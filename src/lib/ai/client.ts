@@ -37,15 +37,15 @@ interface ForwardResponse {
     url: string;
 }
 
-/** forwardProxy 请求体：headers 为单键对象数组 */
+/** forwardProxy 请求体 */
 interface ForwardRequest {
     url: string;
     method: string;
     timeout: number;
     contentType: string;
     headers: Record<string, string>[];
-    payload: string;
-    payloadEncoding: "text";
+    payload: Record<string, unknown>;
+    payloadEncoding: "json";
     responseEncoding: "text";
 }
 
@@ -76,7 +76,7 @@ function extractContent(parsed: unknown): string {
 
 async function forward(
     targetUrl: string,
-    bodyStr: string,
+    body: Record<string, unknown>,
     headers: Record<string, string>[],
     timeout: number,
 ): Promise<ForwardResponse> {
@@ -86,8 +86,8 @@ async function forward(
         timeout,
         contentType: "application/json",
         headers,
-        payload: bodyStr,
-        payloadEncoding: "text",
+        payload: body,
+        payloadEncoding: "json",
         responseEncoding: "text",
     };
     const resp = await fetchSyncPost("/api/network/forwardProxy", req);
@@ -121,7 +121,7 @@ export async function callLLM(
         headers.push({ Authorization: `Bearer ${config.apiKey}` });
     }
     const timeout = opts.timeout ?? config.timeout;
-    const fr = await forward(url, JSON.stringify(body), headers, timeout);
+    const fr = await forward(url, body, headers, timeout);
 
     if (fr.status < 200 || fr.status >= 300) {
         throw new AIError(`AI HTTP ${fr.status}: ${fr.body.slice(0, 500)}`, fr.status);
