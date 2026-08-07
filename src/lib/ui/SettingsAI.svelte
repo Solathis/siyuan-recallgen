@@ -4,11 +4,12 @@
     import type { RecallGenConfig, AIProvider, AIProtocol } from "@/types/config";
 
     export let config: RecallGenConfig;
-    export let onTestConnection: () => Promise<boolean> = async () => false;
+    export let onTestConnection: () => Promise<string> = async () => "";
 
     const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
     let connState: "idle" | "testing" | "ok" | "fail" = "idle";
     let connError = "";
+    let connResult = "";
     let showKey = false;
 
     function v(e: Event): string { return (e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value; }
@@ -29,8 +30,10 @@
     async function testConn() {
         connState = "testing";
         connError = "";
+        connResult = "";
         try {
-            await onTestConnection();
+            const content = await onTestConnection();
+            connResult = content;
             connState = "ok";
         } catch (e) {
             connState = "fail";
@@ -119,6 +122,12 @@
             <input id="rg-testprompt" class={input} type="text" value={config.ai.testPrompt} on:input={(e) => patchAi({ testPrompt: v(e) })} />
             <span class={field.description}>点击「测试连接」时发送给 AI 的消息内容</span>
         </div>
+        {#if connResult}
+            <div class="rg-conn-result">
+                <span class="rg-conn-result__label">AI 回复：</span>
+                <div class="rg-conn-result__content">{connResult}</div>
+            </div>
+        {/if}
         <label class="rg-check-item">
             <input class={switchCls} type="checkbox" checked={config.ai.jsonSchemaEnabled} on:change={(e) => patchAi({ jsonSchemaEnabled: checked(e) })} />
             <span>JSON Schema 严格模式</span>
@@ -145,5 +154,14 @@
         max-height: 80px;
         overflow-y: auto;
     }
+    .rg-conn-result {
+        font-size: 12px;
+        background: color-mix(in srgb, var(--b3-card-success) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--b3-card-success) 30%, transparent);
+        border-radius: var(--b3-border-radius);
+        padding: 8px 10px;
+    }
+    .rg-conn-result__label { font-weight: 600; color: var(--b3-card-success); display: block; margin-bottom: 4px; }
+    .rg-conn-result__content { color: var(--b3-theme-on-background); line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
     @media (max-width: 640px) { .rg-row-2 { flex-direction: column; } }
 </style>

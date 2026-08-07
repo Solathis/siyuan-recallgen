@@ -30,7 +30,7 @@ export interface QuizService {
     loadProgress(id: string): Promise<QuizSession | null>;
     clearProgress(id: string): Promise<void>;
     saveScore(record: ScoreRecord): Promise<void>;
-    testConnection(): Promise<boolean>;
+    testConnection: () => Promise<string>;
     clearScores(): Promise<void>;
     clearAllProgress(): Promise<void>;
 }

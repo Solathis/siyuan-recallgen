@@ -266,11 +266,11 @@ export async function callLLM(
     throw lastError;
 }
 
-/** 测试连接：发一条用户自定义消息验证配置可用。失败时抛出错误。 */
-export async function testConnection(config: AIConfig): Promise<boolean> {
+/** 测试连接：发一条用户自定义消息验证配置可用。返回 AI 回复内容。失败时抛出错误。 */
+export async function testConnection(config: AIConfig): Promise<string> {
     const prompt = config.testPrompt?.trim() || "请用一句话简要介绍你自己";
-    await callLLM(config, [{ role: "user", content: prompt }], {
+    const result = await callLLM(config, [{ role: "user", content: prompt }], {
         maxTokens: 128, temperature: 0,
     });
-    return true;
+    return result.content;
 }

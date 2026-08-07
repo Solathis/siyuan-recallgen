@@ -214,6 +214,7 @@
 </script>
 
 <div class="rg-panel">
+    <div class="rg-panel__inner">
     {#if panelState === "loading_generating" || panelState === "loading_grading"}
         <div class="rg-panel__loading">
             <ProgressBar value={progressValue} label={progressLabel} />
@@ -270,10 +271,22 @@
             <ResultPanel {service} results={results} questions={session.questions} {analysis} on:save={() => saveToDoc()} />
         {/if}
     {/if}
+    </div>
 </div>
 
 <style>
-    .rg-panel { display: flex; flex-direction: column; height: 100%; gap: 12px; }
+    .rg-panel { display: flex; flex-direction: column; height: 100%; }
+    .rg-panel__inner {
+        max-width: 860px;
+        margin: 0 auto;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 0 16px;
+        box-sizing: border-box;
+    }
     .rg-panel__loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; gap: 16px; }
     .rg-panel__scroll { flex: 1; overflow-y: auto; min-height: 0; }
     .rg-panel__list { display: flex; flex-direction: column; gap: 16px; padding: 4px 0 16px; }

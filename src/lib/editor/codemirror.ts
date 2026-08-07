@@ -25,8 +25,20 @@ import {
     defaultHighlightStyle,
 } from "@codemirror/language";
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { oneDarkTheme, oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import type { Extension } from "@codemirror/state";
+
+/** 浅色主题：背景跟随思源变量，行号栏有边框 */
+const lightTheme = EditorView.theme({
+    "&": { backgroundColor: "var(--b3-theme-background)", color: "var(--b3-theme-on-background)" },
+    ".cm-gutters": {
+        backgroundColor: "var(--b3-theme-background-light)",
+        color: "var(--b3-theme-on-surface-light)",
+        borderRight: "1px solid var(--b3-border-color)",
+    },
+    ".cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--b3-theme-primary) 8%, transparent)" },
+    ".cm-activeLineGutter": { backgroundColor: "color-mix(in srgb, var(--b3-theme-primary) 12%, transparent)" },
+});
 
 /**
  * CodeMirror 6 嵌入式编辑器封装。
@@ -102,12 +114,14 @@ export class CodeEditor {
             bracketMatching(),
             closeBrackets(),
             autocompletion(),
-            syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         ];
     }
 
     private resolveTheme(): Extension {
-        return this.isDark() ? oneDark : [];
+        if (this.isDark()) {
+            return [oneDarkTheme, syntaxHighlighting(oneDarkHighlightStyle)];
+        }
+        return [lightTheme, syntaxHighlighting(defaultHighlightStyle)];
     }
 
     private isDark(): boolean {
