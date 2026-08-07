@@ -1,0 +1,120 @@
+import { appendBlock, createDocWithMd, getBlockByID, getHPathByID } from "@/api";
+import type { GeneralConfig } from "@/types/config";
+import type { Question } from "@/types/quiz";
+
+const TYPE_LABEL: Record<Question["type"], string> = {
+    single_choice: "单选题",
+    multiple_choice: "多选题",
+    fill_blank: "填空题",
+    true_false: "判断题",
+    subjective: "主观题",
+    coding: "编程题",
+};
+const DIFF_LABEL: Record<Question["difficulty"], string> = {
+    easy: "初级",
+    medium: "中级",
+    hard: "高级",
+};
+
+function fmtDate(d = new Date()): string {
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+}
+
+function titleOf(sourceTitle: string): string {
+    const safe = sourceTitle.replace(/[\/\\:*?"<>|]/g, "_").slice(0, 40);
+    return `复习题_${fmtDate()}_${safe}`;
+}
+
+/**
+ * 将题目集合成为结构化 Markdown，每题块带 IAL `custom-recallgen-id`，
+ * 答案与解析置于折叠 details 中防止复习偷看。
+ */
+export function buildQuestionsMarkdown(questions: Question[]): string {
+    const lines: string[] = [];
+    for (const q of questions) {
+        const head = `### ${TYPE_LABEL[q.type]} · ${DIFF_LABEL[q.difficulty]}`;
+        lines.push(`${head}\n{: custom-recallgen-id="${q.id}"}`);
+        lines.push(q.question);
+        lines.push("");
+        if (q.type === "single_choice" || q.type === "multiple_choice") {
+            q.options.forEach((opt, i) => {
+                const tag = String.fromCharCode(65 + i);
+                lines.push(`${tag}. ${opt}`);
+            });
+            lines.push("");
+        }
+        if (q.type === "coding") {
+            lines.push("```" + (q.language || ""));
+            if (q.starter_code) lines.push(q.starter_code);
+            lines.push("```");
+            lines.push("");
+        }
+        lines.push(`<details><summary>查看答案与解析</summary>`);
+        lines.push("");
+        lines.push("**答案：** " + answerText(q));
+        if (q.explanation) lines.push("");
+        lines.push("**解析：** " + q.explanation);
+        lines.push("");
+        lines.push(`</details>`);
+        lines.push("");
+    }
+    return lines.join("\n");
+}
+
+function answerText(q: Question): string {
+    switch (q.type) {
+        case "single_choice":
+            return String.fromCharCode(65 + q.answer);
+        case "multiple_choice":
+            return q.answer.map((i) => String.fromCharCode(65 + i)).sort().join("、");
+        case "true_false":
+            return q.answer ? "正确" : "错误";
+        case "fill_blank":
+            return q.answer.map((opts, i) => `第${i + 1}空: ${opts.join(" / ")}`).join("；");
+        case "subjective":
+            return q.reference_answer;
+        case "coding":
+            return "见参考代码\n\n```" + q.language + "\n" + q.answer + "\n```";
+    }
+}
+
+/** 新建子文档存放题目，返回新文档 ID */
+export async function saveAsNewDoc(
+    config: GeneralConfig,
+    questions: Question[],
+    sourceDocId: string,
+    sourceTitle: string,
+): Promise<string> {
+    const md = buildQuestionsMarkdown(questions);
+    const title = titleOf(sourceTitle);
+    const block = await getBlockByID(sourceDocId);
+    if (!block) throw new Error("无法定位源文档块");
+
+    let notebook = block.box;
+    let path = "";
+    if (config.storageLocation === "notebook" && config.notebookId) {
+        notebook = config.notebookId;
+        path = "/" + title;
+    } else {
+        const hpath = await getHPathByID(sourceDocId).catch(() => block.hpath);
+        const parent = hpath.lastIndexOf("/") >= 0 ? hpath.slice(0, hpath.lastIndexOf("/")) : "";
+        path = (parent ? parent : "") + "/" + title;
+    }
+    return createDocWithMd(notebook, path, md);
+}
+
+/** 插入到当前文档末尾 */
+export async function appendQuestions(
+    questions: Question[],
+    sourceDocId: string,
+): Promise<void> {
+    const md = buildQuestionsMarkdown(questions);
+    await appendBlock("markdown", md, sourceDocId);
+}
+
+/** 将薄弱点分析追加到文档末尾 */
+export async function appendAnalysis(docId: string, analysis: string): Promise<void> {
+    const md = `\n---\n\n## 薄弱点分析与复习指导\n\n${analysis}\n`;
+    await appendBlock("markdown", md, docId);
+}
