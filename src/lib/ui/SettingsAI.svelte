@@ -41,7 +41,7 @@
     function removeEndpoint(id: string) {
         const modelsUsing = config.ai.models.filter((m) => m.endpointId === id);
         if (modelsUsing.length > 0) {
-            alert(`该端点被 ${modelsUsing.length} 个模型引用，请先删除或迁移这些模型`);
+            alert(`该端点下有 ${modelsUsing.length} 个模型，请先删除这些模型`);
             return;
         }
         patchAi({ endpoints: config.ai.endpoints.filter((e) => e.id !== id) });
@@ -59,19 +59,17 @@
     function onEpProtocol(id: string, e: Event) {
         patchEndpoint(id, { protocol: v(e) as AIProtocol });
     }
-    function onEpTemp(id: string, e: Event) {
-        patchModel(id, { temperature: parseFloat(v(e)) || 0 });
-    }
 
     // ── 模型 CRUD ──────────────────────────────────────────────
 
-    function addModel() {
-        const ep = config.ai.endpoints[0];
-        if (!ep) { alert("请先添加端点"); return; }
+    function modelsOf(epId: string): AIModel[] {
+        return config.ai.models.filter((m) => m.endpointId === epId);
+    }
+    function addModel(epId: string) {
         const m: AIModel = {
             id: genId("m"),
             name: "",
-            endpointId: ep.id,
+            endpointId: epId,
             temperature: 0.7,
             maxTokens: 4096,
         };
@@ -89,6 +87,9 @@
         patchAi({
             models: config.ai.models.map((m) => m.id === id ? { ...m, ...patch } : m),
         });
+    }
+    function onModelTemp(id: string, e: Event) {
+        patchModel(id, { temperature: parseFloat(v(e)) || 0 });
     }
 
     // ── 测试连接 ──────────────────────────────────────────────
@@ -115,29 +116,25 @@
 <div class={card.root}>
     <div class={card.header}>
         <h3 class={card.title}>AI 端点与模型</h3>
-        <p class={card.description}>配置多个 API 端点和模型，在「AI 身份」中分配角色</p>
+        <p class={card.description}>每个端点下管理其模型，在「AI 身份」中分配角色</p>
     </div>
     <div class={cn(card.content, field.group)}>
-        <!-- ── 端点列表 ── -->
-        <div class="rg-section-head">
-            <span class="rg-section-title">API 端点</span>
-            <button class={button({ variant: "outline", size: "sm" })} on:click={addEndpoint} type="button">+ 添加端点</button>
-        </div>
+        <!-- ── 按端点分组的端点+模型 ── -->
         {#each config.ai.endpoints as ep (ep.id)}
-            <div class="rg-ep-card">
+            <div class="rg-ep-block">
                 <div class="rg-ep-head">
                     <input class={cn(input, "rg-ep-name")} type="text" value={ep.name} on:input={(e) => patchEndpoint(ep.id, { name: v(e) })} placeholder="端点名称" />
-                    <button class={button({ variant: "ghost", size: "sm" })} on:click={() => removeEndpoint(ep.id)} type="button">删除</button>
+                    <button class={button({ variant: "ghost", size: "sm" })} on:click={() => removeEndpoint(ep.id)} type="button">删除端点</button>
                 </div>
-                <div class="rg-ep-body">
-                    <div class="rg-ep-row">
+                <div class="rg-ep-config">
+                    <div class="rg-row">
                         <label class={field.label}>服务商</label>
                         <select class={select} value={ep.provider} on:change={(e) => onEpProvider(ep.id, e)}>
                             <option value="openai">OpenAI 兼容</option>
                             <option value="ollama">Ollama</option>
                         </select>
                     </div>
-                    <div class="rg-ep-row">
+                    <div class="rg-row">
                         <label class={field.label}>协议</label>
                         <select class={select} value={ep.protocol} on:change={(e) => onEpProtocol(ep.id, e)} disabled={ep.provider === "ollama"}>
                             <option value="chat">Chat Completions</option>
@@ -145,11 +142,11 @@
                             <option value="messages">Messages API</option>
                         </select>
                     </div>
-                    <div class="rg-ep-row">
+                    <div class="rg-row">
                         <label class={field.label}>Base URL</label>
                         <input class={input} type="text" value={ep.baseUrl} on:input={(e) => patchEndpoint(ep.id, { baseUrl: v(e) })} placeholder="https://api.openai.com/v1" />
                     </div>
-                    <div class="rg-ep-row">
+                    <div class="rg-row">
                         <label class={field.label}>API Key</label>
                         <div class="rg-key-row">
                             <input class={cn(input, "rg-key-input")} type={showKeys[ep.id] ? "text" : "password"} value={ep.apiKey} on:input={(e) => patchEndpoint(ep.id, { apiKey: v(e) })} placeholder="sk-..." />
@@ -159,47 +156,36 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 该端点下的模型 -->
+                <div class="rg-models-area">
+                    <div class="rg-models-head">
+                        <span class="rg-models-title">模型</span>
+                        <button class={button({ variant: "outline", size: "sm" })} on:click={() => addModel(ep.id)} type="button">+ 添加模型</button>
+                    </div>
+                    {#each modelsOf(ep.id) as m (m.id)}
+                        <div class="rg-model-row">
+                            <input class={cn(input, "rg-model-name")} type="text" value={m.name} on:input={(e) => patchModel(m.id, { name: v(e) })} placeholder="模型名称（如 gpt-4o-mini）" />
+                            <input class={cn(input, "rg-model-num")} type="number" step="0.1" min="0" max="2" value={m.temperature} on:input={(e) => onModelTemp(m.id, e)} title="温度" />
+                            <input class={cn(input, "rg-model-num")} type="number" step="256" min="256" value={m.maxTokens} on:input={(e) => patchModel(m.id, { maxTokens: vn(e) })} title="Max Tokens" />
+                            <button class={button({ variant: "ghost", size: "sm" })} on:click={() => removeModel(m.id)} type="button">删除</button>
+                        </div>
+                    {:else}
+                        <span class={field.description}>该端点下暂无模型</span>
+                    {/each}
+                </div>
             </div>
+        {:else}
+            <span class={field.description}>暂无端点，请点击下方按钮添加</span>
         {/each}
 
-        <!-- ── 模型列表 ── -->
-        <div class="rg-section-head">
-            <span class="rg-section-title">AI 模型</span>
-            <button class={button({ variant: "outline", size: "sm" })} on:click={addModel} type="button">+ 添加模型</button>
-        </div>
-        {#each config.ai.models as m (m.id)}
-            <div class="rg-model-card">
-                <div class="rg-model-head">
-                    <input class={cn(input, "rg-model-name")} type="text" value={m.name} on:input={(e) => patchModel(m.id, { name: v(e) })} placeholder="模型名称（如 gpt-4o-mini）" />
-                    <button class={button({ variant: "ghost", size: "sm" })} on:click={() => removeModel(m.id)} type="button">删除</button>
-                </div>
-                <div class="rg-model-body">
-                    <div class="rg-ep-row">
-                        <label class={field.label}>端点</label>
-                        <select class={select} value={m.endpointId} on:change={(e) => patchModel(m.id, { endpointId: v(e) })}>
-                            {#each config.ai.endpoints as ep}
-                                <option value={ep.id}>{ep.name}</option>
-                            {/each}
-                        </select>
-                    </div>
-                    <div class="rg-ep-row">
-                        <label class={field.label}>温度</label>
-                        <input class={cn(input, "rg-model-num")} type="number" step="0.1" min="0" max="2" value={m.temperature} on:input={(e) => onEpTemp(m.id, e)} />
-                    </div>
-                    <div class="rg-ep-row">
-                        <label class={field.label}>Max Tokens</label>
-                        <input class={cn(input, "rg-model-num")} type="number" step="256" min="256" value={m.maxTokens} on:input={(e) => patchModel(m.id, { maxTokens: vn(e) })} />
-                    </div>
-                </div>
-            </div>
-        {/each}
+        <button class={button({ variant: "outline" })} on:click={addEndpoint} type="button">+ 添加端点</button>
 
         <!-- ── 测试连接 ── -->
-        <div class="rg-section-head">
-            <span class="rg-section-title">测试连接</span>
-        </div>
+        <div class="rg-section-sep"></div>
+        <div class="rg-section-head"><span class="rg-section-title">测试连接</span></div>
         <div class={field.group}>
-            <div class="rg-ep-row">
+            <div class="rg-row">
                 <label class={field.label}>测试模型</label>
                 <select class={select} value={testModelId} on:change={onTestModelChange}>
                     {#each config.ai.models as m}
@@ -207,7 +193,7 @@
                     {/each}
                 </select>
             </div>
-            <div class="rg-ep-row">
+            <div class="rg-row">
                 <label class={field.label}>测试提示词</label>
                 <input class={input} type="text" value={config.ai.testPrompt} on:input={(e) => patchAi({ testPrompt: v(e) })} />
             </div>
@@ -230,11 +216,10 @@
         </div>
 
         <!-- ── 全局设置 ── -->
-        <div class="rg-section-head">
-            <span class="rg-section-title">全局设置</span>
-        </div>
+        <div class="rg-section-sep"></div>
+        <div class="rg-section-head"><span class="rg-section-title">全局设置</span></div>
         <div class={field.group}>
-            <div class="rg-ep-row">
+            <div class="rg-row">
                 <label class={field.label}>超时（秒）</label>
                 <input class={input} type="number" value={Math.round(config.ai.timeout / 1000)} on:input={(e) => patchAi({ timeout: vn(e) * 1000 })} />
             </div>
@@ -248,23 +233,24 @@
 </div>
 
 <style>
-    .rg-section-head { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 8px; }
-    .rg-section-title { font-weight: 600; font-size: 14px; color: var(--b3-theme-on-background); }
-    .rg-ep-card { border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .rg-ep-block { border: 1px solid var(--b3-border-color); border-radius: calc(var(--b3-border-radius) * 1.2); padding: 12px; display: flex; flex-direction: column; gap: 10px; background: color-mix(in srgb, var(--b3-theme-background) 97%, var(--b3-border-color) 3%); }
     .rg-ep-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .rg-ep-name { flex: 1; font-weight: 600; }
-    .rg-ep-body { display: flex; flex-direction: column; gap: 8px; }
-    .rg-ep-row { display: flex; align-items: center; gap: 8px; }
-    .rg-ep-row label { width: 80px; flex-shrink: 0; font-size: 13px; }
-    .rg-ep-row input, .rg-ep-row select { flex: 1; }
-    .rg-model-card { border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-    .rg-model-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-    .rg-model-name { flex: 1; font-weight: 600; }
-    .rg-model-body { display: flex; gap: 8px; flex-wrap: wrap; }
-    .rg-model-body .rg-ep-row { flex: 1; min-width: 120px; }
-    .rg-model-num { max-width: 100px; }
+    .rg-ep-config { display: flex; flex-direction: column; gap: 8px; }
+    .rg-row { display: flex; align-items: center; gap: 8px; }
+    .rg-row label { width: 72px; flex-shrink: 0; font-size: 13px; }
+    .rg-row input, .rg-row select { flex: 1; }
     .rg-key-row { display: flex; gap: 8px; flex: 1; }
     .rg-key-input { flex: 1; }
+    .rg-models-area { border-top: 1px dashed var(--b3-border-color); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .rg-models-head { display: flex; justify-content: space-between; align-items: center; }
+    .rg-models-title { font-size: 13px; font-weight: 600; color: var(--b3-theme-on-surface-light); }
+    .rg-model-row { display: flex; align-items: center; gap: 6px; }
+    .rg-model-name { flex: 1; }
+    .rg-model-num { width: 80px; flex-shrink: 0; text-align: center; }
+    .rg-section-sep { border-top: 1px solid var(--b3-border-color); margin: 4px 0; }
+    .rg-section-head { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 8px; }
+    .rg-section-title { font-weight: 600; font-size: 14px; color: var(--b3-theme-on-background); }
     .rg-test-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .rg-check-item { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--b3-theme-on-background); flex-wrap: wrap; }
     .rg-conn-error { font-size: 12px; font-family: monospace; color: var(--b3-card-error, #d23f31); background: color-mix(in srgb, var(--b3-card-error, #d23f31) 8%, transparent); padding: 6px 10px; border-radius: var(--b3-border-radius); word-break: break-all; max-height: 80px; overflow-y: auto; }
@@ -272,8 +258,9 @@
     .rg-conn-result__label { font-weight: 600; color: var(--b3-card-success, #65a84c); display: block; margin-bottom: 4px; }
     .rg-conn-result__content { color: var(--b3-theme-on-background); line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
     @media (max-width: 640px) {
-        .rg-ep-row { flex-direction: column; align-items: stretch; }
-        .rg-ep-row label { width: auto; }
-        .rg-model-body { flex-direction: column; }
+        .rg-row { flex-direction: column; align-items: stretch; }
+        .rg-row label { width: auto; }
+        .rg-model-row { flex-wrap: wrap; }
+        .rg-model-num { width: 70px; }
     }
 </style>
