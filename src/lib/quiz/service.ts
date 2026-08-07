@@ -17,6 +17,7 @@ export interface QuizService {
         onProgress: (done: number, total: number) => void,
     ): Promise<GradingResult[]>;
     analyze(results: GradingResult[], questions: Question[]): Promise<string>;
+    saveResultToDoc(session: QuizSession, analysis: string): Promise<string>;
     saveProgress(session: QuizSession): Promise<void>;
     loadProgress(id: string): Promise<QuizSession | null>;
     clearProgress(id: string): Promise<void>;

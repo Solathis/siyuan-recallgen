@@ -2,6 +2,8 @@
     import { onMount, onDestroy } from "svelte";
     import ProgressBar from "./ProgressBar.svelte";
     import QuestionView from "./QuestionView.svelte";
+    import ResultPanel from "./ResultPanel.svelte";
+    import { showMessage } from "siyuan";
     import type { QuizService, QuizTabData } from "../quiz/service";
     import type { GradingResult, PanelState, Question, QuizSession, UserAnswer } from "@/types/quiz";
 
@@ -160,11 +162,14 @@
         return `rg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
-    function totalScore(): number {
-        return results?.reduce((s, r) => s + r.score, 0) ?? 0;
-    }
-    function maxScore(): number {
-        return results?.reduce((s, r) => s + r.maxScore, 0) ?? 0;
+    async function saveToDoc() {
+        if (!session || !results) return;
+        try {
+            await service.saveResultToDoc(session, analysis ?? "");
+            showMessage("已保存到文档");
+        } catch (e) {
+            error = (e as Error).message;
+        }
     }
 </script>
 
@@ -210,26 +215,9 @@
         {#if error}
             <div class="rg-panel__error">{error}</div>
         {/if}
-        {#if results}
-            <div class="rg-result">
-                <h3>总分：{totalScore().toFixed(0)} / {maxScore()}</h3>
-                {#each results as r, i}
-                    <details>
-                        <summary>第 {i + 1} 题 · {r.score.toFixed(0)}/{r.maxScore}</summary>
-                        <div class="rg-result__detail">
-                            <p>{session?.questions[i]?.question}</p>
-                            {#if session?.questions[i]?.explanation}<p class="rg-explain">解析：{session.questions[i].explanation}</p>{/if}
-                            {#if r.comment}<p>评语：{r.comment}</p>{/if}
-                        </div>
-                    </details>
-                {/each}
-                {#if analysis}
-                    <div class="rg-analysis">
-                        <h4>薄弱点分析</h4>
-                        <p>{analysis}</p>
-                    </div>
-                {/if}
-            </div>
+        {#if results && session}
+            <ResultPanel results={results} questions={session.questions} {analysis}
+                         on:save={() => saveToDoc()} />
         {/if}
     {/if}
 </div>
@@ -246,10 +234,6 @@
     .rg-panel__pager { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
     .rg-panel__footer { display: flex; justify-content: flex-end; align-items: center; gap: 16px; padding: 8px 16px; border-top: 1px solid var(--b3-border-color); }
     .rg-panel__error { color: var(--b3-card-error-color); padding: 12px; }
-    .rg-result h3 { margin: 0 0 12px; }
-    .rg-result__detail { padding: 8px 0 12px; }
-    .rg-explain { color: var(--b3-theme-on-surface-light); }
-    .rg-analysis { margin-top: 16px; padding: 12px; background: var(--b3-theme-background-light); border-radius: 6px; }
     @media (max-width: 768px) {
         .rg-panel__nav { width: 44px; }
         .rg-nav__item { width: 36px; height: 36px; font-size: 12px; }
