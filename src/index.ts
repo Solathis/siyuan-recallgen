@@ -50,10 +50,15 @@ export default class RecallGenPlugin extends Plugin {
                 (c.element as HTMLElement).appendChild(div);
                 self.quizComp = new QuizPanel({
                     target: div,
-                    props: { service: self.buildService(), tabData: c.data as QuizTabData },
+                    props: {
+                        service: self.buildService(),
+                        tabData: c.data as QuizTabData,
+                        closeTab: () => c.tab.close(),
+                    },
                 });
             },
             destroy: () => {
+                self.quizComp?.beforeDestroy();
                 self.quizComp?.$destroy();
                 self.quizComp = null;
             },

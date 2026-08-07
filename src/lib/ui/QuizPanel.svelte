@@ -10,6 +10,7 @@
 
     export let service: QuizService;
     export let tabData: QuizTabData;
+    export let closeTab: () => void = () => {};
 
     let panelState: PanelState = "loading_generating";
     let session: QuizSession | null = null;
@@ -20,6 +21,7 @@
     let progressValue: number | null = null;
     let progressLabel = "";
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
 
     const config = service.getConfig();
     $: countdownEnabled = config.general.countdownEnabled && config.general.countdownMinutes > 0;
@@ -74,6 +76,16 @@
         if (countdownTimer) clearInterval(countdownTimer);
     });
 
+    /** tab 销毁前调用：中止生成 + 强制保存进度 */
+    export function beforeDestroy() {
+        cancelled = true;
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        if (session && panelState === "answering") {
+            void service.saveProgress(session);
+        }
+    }
+
     /** 检查 AI 配置是否有效 */
     function checkAiConfig(): boolean {
         const ai = config.ai;
@@ -90,6 +102,7 @@
 
     async function startGenerate() {
         error = null;
+        cancelled = false;
         if (!checkAiConfig()) {
             panelState = "answering";
             errorPhase = "generate";
@@ -100,6 +113,7 @@
         progressLabel = "AI 正在生成题目…";
         try {
             const qs = await service.generate(tabData.content ?? "");
+            if (cancelled) return;
             if (qs.length === 0) {
                 error = "AI 未生成任何题目，请检查内容或重试";
                 errorPhase = "generate";
@@ -109,10 +123,12 @@
             const id = genId();
             session = { id, sourceDocId: tabData.sourceDocId, sourceTitle: tabData.sourceTitle, questions: qs, createdAt: Date.now(), answers: {} };
             const prev = await service.loadProgress(id);
+            if (cancelled) return;
             if (prev) session.answers = prev.answers;
             panelState = "answering";
             if (countdownEnabled) { countdownLeft = countdownSec; startCountdown(); }
         } catch (e) {
+            if (cancelled) return;
             error = (e as Error).message;
             errorPhase = "generate";
             panelState = "answering";
@@ -201,6 +217,9 @@
     {#if panelState === "loading_generating" || panelState === "loading_grading"}
         <div class="rg-panel__loading">
             <ProgressBar value={progressValue} label={progressLabel} />
+            {#if panelState === "loading_generating"}
+                <button class={button({ variant: "outline", size: "sm" })} on:click={() => { cancelled = true; closeTab(); }}>取消生成</button>
+            {/if}
         </div>
     {:else if panelState === "answering"}
         {#if hasError && errorInfo}
@@ -255,7 +274,7 @@
 
 <style>
     .rg-panel { display: flex; flex-direction: column; height: 100%; gap: 12px; }
-    .rg-panel__loading { display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+    .rg-panel__loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; gap: 16px; }
     .rg-panel__scroll { flex: 1; overflow-y: auto; min-height: 0; }
     .rg-panel__list { display: flex; flex-direction: column; gap: 16px; padding: 4px 0 16px; }
     .rg-panel__q-item { display: flex; flex-direction: column; gap: 8px; }
