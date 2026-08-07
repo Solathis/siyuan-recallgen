@@ -28,7 +28,10 @@
     type SectionKey = typeof SECTIONS[number]["key"];
     let active: SectionKey = "ai";
 
-    function handleSave(e: { detail: RecallGenConfig }) { dispatch("save", e.detail); }
+    function handleSave(e: { detail: RecallGenConfig }) {
+        config = e.detail;
+        dispatch("save", e.detail);
+    }
 </script>
 
 <div class="rg-setting-layout">
