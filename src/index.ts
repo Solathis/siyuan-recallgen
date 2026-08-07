@@ -1,4 +1,4 @@
-import { Plugin, showMessage, getFrontend, openTab } from "siyuan";
+import { Plugin, showMessage, getFrontend, openTab, Setting } from "siyuan";
 import type { Custom } from "siyuan";
 import "./index.scss";
 
@@ -88,6 +88,8 @@ export default class RecallGenPlugin extends Plugin {
             },
         });
 
+        // 创建 Setting 实例使思源插件列表显示“设置”齿轮；点击齿轮调用 openSetting
+        this.setting = new Setting({ width: "900px", height: "80vh" });
         // 设置入口：思源插件列表齿轮 → openSetting → 打开设置 Tab（非顶栏按钮）
         this.openSetting = () => this.openSettingsTab();
 
