@@ -41,6 +41,7 @@
 
     onDestroy(() => {
         if (saveTimer) clearTimeout(saveTimer);
+        if (countdownTimer) clearInterval(countdownTimer);
     });
 
     async function startGenerate() {

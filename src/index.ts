@@ -1,4 +1,4 @@
-import { Plugin, showMessage, getFrontend, openTab, showMessage as _sm } from "siyuan";
+import { Plugin, showMessage, getFrontend, openTab } from "siyuan";
 import type { Custom } from "siyuan";
 import "./index.scss";
 
