@@ -50,6 +50,8 @@ export interface GeneralConfig {
     notebookId: string;
     /** 超纲比例（0-100），允许出题涵盖笔记外扩展知识点的百分比 */
     extraScopePct: number;
+    /** 答题面板宽度（px） */
+    panelWidth: number;
 }
 
 /** 完整配置 */
@@ -113,6 +115,7 @@ export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     storageLocation: "sibling",
     notebookId: "",
     extraScopePct: 0,
+    panelWidth: 1100,
 };
 
 export function getDefaultConfig(): RecallGenConfig {

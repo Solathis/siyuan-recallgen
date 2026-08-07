@@ -127,6 +127,7 @@ export default class RecallGenPlugin extends Plugin {
             saveResultToDoc: (session, analysis) => this.saveResultToDoc(session, analysis),
             saveProgress: (session) => this.progressStore.save(session),
             loadProgress: (id) => this.progressStore.load(id),
+            findProgressBySourceDocId: (sourceDocId) => this.progressStore.findBySourceDocId(sourceDocId),
             clearProgress: (id) => this.progressStore.clear(id),
             saveScore: (record) => this.scoreStore.add(record),
             testConnection: () => aiTestConnection(this.config.ai),

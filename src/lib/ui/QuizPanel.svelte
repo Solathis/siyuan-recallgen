@@ -64,7 +64,15 @@
         if (tabData.mode === "resume" && tabData.quizId) {
             await resume();
         } else if (tabData.mode === "generate") {
-            await startGenerate();
+            // SiYuan 重启后可能恢复 tab，先检查是否有已保存的进度避免重新生成
+            const existing = await service.findProgressBySourceDocId(tabData.sourceDocId);
+            if (existing && existing.questions.length > 0) {
+                session = existing;
+                panelState = "answering";
+                if (countdownEnabled) { countdownLeft = countdownSec; startCountdown(); }
+            } else {
+                await startGenerate();
+            }
         } else {
             error = "无效的 Tab 数据";
             panelState = "answering";
@@ -200,6 +208,12 @@
         error = null;
         await startGenerate();
     }
+    async function regenerate() {
+        if (session) { await service.clearProgress(session.id); }
+        session = null;
+        error = null;
+        await startGenerate();
+    }
     async function retryGrade() {
         error = null;
         await submit();
@@ -213,7 +227,7 @@
     }
 </script>
 
-<div class="rg-panel">
+<div class="rg-panel" style="--rg-panel-width: {config.general.panelWidth}px">
     <div class="rg-panel__inner">
     {#if panelState === "loading_generating" || panelState === "loading_grading"}
         <div class="rg-panel__loading">
@@ -234,6 +248,18 @@
                 </div>
             </div>
         {:else if questions.length > 0}
+            <header class="rg-panel__topbar">
+                <div class="rg-panel__topbar-left">
+                    <span class={badge("secondary")}>已答 {answeredCount} / {questions.length}</span>
+                </div>
+                <div class="rg-panel__topbar-right">
+                    {#if countdownEnabled}
+                        <span class={badge("warning")}>⏱ {Math.floor(countdownLeft / 60)}:{(countdownLeft % 60).toString().padStart(2, "0")}</span>
+                    {/if}
+                    <button class={button({ variant: "outline", size: "sm" })} on:click={regenerate}>重新生成</button>
+                    <button class={button({ variant: "destructive" })} on:click={submit}>交卷</button>
+                </div>
+            </header>
             <div class="rg-panel__scroll">
                 <div class="rg-panel__list">
                     {#each questions as q, i}
@@ -248,13 +274,6 @@
                     {/each}
                 </div>
             </div>
-            <footer class="rg-panel__footer">
-                <span class={badge("secondary")}>已答 {answeredCount} / {questions.length}</span>
-                {#if countdownEnabled}
-                    <span class={badge("warning")}>{Math.floor(countdownLeft / 60)}:{(countdownLeft % 60).toString().padStart(2, "0")}</span>
-                {/if}
-                <button class={button({ variant: "destructive" })} on:click={submit}>交卷</button>
-            </footer>
         {/if}
     {:else if panelState === "result"}
         {#if hasError && errorInfo}
@@ -277,19 +296,30 @@
 <style>
     .rg-panel { display: flex; flex-direction: column; height: 100%; }
     .rg-panel__inner {
-        max-width: 860px;
+        max-width: var(--rg-panel-width, 1100px);
         margin: 0 auto;
         width: 100%;
         height: 100%;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 0;
         padding: 0 16px;
         box-sizing: border-box;
     }
     .rg-panel__loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; gap: 16px; }
+    .rg-panel__topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--b3-border-color);
+        flex-shrink: 0;
+    }
+    .rg-panel__topbar-left { display: flex; align-items: center; gap: 6px; }
+    .rg-panel__topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
     .rg-panel__scroll { flex: 1; overflow-y: auto; min-height: 0; }
-    .rg-panel__list { display: flex; flex-direction: column; gap: 16px; padding: 4px 0 16px; }
+    .rg-panel__list { display: flex; flex-direction: column; gap: 16px; padding: 12px 0 16px; }
     .rg-panel__q-item { display: flex; flex-direction: column; gap: 8px; }
     .rg-panel__q-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .rg-panel__footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--b3-border-color); flex-shrink: 0; }

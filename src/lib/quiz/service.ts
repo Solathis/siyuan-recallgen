@@ -28,6 +28,7 @@ export interface QuizService {
     saveResultToDoc(session: QuizSession, analysis: string): Promise<string>;
     saveProgress(session: QuizSession): Promise<void>;
     loadProgress(id: string): Promise<QuizSession | null>;
+    findProgressBySourceDocId(sourceDocId: string): Promise<QuizSession | null>;
     clearProgress(id: string): Promise<void>;
     saveScore(record: ScoreRecord): Promise<void>;
     testConnection: () => Promise<string>;

@@ -22,6 +22,7 @@
     function vf(e: Event): number { return parseFloat(v(e)) || 0; }
 
     let _extraScope = config.general.extraScopePct;
+    let _panelWidth = config.general.panelWidth;
 
     $: diffOk = config.general.difficulty.easy + config.general.difficulty.medium + config.general.difficulty.hard === config.general.difficulty.total;
     $: totalValid = config.general.difficulty.total >= 1 && config.general.difficulty.total <= 50;
@@ -88,6 +89,11 @@
             <span class={field.label}>超纲比例（{_extraScope}%）</span>
             <span class={field.description}>允许 AI 出题时扩展到笔记外的相关知识点，0% = 仅限笔记内容</span>
             <input class={slider} type="range" min="0" max="50" step="5" bind:value={_extraScope} on:change={() => patchGeneral({ extraScopePct: _extraScope })} />
+        </div>
+        <div class={field.field}>
+            <span class={field.label}>答题面板宽度（{_panelWidth}px）</span>
+            <span class={field.description}>答题页内容区域的最大宽度，避免过宽或过窄</span>
+            <input class={slider} type="range" min="600" max="1600" step="50" bind:value={_panelWidth} on:change={() => patchGeneral({ panelWidth: _panelWidth })} />
         </div>
         <label class="rg-check-item">
             <input class={switchCls} type="checkbox" checked={config.general.countdownEnabled} on:change={(e) => patchGeneral({ countdownEnabled: checked(e) })} />

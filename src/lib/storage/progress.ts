@@ -34,6 +34,15 @@ export class ProgressStore extends AsyncStore {
         return Object.keys(map);
     }
 
+    /** 按 sourceDocId 查找最近的进度（用于 SiYuan 重启后恢复 tab） */
+    async findBySourceDocId(sourceDocId: string): Promise<QuizSession | null> {
+        const map = await this.readMap();
+        const sessions = Object.values(map)
+            .filter((s) => s.sourceDocId === sourceDocId)
+            .sort((a, b) => b.createdAt - a.createdAt);
+        return sessions[0] ?? null;
+    }
+
     async clear(quizId: string): Promise<void> {
         const map = await this.readMap();
         const next = { ...map };
