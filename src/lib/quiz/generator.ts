@@ -6,7 +6,7 @@ import {
     buildJsonObjectResponseFormat,
     parseJsonLoose,
 } from "../ai/schema";
-import type { AIProvider, RecallGenConfig } from "@/types/config";
+import type { RecallGenConfig } from "@/types/config";
 import type {
     DifficultyDistribution,
     Question,
@@ -26,7 +26,7 @@ export async function generateQuestions(
     const difficulty = general.difficulty;
 
     const messages = buildGenerateMessages(prompts, general, content, types, difficulty);
-    const responseFormat = config.ai.jsonSchemaEnabled ? pickResponseFormat(ai.provider) : undefined;
+    const responseFormat = pickResponseFormat(ai.jsonSchemaEnabled);
     const result = await callLLM(ai, messages as ChatMessage[], { responseFormat });
 
     const parsed = parseJsonLoose(result.content) as { questions?: unknown[] };
@@ -36,12 +36,11 @@ export async function generateQuestions(
     return validateQuestions(parsed.questions, types, difficulty);
 }
 
-/** 按 provider 选择 response_format：OpenAI 兼容用 json_schema，Ollama 用 json_object */
-function pickResponseFormat(provider: AIProvider): unknown {
-    if (provider === "ollama") {
-        return buildJsonObjectResponseFormat();
-    }
-    return buildJsonSchemaResponseFormat("recallgen_quiz", QUIZ_SCHEMA as object);
+/** 按 jsonSchemaEnabled 选择 response_format：true=json_schema（严格），false=json_object（宽松兼容） */
+function pickResponseFormat(jsonSchemaEnabled: boolean): unknown {
+    return jsonSchemaEnabled
+        ? buildJsonSchemaResponseFormat("recallgen_quiz", QUIZ_SCHEMA as object)
+        : buildJsonObjectResponseFormat();
 }
 
 /** 校验并转换为强类型 Question[]，赋 id */

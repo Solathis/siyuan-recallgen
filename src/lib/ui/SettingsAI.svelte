@@ -76,8 +76,8 @@
         </div>
         <label class="rg-check-item">
             <input class={switchCls} type="checkbox" checked={config.ai.jsonSchemaEnabled} on:change={(e) => patchAi({ jsonSchemaEnabled: checked(e) })} />
-            <span>JSON Schema 约束输出</span>
-            <span class={field.description}>开启后用 response_format 强制 AI 返回 JSON；关闭后仅靠提示词约束（兼容性更好但可能需 jsonrepair 修复）</span>
+            <span>JSON Schema 严格模式</span>
+            <span class={field.description}>开启后用 json_schema 强制结构化输出；关闭后用 json_object 宽松模式（兼容性更好，遇到 400 错误时建议关闭）</span>
         </label>
     </div>
 </div>

@@ -2,7 +2,7 @@ import PromiseLimitPool from "@/libs/promise-pool";
 import { callLLM, AIError, type ChatMessage } from "../ai/client";
 import { buildGradeSubjectiveMessages } from "../ai/prompts";
 import { GRADING_SCHEMA, buildJsonSchemaResponseFormat, buildJsonObjectResponseFormat, parseJsonLoose } from "../ai/schema";
-import type { AIProvider, RecallGenConfig } from "@/types/config";
+import type { RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, UserAnswer } from "@/types/quiz";
 
 const MAX_CONCURRENT = 4;
@@ -109,7 +109,7 @@ function checkFillBlank(accepted: string[][], user: string[]): boolean {
 async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | undefined): Promise<GradingResult> {
     const userText = ua?.type === "subjective" || ua?.type === "coding" ? ua.value : "";
     const messages = buildGradeSubjectiveMessages(config.prompts, q, userText);
-    const responseFormat = config.ai.jsonSchemaEnabled ? pickGradingFormat(config.ai.provider) : undefined;
+    const responseFormat = pickGradingFormat(config.ai.jsonSchemaEnabled);
     const result = await callLLM(config.ai, messages as ChatMessage[], {
         responseFormat,
         temperature: 0,
@@ -129,11 +129,10 @@ async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | un
     };
 }
 
-function pickGradingFormat(provider: AIProvider): unknown {
-    if (provider === "ollama") {
-        return buildJsonObjectResponseFormat();
-    }
-    return buildJsonSchemaResponseFormat("recallgen_grading", GRADING_SCHEMA as object);
+function pickGradingFormat(jsonSchemaEnabled: boolean): unknown {
+    return jsonSchemaEnabled
+        ? buildJsonSchemaResponseFormat("recallgen_grading", GRADING_SCHEMA as object)
+        : buildJsonObjectResponseFormat();
 }
 
 function clampScore(v: unknown): number {
