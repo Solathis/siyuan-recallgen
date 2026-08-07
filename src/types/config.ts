@@ -16,6 +16,8 @@ export interface AIConfig {
     maxTokens: number;
     /** forwardProxy 超时毫秒 */
     timeout: number;
+    /** JSON Schema 约束输出开关，默认开启 */
+    jsonSchemaEnabled: boolean;
 }
 
 /** 提示词配置 */
@@ -71,6 +73,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
     temperature: 0.7,
     maxTokens: 16384,
     timeout: 120000,
+    jsonSchemaEnabled: true,
 };
 
 export const DEFAULT_PROMPTS: PromptConfig = {

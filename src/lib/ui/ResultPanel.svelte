@@ -1,13 +1,17 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import { card, badge, button, progress as p, alert, alertTitle, alertDescription, separator, cn } from "./components";
+    import ChatPanel from "./ChatPanel.svelte";
+    import type { QuizService } from "../quiz/service";
     import type { GradingResult, Question } from "@/types/quiz";
 
+    export let service: QuizService;
     export let results: GradingResult[];
     export let questions: Question[];
     export let analysis: string | null;
 
     const dispatch = createEventDispatcher<{ save: void }>();
+    let showChat = false;
 
     const TYPE_LABEL: Record<string, string> = {
         single_choice: "单选题", multiple_choice: "多选题", fill_blank: "填空题",
@@ -94,8 +98,15 @@
 
     <hr class={separator} />
     <div class="rg-result__foot">
+        <button class={button({ variant: "outline", size: "sm" })} on:click={() => (showChat = !showChat)}>
+            {showChat ? "收起答疑" : "AI 答疑对话"}
+        </button>
         <button class={button({ variant: "default" })} on:click={() => dispatch("save")}>保存到文档</button>
     </div>
+
+    {#if showChat}
+        <ChatPanel {service} {questions} {results} analysis={analysis ?? ""} on:close={() => (showChat = false)} />
+    {/if}
 </div>
 
 <style>

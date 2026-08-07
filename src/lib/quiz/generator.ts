@@ -26,7 +26,7 @@ export async function generateQuestions(
     const difficulty = general.difficulty;
 
     const messages = buildGenerateMessages(prompts, general, content, types, difficulty);
-    const responseFormat = pickResponseFormat(ai.provider);
+    const responseFormat = config.ai.jsonSchemaEnabled ? pickResponseFormat(ai.provider) : undefined;
     const result = await callLLM(ai, messages as ChatMessage[], { responseFormat });
 
     const parsed = parseJsonLoose(result.content) as { questions?: unknown[] };

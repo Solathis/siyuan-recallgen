@@ -93,8 +93,11 @@
         </label>
         {#if config.general.countdownEnabled}
             <div class={field.field}>
-                <label class={field.label} for="rg-cd">倒计时分钟</label>
-                <input id="rg-cd" class={input} type="number" value={config.general.countdownMinutes} on:input={(e) => patchGeneral({ countdownMinutes: vn(e) })} />
+                <label class={field.label} for="rg-cd">答题时间（分钟）</label>
+                <input id="rg-cd" class={cn(input, config.general.countdownMinutes <= 0 && "rg-input--invalid")} type="number" min="1" value={config.general.countdownMinutes} on:input={(e) => patchGeneral({ countdownMinutes: Math.max(0, vn(e)) })} />
+                {#if config.general.countdownMinutes <= 0}
+                    <span class={field.description} style="color:var(--b3-card-error)">请设置大于 0 的答题时间，否则倒计时不会生效</span>
+                {/if}
             </div>
         {/if}
         <div class={field.field}>

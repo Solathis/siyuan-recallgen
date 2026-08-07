@@ -109,7 +109,7 @@ function checkFillBlank(accepted: string[][], user: string[]): boolean {
 async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | undefined): Promise<GradingResult> {
     const userText = ua?.type === "subjective" || ua?.type === "coding" ? ua.value : "";
     const messages = buildGradeSubjectiveMessages(config.prompts, q, userText);
-    const responseFormat = pickGradingFormat(config.ai.provider);
+    const responseFormat = config.ai.jsonSchemaEnabled ? pickGradingFormat(config.ai.provider) : undefined;
     const result = await callLLM(config.ai, messages as ChatMessage[], {
         responseFormat,
         temperature: 0,

@@ -8,7 +8,7 @@ import { ConfigStore, ScoreStore, ProgressStore } from "@/lib/storage";
 import { QuizSelector } from "@/lib/quiz/selector";
 import { generateQuestions } from "@/lib/quiz/generator";
 import { gradeAll } from "@/lib/quiz/grader";
-import { buildAnalysisMessages } from "@/lib/ai/prompts";
+import { buildAnalysisMessages, buildChatMessages } from "@/lib/ai/prompts";
 import { callLLM, testConnection as aiTestConnection, type ChatMessage } from "@/lib/ai/client";
 import { saveAsNewDoc, appendAnalysis } from "@/lib/quiz/docWriter";
 import type { QuizService, QuizTabData } from "@/lib/quiz/service";
@@ -117,6 +117,7 @@ export default class RecallGenPlugin extends Plugin {
             generate: (content: string) => generateQuestions(this.config, content),
             grade: (qs, ans, onProgress) => gradeAll(this.config, qs, ans, onProgress),
             analyze: (results, questions) => this.analyze(results, questions),
+            chat: (questions, results, analysis, history, userMessage) => this.chat(questions, results, analysis, history, userMessage),
             saveResultToDoc: (session, analysis) => this.saveResultToDoc(session, analysis),
             saveProgress: (session) => this.progressStore.save(session),
             loadProgress: (id) => this.progressStore.load(id),
@@ -153,5 +154,20 @@ export default class RecallGenPlugin extends Plugin {
         const docId = await saveAsNewDoc(this.config.general, session.questions, session.sourceDocId, session.sourceTitle);
         await appendAnalysis(docId, analysis);
         return docId;
+    }
+
+    private async chat(
+        questions: Question[],
+        results: GradingResult[],
+        analysis: string,
+        history: Array<{ role: "user" | "assistant"; content: string }>,
+        userMessage: string,
+    ): Promise<string> {
+        const messages = buildChatMessages(this.config.prompts, questions, results, analysis, history, userMessage);
+        const res = await callLLM(this.config.ai, messages as ChatMessage[], {
+            temperature: 0.6,
+            maxTokens: 1024,
+        });
+        return res.content;
     }
 }

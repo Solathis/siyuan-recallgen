@@ -21,7 +21,7 @@
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
     const config = service.getConfig();
-    $: countdownEnabled = config.general.countdownEnabled;
+    $: countdownEnabled = config.general.countdownEnabled && config.general.countdownMinutes > 0;
     $: countdownSec = config.general.countdownMinutes * 60;
     let countdownLeft = 0;
 
@@ -191,7 +191,7 @@
             <div class={alert("destructive")}><p class={alertTitle}>出错了</p><p class={alertDescription}>{error}</p></div>
         {/if}
         {#if results && session}
-            <ResultPanel results={results} questions={session.questions} {analysis} on:save={() => saveToDoc()} />
+            <ResultPanel {service} results={results} questions={session.questions} {analysis} on:save={() => saveToDoc()} />
         {/if}
     {/if}
 </div>

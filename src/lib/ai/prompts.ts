@@ -90,5 +90,31 @@ export function buildAnalysisMessages(
     ];
 }
 
+/** AI 对话：以答题结果为上下文回答用户追问 */
+export function buildChatMessages(
+    prompts: PromptConfig,
+    questions: Question[],
+    results: GradingResult[],
+    analysis: string,
+    history: Array<{ role: "user" | "assistant"; content: string }>,
+    userMessage: string,
+): Array<{ role: "system" | "user" | "assistant"; content: string }> {
+    const ctx = results.map((r, i) => {
+        const q = questions[i];
+        return `【${r.score >= 60 ? "正确" : "错误"}·${r.score}分】${q.question}\n  你的答案：${r.userAnswer?.value ?? "未答"}\n  评语：${r.comment ?? ""}`;
+    }).join("\n\n");
+    const system = [
+        prompts.analysis,
+        `以下是学生本次答题情况：\n${ctx}`,
+        `薄弱点分析：\n${analysis}`,
+        "请基于以上信息回答学生的问题。如果问题超出本次答题范围，可以适当延伸但需说明。",
+    ];
+    return [
+        { role: "system", content: system.join("\n\n") },
+        ...history,
+        { role: "user", content: userMessage },
+    ];
+}
+
 /** 取 AI 调用所需的 AIConfig 子集（仅类型层面复用） */
 export type { AIConfig };

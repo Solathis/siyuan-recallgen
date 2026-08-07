@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { button, badge, card, field, input, select, label, slider, cn } from "./components";
+    import { button, badge, card, field, input, select, label, switchCls, slider, cn } from "./components";
     import type { RecallGenConfig, AIProvider } from "@/types/config";
 
     export let config: RecallGenConfig;
@@ -12,6 +12,7 @@
     function v(e: Event): string { return (e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value; }
     function vn(e: Event): number { return parseInt(v(e)) || 0; }
     function vf(e: Event): number { return parseFloat(v(e)) || 0; }
+    function checked(e: Event): boolean { return (e.target as HTMLInputElement).checked; }
 
     function patchAi(patch: Partial<typeof config.ai>) {
         dispatch("save", { ...config, ai: { ...config.ai, ...patch } });
@@ -71,6 +72,11 @@
             {#if connState === "ok"}<span class={badge("success")}>连接成功</span>{/if}
             {#if connState === "fail"}<span class={badge("destructive")}>连接失败</span>{/if}
         </div>
+        <label class="rg-check-item">
+            <input class={switchCls} type="checkbox" checked={config.ai.jsonSchemaEnabled} on:change={(e) => patchAi({ jsonSchemaEnabled: checked(e) })} />
+            <span>JSON Schema 约束输出</span>
+            <span class={field.description}>开启后用 response_format 强制 AI 返回 JSON；关闭后仅靠提示词约束（兼容性更好但可能需 jsonrepair 修复）</span>
+        </label>
     </div>
 </div>
 
@@ -78,5 +84,6 @@
     .rg-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .rg-row-2 { display: flex; gap: 12px; }
     .rg-row-2 > * { flex: 1; }
+    .rg-check-item { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--b3-theme-on-background); flex-wrap: wrap; }
     @media (max-width: 640px) { .rg-row-2 { flex-direction: column; } }
 </style>
