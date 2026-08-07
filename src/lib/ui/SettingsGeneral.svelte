@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { button, card, field, input, textarea, select, switchCls, checkbox, alert, alertTitle, alertDescription, cn } from "./components";
+    import { button, card, field, input, select, switchCls, checkbox, slider, alert, alertTitle, alertDescription, cn } from "./components";
     import type { RecallGenConfig, StorageLocation } from "@/types/config";
     import type { QuestionType } from "@/types/quiz";
 
@@ -19,6 +19,7 @@
     function v(e: Event): string { return (e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value; }
     function vn(e: Event): number { return parseInt(v(e)) || 0; }
     function checked(e: Event): boolean { return (e.target as HTMLInputElement).checked; }
+    function vf(e: Event): number { return parseFloat(v(e)) || 0; }
 
     $: diffOk = config.general.difficulty.easy + config.general.difficulty.medium + config.general.difficulty.hard === config.general.difficulty.total;
     $: totalValid = config.general.difficulty.total >= 1 && config.general.difficulty.total <= 50;
@@ -82,9 +83,9 @@
             </div>
         {/if}
         <div class={field.field}>
-            <span class={field.label}>超纲范围</span>
-            <span class={field.description}>允许出题涵盖笔记外的扩展知识点，留空则仅限笔记内容</span>
-            <textarea class={cn(textarea, "rg-scope-ta")} placeholder="例如：可扩展到相关算法、数据结构、系统设计等" on:input={(e) => patchGeneral({ extraScope: v(e) })}>{config.general.extraScope}</textarea>
+            <span class={field.label}>超纲比例（{config.general.extraScopePct}%）</span>
+            <span class={field.description}>允许 AI 出题时扩展到笔记外的相关知识点，0% = 仅限笔记内容</span>
+            <input class={slider} type="range" min="0" max="50" step="5" value={config.general.extraScopePct} on:input={(e) => patchGeneral({ extraScopePct: vf(e) })} />
         </div>
         <label class="rg-check-item">
             <input class={switchCls} type="checkbox" checked={config.general.countdownEnabled} on:change={(e) => patchGeneral({ countdownEnabled: checked(e) })} />
@@ -118,6 +119,5 @@
     .rg-checks { display: flex; flex-wrap: wrap; gap: 12px; }
     .rg-check-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--b3-theme-on-background); }
     :global(.rg-input--invalid) { border-color: var(--b3-card-error); }
-    :global(.rg-scope-ta) { min-height: 60px; resize: vertical; }
     @media (max-width: 640px) { .rg-row-3 { flex-direction: column; } }
 </style>

@@ -79,7 +79,9 @@ function answerText(q: Question): string {
     }
 }
 
-/** 新建子文档存放题目，返回新文档 ID */
+/** 新建子文档存放题目，返回新文档 ID
+ * sourceDocId 可以是文档块 ID 或笔记本 ID（笔记本生成时）。
+ */
 export async function saveAsNewDoc(
     config: GeneralConfig,
     questions: Question[],
@@ -88,20 +90,22 @@ export async function saveAsNewDoc(
 ): Promise<string> {
     const md = buildQuestionsMarkdown(questions);
     const title = titleOf(sourceTitle);
-    const block = await getBlockByID(sourceDocId);
-    if (!block) throw new Error("无法定位源文档块");
 
-    let notebook = block.box;
-    let path = "";
     if (config.storageLocation === "notebook" && config.notebookId) {
-        notebook = config.notebookId;
-        path = "/" + title;
-    } else {
+        return createDocWithMd(config.notebookId, "/" + title, md);
+    }
+
+    const block = await getBlockByID(sourceDocId).catch(() => null);
+    if (block) {
+        // 源是文档：在同级路径下创建子文档
         const hpath = await getHPathByID(sourceDocId).catch(() => block.hpath);
         const parent = hpath.lastIndexOf("/") >= 0 ? hpath.slice(0, hpath.lastIndexOf("/")) : "";
-        path = (parent ? parent : "") + "/" + title;
+        const path = (parent || "") + "/" + title;
+        return createDocWithMd(block.box, path, md);
     }
-    return createDocWithMd(notebook, path, md);
+
+    // 源是笔记本：直接在该笔记本根目录下创建文档
+    return createDocWithMd(sourceDocId as NotebookId, "/" + title, md);
 }
 
 /** 插入到当前文档末尾 */

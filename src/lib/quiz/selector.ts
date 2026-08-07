@@ -54,16 +54,20 @@ export class QuizSelector {
         });
     }
 
-    /** 文档标题图标菜单：生成复习题 */
+    /** 文档标题图标菜单：生成复习题 + 从笔记本生成 */
     private onTitleIcon(e: CustomEvent) {
         const detail = (e as any).detail;
         if (!detail?.menu) return;
         const rootId: string = detail?.data?.rootID || detail?.data?.id || detail?.protyle?.block?.rootID;
-        if (!rootId) return;
         detail.menu.addItem({
             icon: "iconSparkles",
             label: this.plugin.i18n.generateQuiz ?? "生成复习题",
-            click: () => void this.fromDoc(rootId),
+            click: () => { if (rootId) void this.fromDoc(rootId); },
+        });
+        detail.menu.addItem({
+            icon: "iconFiles",
+            label: this.plugin.i18n.generateNotebookQuiz ?? "从笔记本生成复习题",
+            click: () => void this.onNotebookCommand(),
         });
     }
 
@@ -75,7 +79,8 @@ export class QuizSelector {
         if (!elements || elements.length === 0) return;
 
         if (detail.type === "doc") {
-            const docId = elements[0].getAttribute("data-node-id");
+            const docId = elements[0].getAttribute("data-node-id")
+                || elements[0].getAttribute("data-id");
             if (!docId) return;
             detail.menu.addItem({
                 icon: "iconSparkles",
@@ -83,9 +88,15 @@ export class QuizSelector {
                 click: () => void this.fromDoc(docId),
             });
         } else if (detail.type === "notebook") {
-            const nbId = elements[0].getAttribute("data-url") || elements[0].getAttribute("data-box");
-            const nbName = elements[0].querySelector(".b3-list-item__text")?.textContent ?? "笔记本";
+            const el = elements[0];
+            const nbId = el.getAttribute("data-url")
+                || el.getAttribute("data-box")
+                || el.getAttribute("data-id")
+                || el.getAttribute("data-node-id");
             if (!nbId) return;
+            const nbName = el.querySelector(".b3-list-item__text")?.textContent?.trim()
+                || el.querySelector("[title]")?.getAttribute("title")
+                || "笔记本";
             detail.menu.addItem({
                 icon: "iconSparkles",
                 label: this.plugin.i18n.generateNotebookQuiz ?? "从笔记本生成复习题",
@@ -105,7 +116,7 @@ export class QuizSelector {
         await this.fromDoc(rootId);
     }
 
-    /** 命令面板：从笔记本生成 */
+    /** 命令面板/标题菜单：从笔记本生成（弹出选择对话框） */
     private async onNotebookCommand() {
         const res = await lsNotebooks().catch(() => null);
         const notebooks = res?.notebooks?.filter((n: Notebook) => !n.closed) ?? [];
@@ -113,6 +124,11 @@ export class QuizSelector {
             showMessage("没有打开的笔记本");
             return;
         }
+        if (notebooks.length === 1) {
+            await this.fromNotebook(notebooks[0].id, notebooks[0].name);
+            return;
+        }
+        // 多个笔记本时弹出 Menu 选择
         const menu = new Menu("rg-notebook");
         for (const nb of notebooks) {
             menu.addItem({
