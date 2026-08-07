@@ -65,19 +65,21 @@ export default class RecallGenPlugin extends Plugin {
                 const c = this as unknown as Custom;
                 const div = document.createElement("div");
                 (c.element as HTMLElement).appendChild(div);
-                self.settingComp = new SettingPanel({
-                    target: div,
-                    props: {
-                        config: self.config,
-                        scores: [],
-                        onTestConnection: () => aiTestConnection(self.config.ai),
-                        onClearScores: async () => { await self.scoreStore.clear(); },
-                        onClearProgress: async () => { await self.progressStore.clearAll(); },
-                    },
-                });
-                self.settingComp.$on("save", async (e: { detail: RecallGenConfig }) => {
-                    self.config = e.detail;
-                    await self.configStore.set(self.config);
+                self.scoreStore.list().then((scores) => {
+                    self.settingComp = new SettingPanel({
+                        target: div,
+                        props: {
+                            config: self.config,
+                            scores,
+                            onTestConnection: () => aiTestConnection(self.config.ai),
+                            onClearScores: async () => { await self.scoreStore.clear(); },
+                            onClearProgress: async () => { await self.progressStore.clearAll(); },
+                        },
+                    });
+                    self.settingComp.$on("save", async (e: { detail: RecallGenConfig }) => {
+                        self.config = e.detail;
+                        await self.configStore.set(self.config);
+                    });
                 });
             },
             destroy: () => {
@@ -86,17 +88,11 @@ export default class RecallGenPlugin extends Plugin {
             },
         });
 
+        // 设置入口：思源插件列表齿轮 → openSetting → 打开设置 Tab（非顶栏按钮）
         this.openSetting = () => this.openSettingsTab();
 
         this.selector = new QuizSelector(this, (tabData) => this.openQuizTab(tabData));
         this.selector.register();
-
-        this.addTopBar({
-            icon: "iconRecallGen",
-            title: this.i18n.name ?? "RecallGen",
-            position: "right",
-            callback: () => this.openSettingsTab(),
-        });
     }
 
     async onunload() {
