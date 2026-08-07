@@ -1,7 +1,10 @@
 import type { DifficultyDistribution, HeatmapConfig, QuestionType } from "./quiz";
 
-/** AI 服务提供商 */
-export type AIProvider = "openai" | "ollama" | "custom";
+/** AI 服务提供商（仅影响认证行为：ollama 无 key 时跳过认证头） */
+export type AIProvider = "openai" | "ollama";
+
+/** API 协议：决定端点路径、请求体格式、响应解析、认证头格式 */
+export type AIProtocol = "chat" | "responses" | "messages";
 
 /** 题目存储位置策略 */
 export type StorageLocation = "sibling" | "notebook";
@@ -9,6 +12,8 @@ export type StorageLocation = "sibling" | "notebook";
 /** AI 接口配置 */
 export interface AIConfig {
     provider: AIProvider;
+    /** API 协议：chat=OpenAI Chat Completions, responses=OpenAI Responses, messages=Anthropic Messages */
+    protocol: AIProtocol;
     baseUrl: string;
     apiKey: string;
     model: string;
@@ -69,6 +74,7 @@ export const DEFAULT_HEATMAP: HeatmapConfig = {
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
     provider: "openai",
+    protocol: "chat",
     baseUrl: "https://api.openai.com/v1",
     apiKey: "",
     model: "gpt-4o-mini",

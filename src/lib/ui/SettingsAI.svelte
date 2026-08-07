@@ -1,7 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import { button, badge, card, field, input, select, label, switchCls, slider, cn } from "./components";
-    import type { RecallGenConfig, AIProvider } from "@/types/config";
+    import type { RecallGenConfig, AIProvider, AIProtocol } from "@/types/config";
 
     export let config: RecallGenConfig;
     export let onTestConnection: () => Promise<boolean> = async () => false;
@@ -19,7 +19,13 @@
     function patchAi(patch: Partial<typeof config.ai>) {
         dispatch("save", { ...config, ai: { ...config.ai, ...patch } });
     }
-    function onProviderChange(e: Event) { patchAi({ provider: v(e) as AIProvider }); }
+    function onProviderChange(e: Event) {
+        const provider = v(e) as AIProvider;
+        // ollama 仅支持 chat 协议
+        if (provider === "ollama") patchAi({ provider, protocol: "chat" });
+        else patchAi({ provider });
+    }
+    function onProtocolChange(e: Event) { patchAi({ protocol: v(e) as AIProtocol }); }
     async function testConn() {
         connState = "testing";
         try { connState = (await onTestConnection()) ? "ok" : "fail"; }
@@ -38,8 +44,18 @@
             <select id="rg-provider" class={select} value={config.ai.provider} on:change={onProviderChange}>
                 <option value="openai">OpenAI 兼容</option>
                 <option value="ollama">Ollama</option>
-                <option value="custom">自定义</option>
             </select>
+        </div>
+        <div class={field.field}>
+            <label class={field.label} for="rg-protocol">API 协议</label>
+            <select id="rg-protocol" class={select} value={config.ai.protocol} on:change={onProtocolChange} disabled={config.ai.provider === "ollama"}>
+                <option value="chat">Chat Completions (/v1/chat/completions)</option>
+                <option value="responses">Responses API (/v1/responses)</option>
+                <option value="messages">Messages API (/v1/messages)</option>
+            </select>
+            {#if config.ai.provider === "ollama"}
+                <span class={field.description}>Ollama 仅支持 Chat Completions 协议</span>
+            {/if}
         </div>
         <div class={field.field}>
             <label class={field.label} for="rg-baseurl">Base URL</label>
