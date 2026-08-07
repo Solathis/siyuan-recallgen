@@ -74,6 +74,11 @@
             {#if connState === "ok"}<span class={badge("success")}>连接成功</span>{/if}
             {#if connState === "fail"}<span class={badge("destructive")}>连接失败</span>{/if}
         </div>
+        <div class={field.field}>
+            <label class={field.label} for="rg-testprompt">测试提示词</label>
+            <input id="rg-testprompt" class={input} type="text" value={config.ai.testPrompt} placeholder="ping" on:input={(e) => patchAi({ testPrompt: v(e) })} />
+            <span class={field.description}>点击「测试连接」时发送给 AI 的消息内容，默认 ping</span>
+        </div>
         <label class="rg-check-item">
             <input class={switchCls} type="checkbox" checked={config.ai.jsonSchemaEnabled} on:change={(e) => patchAi({ jsonSchemaEnabled: checked(e) })} />
             <span>JSON Schema 严格模式</span>

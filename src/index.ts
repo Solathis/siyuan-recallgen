@@ -15,8 +15,9 @@ import type { QuizService, QuizTabData } from "@/lib/quiz/service";
 import type { RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, QuizSession } from "@/types/quiz";
 import { getDefaultConfig } from "@/types/config";
+import { LOGO_DATA_URI } from "@/lib/logo-data";
 
-const ICON = `<symbol id="iconRecallGen" viewBox="0 0 16 16"><path fill="currentColor" d="M8 1l1.8 3.7L14 5.3l-2.9 2.8.7 4L8 10.2 4.2 12.1l.7-4L2 5.3l4.2-.6L8 1z"/></symbol>`;
+const ICON = `<symbol id="iconRecallGen" viewBox="0 0 128 128"><image href="${LOGO_DATA_URI}" width="128" height="128"/></symbol>`;
 
 const QUIZ_TAB = "quiz";
 

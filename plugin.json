@@ -3,7 +3,7 @@
   "author": "Solathis",
   "url": "",
   "version": "0.1.0",
-  "icon": "logo.png",
+  "icon": "iconRecallGen",
   "minAppVersion": "3.7.0",
   "backends": [
     "windows",

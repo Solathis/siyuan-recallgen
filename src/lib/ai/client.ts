@@ -137,11 +137,12 @@ export async function callLLM(
     return { content, raw: parsed };
 }
 
-/** 测试连接：发一条极简消息验证配置可用 */
+/** 测试连接：发一条用户自定义消息验证配置可用 */
 export async function testConnection(config: AIConfig): Promise<boolean> {
+    const prompt = config.testPrompt?.trim() || "ping";
     try {
-        await callLLM(config, [{ role: "user", content: "ping" }], {
-            maxTokens: 8,
+        await callLLM(config, [{ role: "user", content: prompt }], {
+            maxTokens: 16,
             temperature: 0,
         });
         return true;

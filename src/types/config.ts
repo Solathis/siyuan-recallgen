@@ -18,6 +18,8 @@ export interface AIConfig {
     timeout: number;
     /** JSON Schema 约束输出开关，默认开启 */
     jsonSchemaEnabled: boolean;
+    /** 测试连接的自定义提示词 */
+    testPrompt: string;
 }
 
 /** 提示词配置 */
@@ -74,6 +76,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
     maxTokens: 16384,
     timeout: 120000,
     jsonSchemaEnabled: true,
+    testPrompt: "ping",
 };
 
 export const DEFAULT_PROMPTS: PromptConfig = {
