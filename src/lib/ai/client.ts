@@ -138,10 +138,14 @@ export async function callLLM(
 }
 
 /** 测试连接：发一条极简消息验证配置可用 */
-export async function testConnection(config: AIConfig): Promise<string> {
-    const result = await callLLM(config, [{ role: "user", content: "ping" }], {
-        maxTokens: 8,
-        temperature: 0,
-    });
-    return result.content;
+export async function testConnection(config: AIConfig): Promise<boolean> {
+    try {
+        await callLLM(config, [{ role: "user", content: "ping" }], {
+            maxTokens: 8,
+            temperature: 0,
+        });
+        return true;
+    } catch {
+        return false;
+    }
 }

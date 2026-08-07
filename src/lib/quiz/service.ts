@@ -24,7 +24,7 @@ export interface QuizService {
     saveScore(record: ScoreRecord): Promise<void>;
     testConnection(): Promise<boolean>;
     clearScores(): Promise<void>;
-    clearProgress(): Promise<void>;
+    clearAllProgress(): Promise<void>;
 }
 
 /** Tab 初始数据 */
