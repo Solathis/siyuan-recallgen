@@ -14,6 +14,8 @@
     function vf(e: Event): number { return parseFloat(v(e)) || 0; }
     function checked(e: Event): boolean { return (e.target as HTMLInputElement).checked; }
 
+    let _temperature = config.ai.temperature;
+
     function patchAi(patch: Partial<typeof config.ai>) {
         dispatch("save", { ...config, ai: { ...config.ai, ...patch } });
     }
@@ -52,8 +54,8 @@
             <input id="rg-model" class={input} type="text" value={config.ai.model} on:input={(e) => patchAi({ model: v(e) })} />
         </div>
         <div class={field.field}>
-            <label class={field.label}>Temperature（{config.ai.temperature.toFixed(1)}）</label>
-            <input class={slider} type="range" min="0" max="2" step="0.1" value={config.ai.temperature} on:input={(e) => patchAi({ temperature: vf(e) })} />
+            <label class={field.label}>Temperature（{_temperature.toFixed(1)}）</label>
+            <input class={slider} type="range" min="0" max="2" step="0.1" bind:value={_temperature} on:change={() => patchAi({ temperature: _temperature })} />
         </div>
         <div class="rg-row-2">
             <div class={field.field}>

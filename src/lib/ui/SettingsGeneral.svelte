@@ -22,7 +22,6 @@
     function vf(e: Event): number { return parseFloat(v(e)) || 0; }
 
     let _extraScope = config.general.extraScopePct;
-    $: _extraScope = config.general.extraScopePct;
 
     $: diffOk = config.general.difficulty.easy + config.general.difficulty.medium + config.general.difficulty.hard === config.general.difficulty.total;
     $: totalValid = config.general.difficulty.total >= 1 && config.general.difficulty.total <= 50;
