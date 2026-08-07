@@ -56,7 +56,6 @@ export interface RecallGenConfig {
 export const DEFAULT_HEATMAP: HeatmapConfig = {
     enabled: true,
     metric: "max",
-    days: 90,
     ranges: [
         { min: 90, max: 100, color: "#196127" },
         { min: 80, max: 89, color: "#40c463" },
@@ -72,7 +71,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
     apiKey: "",
     model: "gpt-4o-mini",
     temperature: 0.7,
-    maxTokens: 4096,
+    maxTokens: 8192,
     timeout: 120000,
 };
 

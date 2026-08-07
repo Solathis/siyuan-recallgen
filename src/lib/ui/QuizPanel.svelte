@@ -13,7 +13,6 @@
 
     let panelState: PanelState = "loading_generating";
     let session: QuizSession | null = null;
-    let currentIndex = 0;
     let error: string | null = null;
     let results: GradingResult[] | null = null;
     let analysis: string | null = null;
@@ -27,7 +26,6 @@
     let countdownLeft = 0;
 
     $: questions = session?.questions ?? [];
-    $: current = questions[currentIndex];
 
     onMount(async () => {
         if (tabData.mode === "resume" && tabData.quizId) {
@@ -45,12 +43,36 @@
         if (countdownTimer) clearInterval(countdownTimer);
     });
 
+    /** 检查 AI 配置是否有效 */
+    function checkAiConfig(): boolean {
+        const ai = config.ai;
+        if (!ai.model) {
+            error = "未配置 AI 模型，请先在设置中填写模型名称";
+            return false;
+        }
+        if (ai.provider !== "ollama" && !ai.apiKey) {
+            error = "未配置 API Key，请先在设置中填写";
+            return false;
+        }
+        return true;
+    }
+
     async function startGenerate() {
+        error = null;
+        if (!checkAiConfig()) {
+            panelState = "answering";
+            return;
+        }
         panelState = "loading_generating";
         progressValue = null;
         progressLabel = "AI 正在生成题目…";
         try {
             const qs = await service.generate(tabData.content ?? "");
+            if (qs.length === 0) {
+                error = "AI 未生成任何题目，请检查内容或重试";
+                panelState = "answering";
+                return;
+            }
             const id = genId();
             session = { id, sourceDocId: tabData.sourceDocId, sourceTitle: tabData.sourceTitle, questions: qs, createdAt: Date.now(), answers: {} };
             const prev = await service.loadProgress(id);
@@ -71,17 +93,17 @@
         if (countdownEnabled) { countdownLeft = countdownSec; startCountdown(); }
     }
 
-    function onAnswer(a: UserAnswer) {
-        if (!session || !current) return;
-        session.answers[current.id] = a;
+    function onAnswer(qid: string, a: UserAnswer) {
+        if (!session) return;
+        session.answers[qid] = a;
         scheduleSave();
     }
     function scheduleSave() {
         if (saveTimer) clearTimeout(saveTimer);
         saveTimer = setTimeout(() => { if (session) void service.saveProgress(session); }, 800);
     }
-    function go(i: number) { if (i < 0 || i >= questions.length) return; currentIndex = i; }
     function isAnswered(q: Question): boolean { return !!session?.answers[q.id]; }
+    $: answeredCount = questions.filter(isAnswered).length;
 
     async function submit() {
         if (!session) return;
@@ -123,6 +145,13 @@
         try { await service.saveResultToDoc(session, analysis ?? ""); showMessage("已保存到文档"); }
         catch (e) { error = (e as Error).message; }
     }
+    function typeLabel(t: string): string {
+        const m: Record<string, string> = {
+            single_choice: "单选", multiple_choice: "多选", fill_blank: "填空",
+            true_false: "判断", subjective: "简答", coding: "编程",
+        };
+        return m[t] ?? t;
+    }
 </script>
 
 <div class="rg-panel">
@@ -134,29 +163,29 @@
         {#if error}
             <div class={alert("destructive")}><p class={alertTitle}>出错了</p><p class={alertDescription}>{error}</p></div>
         {/if}
-        <div class="rg-panel__body">
-            <aside class="rg-panel__nav">
-                {#each questions as q, i}
-                    <button class="rg-nav__item" class:active={i === currentIndex} class:done={isAnswered(q)} on:click={() => go(i)}>{i + 1}</button>
-                {/each}
-            </aside>
-            <section class="rg-panel__main">
-                {#if current}
-                    <QuestionView question={current} answer={session?.answers[current.id]} on:change={onAnswer} />
-                {/if}
-                <div class="rg-panel__pager">
-                    <button class={button({ variant: "outline", size: "sm" })} on:click={() => go(currentIndex - 1)} disabled={currentIndex === 0}>上一题</button>
-                    <span class={badge("secondary")}>{currentIndex + 1} / {questions.length}</span>
-                    <button class={button({ variant: "outline", size: "sm" })} on:click={() => go(currentIndex + 1)} disabled={currentIndex === questions.length - 1}>下一题</button>
+        {#if questions.length > 0}
+            <div class="rg-panel__scroll">
+                <div class="rg-panel__list">
+                    {#each questions as q, i}
+                        <div class="rg-panel__q-item">
+                            <div class="rg-panel__q-header">
+                                <span class={badge("secondary")}>第 {i + 1} 题</span>
+                                <span class={badge("outline")}>{typeLabel(q.type)}</span>
+                                {#if isAnswered(q)}<span class={badge("success")}>已答</span>{/if}
+                            </div>
+                            <QuestionView question={q} answer={session?.answers[q.id]} on:change={(e) => onAnswer(q.id, e.detail)} />
+                        </div>
+                    {/each}
                 </div>
-            </section>
-        </div>
-        <footer class="rg-panel__footer">
-            {#if countdownEnabled}
-                <span class={badge("warning")}>{Math.floor(countdownLeft / 60)}:{(countdownLeft % 60).toString().padStart(2, "0")}</span>
-            {/if}
-            <button class={button({ variant: "destructive" })} on:click={submit}>交卷</button>
-        </footer>
+            </div>
+            <footer class="rg-panel__footer">
+                <span class={badge("secondary")}>已答 {answeredCount} / {questions.length}</span>
+                {#if countdownEnabled}
+                    <span class={badge("warning")}>{Math.floor(countdownLeft / 60)}:{(countdownLeft % 60).toString().padStart(2, "0")}</span>
+                {/if}
+                <button class={button({ variant: "destructive" })} on:click={submit}>交卷</button>
+            </footer>
+        {/if}
     {:else if panelState === "result"}
         {#if error}
             <div class={alert("destructive")}><p class={alertTitle}>出错了</p><p class={alertDescription}>{error}</p></div>
@@ -170,16 +199,9 @@
 <style>
     .rg-panel { display: flex; flex-direction: column; height: 100%; gap: 12px; }
     .rg-panel__loading { display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
-    .rg-panel__body { display: flex; flex: 1; min-height: 0; gap: 12px; }
-    .rg-panel__nav { width: 52px; display: flex; flex-direction: column; gap: 4px; padding: 4px; overflow-y: auto; }
-    .rg-nav__item { width: 40px; height: 40px; border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); background: var(--b3-theme-background); color: var(--b3-theme-on-background); cursor: pointer; font-size: 13px; transition: border-color .12s, background .12s; }
-    .rg-nav__item.done { background: color-mix(in srgb, var(--b3-theme-primary) 14%, transparent); }
-    .rg-nav__item.active { border-color: var(--b3-theme-primary); box-shadow: 0 0 0 1px var(--b3-theme-primary); }
-    .rg-panel__main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-    .rg-panel__pager { display: flex; align-items: center; gap: 12px; }
-    .rg-panel__footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--b3-border-color); }
-    @media (max-width: 768px) {
-        .rg-panel__nav { width: 44px; }
-        .rg-nav__item { width: 36px; height: 36px; font-size: 12px; }
-    }
+    .rg-panel__scroll { flex: 1; overflow-y: auto; min-height: 0; }
+    .rg-panel__list { display: flex; flex-direction: column; gap: 16px; padding: 4px 0 16px; }
+    .rg-panel__q-item { display: flex; flex-direction: column; gap: 8px; }
+    .rg-panel__q-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .rg-panel__footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--b3-border-color); flex-shrink: 0; }
 </style>

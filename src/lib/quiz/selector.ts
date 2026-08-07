@@ -1,6 +1,6 @@
 import type { Plugin } from "siyuan";
-import { getAllEditor, confirm, showMessage } from "siyuan";
-import { getBlockKramdown, exportMdContent, getHPathByID } from "@/api";
+import { getAllEditor, confirm, showMessage, Menu } from "siyuan";
+import { getBlockKramdown, exportMdContent, getHPathByID, lsNotebooks, sql, listDocTree } from "@/api";
 import type { QuizTabData } from "./service";
 
 const MIN_LEN = 50;
@@ -8,11 +8,12 @@ const MIN_LEN = 50;
 export type OpenQuizFn = (tabData: QuizTabData) => void;
 
 /**
- * 内容选取与触发注册：右键块菜单 + 命令面板。
- * register/unregister 成对调用。
+ * 内容选取与触发注册。
+ * 三种入口：块菜单、文档标题图标菜单、命令面板（含笔记本）。
  */
 export class QuizSelector {
-    private readonly bound = (e: CustomEvent) => this.onBlockIcon(e);
+    private readonly boundBlock = (e: CustomEvent) => this.onBlockIcon(e);
+    private readonly boundTitle = (e: CustomEvent) => this.onTitleIcon(e);
 
     constructor(
         private readonly plugin: Plugin,
@@ -20,17 +21,24 @@ export class QuizSelector {
     ) {}
 
     register(): void {
-        this.plugin.eventBus.on("click-blockicon", this.bound);
+        this.plugin.eventBus.on("click-blockicon", this.boundBlock);
+        this.plugin.eventBus.on("click-editortitleicon", this.boundTitle);
         this.plugin.addCommand({
             langKey: "generateQuiz",
             callback: () => void this.onCommand(),
         });
+        this.plugin.addCommand({
+            langKey: "generateNotebookQuiz",
+            callback: () => void this.onNotebookCommand(),
+        });
     }
 
     unregister(): void {
-        this.plugin.eventBus.off("click-blockicon", this.bound);
+        this.plugin.eventBus.off("click-blockicon", this.boundBlock);
+        this.plugin.eventBus.off("click-editortitleicon", this.boundTitle);
     }
 
+    /** 块图标菜单：生成复习题 */
     private onBlockIcon(e: CustomEvent) {
         const detail = (e as any).detail;
         detail.menu.addItem({
@@ -40,12 +48,56 @@ export class QuizSelector {
         });
     }
 
+    /** 文档标题图标菜单：生成复习题 */
+    private onTitleIcon(e: CustomEvent) {
+        const detail = (e as any).detail;
+        const rootId: string = detail?.data?.rootID;
+        if (!rootId) return;
+        detail.menu.addItem({
+            icon: "iconSparkles",
+            label: this.plugin.i18n.generateQuiz ?? "生成复习题",
+            click: () => void this.fromDoc(rootId),
+        });
+    }
+
+    /** 命令面板：从当前文档生成 */
+    private async onCommand() {
+        const editors = getAllEditor();
+        if (!editors || editors.length === 0) {
+            showMessage(this.plugin.i18n.openDocFirst ?? "请先打开文档");
+            return;
+        }
+        const rootId = editors[0].protyle.block.rootID;
+        await this.fromDoc(rootId);
+    }
+
+    /** 命令面板：从笔记本生成 */
+    private async onNotebookCommand() {
+        const res = await lsNotebooks().catch(() => null);
+        const notebooks = res?.notebooks?.filter((n: Notebook) => !n.closed) ?? [];
+        if (notebooks.length === 0) {
+            showMessage("没有打开的笔记本");
+            return;
+        }
+        const menu = new Menu("rg-notebook");
+        for (const nb of notebooks) {
+            menu.addItem({
+                icon: "iconFiles",
+                label: nb.name,
+                click: () => void this.fromNotebook(nb.id, nb.name),
+            });
+        }
+        // 在屏幕中央弹出菜单
+        const rect = document.body.getBoundingClientRect();
+        menu.open({ x: rect.width / 2 - 100, y: rect.height / 2 - 50 });
+    }
+
     private async fromBlocks(detail: any) {
         const elements: HTMLElement[] = detail.blockElements ?? [];
         const rootId: string = detail.protyle?.block?.rootID;
         const ids = elements
-            .map((el) => el?.dataset?.nodeId)
-            .filter((id): id is string => !!id);
+            .map((el: HTMLElement) => el?.dataset?.nodeId)
+            .filter((id: string): id is string => !!id);
         if (ids.length === 0) return;
         let content = "";
         for (const id of ids) {
@@ -56,17 +108,26 @@ export class QuizSelector {
         await this.launch(content, rootId, title);
     }
 
-    private async onCommand() {
-        const editors = getAllEditor();
-        if (!editors || editors.length === 0) {
-            showMessage(this.plugin.i18n.openDocFirst ?? "请先打开文档");
-            return;
-        }
-        const rootId = editors[0].protyle.block.rootID;
+    private async fromDoc(rootId: string) {
         const exp = await exportMdContent(rootId).catch(() => null);
         const content = exp?.content ?? "";
         const title = exp?.hPath || (await safeTitle(rootId));
         await this.launch(content, rootId, title);
+    }
+
+    private async fromNotebook(notebookId: string, notebookName: string) {
+        showMessage(`正在加载笔记本「${notebookName}」的内容…`);
+        const docIds = await collectDocIds(notebookId);
+        if (docIds.length === 0) {
+            showMessage("笔记本中没有文档");
+            return;
+        }
+        let content = "";
+        for (const id of docIds) {
+            const exp = await exportMdContent(id).catch(() => null);
+            if (exp?.content) content += exp.content + "\n\n---\n\n";
+        }
+        await this.launch(content, notebookId, `笔记本·${notebookName}`);
     }
 
     private async launch(content: string, rootId: string, title: string) {
@@ -92,6 +153,23 @@ export class QuizSelector {
             );
         });
     }
+}
+
+/** 递归收集笔记本下所有文档 ID */
+async function collectDocIds(notebookId: string): Promise<string[]> {
+    const rows = await sql(`SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' ORDER BY hpath ASC LIMIT 100`);
+    if (rows && rows.length > 0) return rows.map((r: any) => r.id as string);
+    // SQL 不可用时回退到树遍历
+    const tree = await listDocTree(notebookId as NotebookId, "/").catch(() => [] as IDocTreeNode[]);
+    const ids: string[] = [];
+    function walk(nodes: IDocTreeNode[]) {
+        for (const n of nodes) {
+            if (n.id) ids.push(n.id);
+            if (n.children) walk(n.children);
+        }
+    }
+    walk(tree);
+    return ids;
 }
 
 async function safeTitle(rootId?: string): Promise<string> {

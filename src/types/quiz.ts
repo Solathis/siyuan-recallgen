@@ -152,7 +152,6 @@ export interface HeatmapConfig {
     enabled: boolean;
     metric: "max" | "avg";
     ranges: ScoreRange[];
-    days: number;
 }
 
 /** 答题面板状态机 */

@@ -43,10 +43,6 @@
             </select>
         </div>
         <div class={field.field}>
-            <label class={field.label} for="rg-days">显示天数</label>
-            <input id="rg-days" class={input} type="number" value={config.heatmap.days} on:input={(e) => patchHeatmap({ days: vn(e) || 90 })} />
-        </div>
-        <div class={field.field}>
             <span class={field.label}>配色区间</span>
             <div class="rg-ranges">
                 {#each config.heatmap.ranges as r, i}

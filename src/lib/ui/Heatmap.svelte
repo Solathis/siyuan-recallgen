@@ -5,32 +5,35 @@
     export let records: ScoreRecord[] = [];
     export let config: HMConfig;
 
+    /** GitHub 风格：固定 53 周 × 7 天 */
+    const WEEKS = 53;
+    const DAYS = WEEKS * 7;
+
     type Cell = { date: string; score: number | null; count: number };
     type Col = Cell[];
 
-    $: weeks = Math.max(1, Math.ceil((config?.days ?? 90) / 7));
-    $: cols = buildCols(records, config, weeks);
+    $: cols = buildCols(records, config);
+    $: tipText = hover ? fmtTip(hover) : "\u00a0";
 
     const MONTHS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
-
-    let tipX = 0;
-    let tipY = 0;
-    let tipVisible = false;
-    let tipDate = "";
-    let tipScore = "";
+    const WEEKDAYS = ["", "一", "", "三", "", "五", ""];
 
     function fmtDay(d: Date): string {
         const p = (n: number) => String(n).padStart(2, "0");
         return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
     }
 
-    function buildCols(recs: ScoreRecord[], cfg: HMConfig, wk: number): Col[] {
+    function fmtTip(cell: Cell): string {
+        if (cell.score === null) return `${cell.date} · 无记录`;
+        return `${cell.date} · ${cell.score} 分（${cell.count} 次）`;
+    }
+
+    function buildCols(recs: ScoreRecord[], cfg: HMConfig): Col[] {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayDow = (today.getDay() + 6) % 7;
-        const totalDays = wk * 7;
         const start = new Date(today);
-        start.setDate(start.getDate() - (totalDays - 1 - todayDow));
+        start.setDate(start.getDate() - (DAYS - 1 - todayDow));
         const byDate = aggregate(recs, cfg.metric);
         const out: Col[] = [];
         let cur = new Date(start);
@@ -44,6 +47,7 @@
             cur.setDate(cur.getDate() + 1);
         }
         if (col.length > 0) out.push(col);
+        while (out.length < WEEKS) out.push(Array.from({ length: 7 }, (_, i) => ({ date: "", score: null, count: 0 })));
         return out;
     }
 
@@ -73,19 +77,12 @@
         return "#ebedf0";
     }
 
-    function onEnter(cell: Cell, e: MouseEvent) {
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const parentRect = (e.currentTarget as HTMLElement).closest(".rg-heatmap")!.getBoundingClientRect();
-        tipX = rect.left - parentRect.left + rect.width / 2;
-        tipY = rect.top - parentRect.top - 4;
-        tipDate = cell.date;
-        tipScore = cell.score !== null ? `${cell.score} 分（${cell.count} 次）` : "无记录";
-        tipVisible = true;
-    }
-    function onLeave() { tipVisible = false; }
+    let hover: Cell | null = null;
+    function onEnter(cell: Cell) { hover = cell; }
+    function onLeave() { hover = null; }
 
     $: monthLabels = cols.map((col) => {
-        const first = col.find((c) => c);
+        const first = col.find((c) => c.date);
         if (!first) return "";
         return MONTHS[new Date(first.date + "T00:00:00").getMonth()];
     });
@@ -93,27 +90,34 @@
 </script>
 
 <div class={h.root}>
-    <div class={h.tip} style="left:{tipX}px; top:{tipY}px; transform:translate(-50%,-100%); opacity:{tipVisible ? 1 : 0}">
-        {tipDate} · {tipScore}
-    </div>
-    <div class={h.months} style="grid-template-columns: repeat({cols.length}, 1fr)">
-        {#each monthLabels as label}
-            <span class={h.monthLabel}>{label}</span>
-        {/each}
-    </div>
-    <div class={h.grid} style="grid-template-columns: repeat({cols.length}, 1fr)">
-        {#each cols as col}
-            <div class={h.col}>
-                {#each col as cell}
-                    <div class={h.cell}
-                         style="background:{colorFor(cell.score)}"
-                         on:mouseenter={(e) => onEnter(cell, e)}
-                         on:mouseleave={onLeave}
-                         role="button" tabindex="-1"
-                    ></div>
+    <div class={h.tip}>{tipText}</div>
+    <div class="rg-heatmap__chart">
+        <div class="rg-heatmap__weekdays">
+            {#each WEEKDAYS as wd}
+                <span class="rg-heatmap__weekday">{wd}</span>
+            {/each}
+        </div>
+        <div class="rg-heatmap__right">
+            <div class={h.months} style="grid-template-columns: repeat({WEEKS}, 1fr)">
+                {#each monthLabels as label}
+                    <span class={h.monthLabel}>{label}</span>
                 {/each}
             </div>
-        {/each}
+            <div class={h.grid} style="grid-template-columns: repeat({WEEKS}, 1fr)">
+                {#each cols as col}
+                    <div class={h.col}>
+                        {#each col as cell}
+                            <div class={h.cell}
+                                 style="background:{colorFor(cell.score)}"
+                                 on:mouseenter={() => onEnter(cell)}
+                                 on:mouseleave={onLeave}
+                                 role="button" tabindex="-1"
+                            ></div>
+                        {/each}
+                    </div>
+                {/each}
+            </div>
+        </div>
     </div>
     <div class={h.legend}>
         <span class={h.legendText}>少</span>
