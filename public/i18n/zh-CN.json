@@ -1,4 +1,6 @@
 {
+    "generateQuiz": "💡 生成复习题",
+    "openDocFirst": "请先打开文档",
     "byePlugin": "再见，RecallGen",
     "name": "RecallGen"
 }

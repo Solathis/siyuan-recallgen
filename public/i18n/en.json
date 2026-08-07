@@ -1,4 +1,6 @@
 {
+    "generateQuiz": "💡 Generate Quiz",
+    "openDocFirst": "Please open a document first",
     "byePlugin": "Bye, RecallGen",
     "name": "RecallGen"
 }
