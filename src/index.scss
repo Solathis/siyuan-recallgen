@@ -227,10 +227,75 @@
 }
 .rg-tooltip:hover::after { opacity: .95; }
 
+/* === ScrollArea === */
+.rg-scroll-area {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+/* === SidebarNav === */
+.rg-sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+.rg-sidebar-nav__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 12px;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: var(--b3-border-radius);
+    background: transparent;
+    color: var(--b3-theme-on-background);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: background .12s;
+    white-space: nowrap;
+}
+.rg-sidebar-nav__item:hover { background: var(--b3-list-hover); }
+.rg-sidebar-nav__item--active {
+    background: var(--b3-theme-background);
+    border-left-color: var(--b3-theme-primary);
+    font-weight: 600;
+}
+
+/* === Heatmap (HTML grid) === */
+.rg-heatmap { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.rg-heatmap__months { display: flex; gap: 0; height: 14px; margin-left: 0; }
+.rg-heatmap__month { font-size: 10px; color: var(--b3-theme-on-surface-light); width: 14px; white-space: nowrap; }
+.rg-heatmap__grid { display: flex; gap: 2px; }
+.rg-heatmap__col { display: flex; flex-direction: column; gap: 2px; }
+.rg-heatmap__cell {
+    width: 12px; height: 12px; border-radius: 2px; cursor: pointer;
+    transition: transform .08s;
+}
+.rg-heatmap__cell:hover { transform: scale(1.25); }
+.rg-heatmap__tip {
+    position: absolute; top: 0; left: 0; z-index: 10;
+    background: var(--b3-theme-on-background); color: var(--b3-theme-background);
+    padding: 4px 8px; border-radius: var(--b3-border-radius);
+    font-size: 11px; white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity .12s;
+}
+.rg-heatmap__legend { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.rg-heatmap__legend-text { font-size: 11px; color: var(--b3-theme-on-surface-light); }
+.rg-heatmap__legend-swatch {
+    display: inline-block; width: 12px; height: 12px;
+    border-radius: 2px; border: 1px solid var(--b3-border-color);
+}
+
 /* === 设置面板容器：自身管理高度，不操纵思源对话框内部结构 === */
 .rg-setting-container {
     width: 100%;
-    height: calc(80vh - 110px);
-    min-height: 420px;
+    height: 560px;
+    max-height: 72vh;
     overflow: hidden;
 }

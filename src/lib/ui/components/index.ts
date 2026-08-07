@@ -105,5 +105,23 @@ export const collapsible = {
 
 export const tooltip = "rg-tooltip";
 
+export const scrollArea = "rg-scroll-area";
+
+export const sidebarNav = "rg-sidebar-nav";
+export const sidebarNavItem = (active: boolean) => cn("rg-sidebar-nav__item", active && "rg-sidebar-nav__item--active");
+
+export const heatmap = {
+    root: "rg-heatmap",
+    grid: "rg-heatmap__grid",
+    col: "rg-heatmap__col",
+    cell: "rg-heatmap__cell",
+    months: "rg-heatmap__months",
+    monthLabel: "rg-heatmap__month",
+    legend: "rg-heatmap__legend",
+    legendSwatch: "rg-heatmap__legend-swatch",
+    legendText: "rg-heatmap__legend-text",
+    tip: "rg-heatmap__tip",
+};
+
 /** 共享 context key，所有 Tabs 组件必须使用同一个 Symbol 实例 */
 export const TABS_KEY = Symbol("rg-tabs");
