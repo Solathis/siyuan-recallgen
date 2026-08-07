@@ -3,7 +3,7 @@
     import ProgressBar from "./ProgressBar.svelte";
     import QuestionView from "./QuestionView.svelte";
     import ResultPanel from "./ResultPanel.svelte";
-    import { showMessage } from "siyuan";
+    import { showMessage, Dialog } from "siyuan";
     import { button, badge, card, alert, alertTitle, alertDescription, cn } from "./components";
     import type { QuizService, QuizTabData } from "../quiz/service";
     import type { GradingResult, PanelState, Question, QuizSession, UserAnswer } from "@/types/quiz";
@@ -208,6 +208,14 @@
         error = null;
         await startGenerate();
     }
+    async function confirmRegenerate() {
+        const ok = await confirmAction("重新生成", "确定要放弃当前题目并重新生成吗？");
+        if (ok) await regenerate();
+    }
+    async function confirmSubmit() {
+        const ok = await confirmAction("交卷", "确定要提交答案吗？提交后不可修改。");
+        if (ok) await submit();
+    }
     async function regenerate() {
         if (session) { await service.clearProgress(session.id); }
         session = null;
@@ -217,6 +225,19 @@
     async function retryGrade() {
         error = null;
         await submit();
+    }
+    /** 二次确认弹窗 */
+    function confirmAction(title: string, msg: string): Promise<boolean> {
+        return new Promise((resolve) => {
+            const dialog = new Dialog({
+                title,
+                content: `<div class="b3-dialog__content"><div class="ft__breakword">${msg}</div></div>
+<div class="b3-dialog__action"><button class="b3-button b3-button--cancel">${window.siyuan.languages.cancel}</button><div class="fn__space"></div><button class="b3-button b3-button--text">${window.siyuan.languages.confirm}</button></div>`,
+            });
+            const btns = dialog.element.querySelectorAll(".b3-button");
+            btns[0].addEventListener("click", () => { resolve(false); dialog.destroy(); });
+            btns[1].addEventListener("click", () => { resolve(true); dialog.destroy(); });
+        });
     }
     function typeLabel(t: string): string {
         const m: Record<string, string> = {
@@ -256,8 +277,8 @@
                     {#if countdownEnabled}
                         <span class={badge("warning")}>⏱ {Math.floor(countdownLeft / 60)}:{(countdownLeft % 60).toString().padStart(2, "0")}</span>
                     {/if}
-                    <button class={button({ variant: "outline", size: "sm" })} on:click={regenerate}>重新生成</button>
-                    <button class={button({ variant: "destructive" })} on:click={submit}>交卷</button>
+                    <button class={button({ variant: "outline", size: "sm" })} on:click={confirmRegenerate}>重新生成</button>
+                    <button class={button({ variant: "destructive" })} on:click={confirmSubmit}>交卷</button>
                 </div>
             </header>
             <div class="rg-panel__scroll">

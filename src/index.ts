@@ -48,6 +48,7 @@ export default class RecallGenPlugin extends Plugin {
             init: function () {
                 const c = this as unknown as Custom;
                 const div = document.createElement("div");
+                div.style.height = "100%";
                 (c.element as HTMLElement).appendChild(div);
                 self.quizComp = new QuizPanel({
                     target: div,

@@ -1,5 +1,7 @@
 /* === RecallGen shadcn 风格组件样式（思源 --b3-* 变量） === */
 .rg-btn {
+    appearance: none;
+    -webkit-appearance: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -36,7 +38,7 @@
     color: var(--b3-theme-on-primary);
 }
 .rg-btn--destructive {
-    background: var(--b3-card-error);
+    background: var(--b3-card-error, #d23f31);
     color: #fff;
 }
 .rg-btn--link {
@@ -59,9 +61,9 @@
 .rg-badge--default { background: var(--b3-theme-primary); color: var(--b3-theme-on-primary); }
 .rg-badge--secondary { background: var(--b3-theme-secondary); color: var(--b3-theme-on-primary); }
 .rg-badge--outline { border-color: var(--b3-border-color); color: var(--b3-theme-on-background); }
-.rg-badge--destructive { background: var(--b3-card-error); color: #fff; }
-.rg-badge--success { background: var(--b3-card-success); color: #fff; }
-.rg-badge--warning { background: var(--b3-card-warning); color: #fff; }
+.rg-badge--destructive { background: var(--b3-card-error, #d23f31); color: #fff; }
+.rg-badge--success { background: var(--b3-card-success, #65a84c); color: #fff; }
+.rg-badge--warning { background: var(--b3-card-warning, #d97706); color: #fff; }
 
 .rg-input, .rg-textarea, .rg-select {
     width: 100%;
@@ -131,9 +133,9 @@
     padding: 12px;
     background: var(--b3-theme-background-light);
 }
-.rg-alert--destructive { border-color: var(--b3-card-error); background: color-mix(in srgb, var(--b3-card-error) 12%, transparent); }
-.rg-alert--success { border-color: var(--b3-card-success); background: color-mix(in srgb, var(--b3-card-success) 12%, transparent); }
-.rg-alert--warning { border-color: var(--b3-card-warning); background: color-mix(in srgb, var(--b3-card-warning) 12%, transparent); }
+.rg-alert--destructive { border-color: var(--b3-card-error, #d23f31); background: color-mix(in srgb, var(--b3-card-error, #d23f31) 12%, transparent); }
+.rg-alert--success { border-color: var(--b3-card-success, #65a84c); background: color-mix(in srgb, var(--b3-card-success, #65a84c) 12%, transparent); }
+.rg-alert--warning { border-color: var(--b3-card-warning, #d97706); background: color-mix(in srgb, var(--b3-card-warning, #d97706) 12%, transparent); }
 .rg-alert__title { font-weight: 600; font-size: 13px; margin: 0 0 4px; color: var(--b3-theme-on-background); }
 .rg-alert__description { font-size: 12px; color: var(--b3-theme-on-surface-light); margin: 0; }
 
