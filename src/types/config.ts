@@ -43,6 +43,8 @@ export interface GeneralConfig {
     storageLocation: StorageLocation;
     /** 指定笔记本 ID（storageLocation=notebook 时生效） */
     notebookId: string;
+    /** 超纲范围：允许出题涵盖笔记外的扩展知识点 */
+    extraScope: string;
 }
 
 /** 完整配置 */
@@ -55,7 +57,7 @@ export interface RecallGenConfig {
 
 export const DEFAULT_HEATMAP: HeatmapConfig = {
     enabled: true,
-    metric: "max",
+    metric: "avg",
     ranges: [
         { min: 90, max: 100, color: "#196127" },
         { min: 80, max: 89, color: "#40c463" },
@@ -71,7 +73,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
     apiKey: "",
     model: "gpt-4o-mini",
     temperature: 0.7,
-    maxTokens: 8192,
+    maxTokens: 16384,
     timeout: 120000,
 };
 
@@ -81,12 +83,17 @@ export const DEFAULT_PROMPTS: PromptConfig = {
 1. 题目必须紧扣笔记内容，不得编造笔记中未涉及的知识点。
 2. 每道题的解析要简明扼要，说明正确答案的依据。
 3. 选项之间要有区分度，避免模棱两可。
-4. 严格按 JSON Schema 输出，不要输出任何多余文本。`,
+4. 严格按 JSON Schema 输出，不要输出任何多余文本。
+5. 难度说明：初级（基础概念识记与直接应用）、中级（综合理解与多步推理）、高级（深层原理、边缘情况与综合分析）。
+
+【编程题指令】若选中内容含代码或涉及编程，可生成编程题（编写函数、修复代码、预测输出）。编程题必须包含：题目描述、初始代码模板（可选）、测试用例（输入/期望输出）、参考答案与解析。`,
     coding: `若选中内容包含代码块，优先针对该代码语言生成编程题。
 编程题类型包括：根据需求编写函数、找出并修复代码错误、预测代码输出结果。
 必须包含：题目描述、初始代码模板（可选）、测试用例（输入/期望输出）、参考答案与解析。`,
     gradeSubjective: `你是一名严格但公正的阅卷老师。根据题目、参考答案要点和学生作答，给出 0-100 的评分，并附上简要评语。
-评分维度：知识正确性、逻辑完整性、表述清晰度。以 JSON 格式返回：{"score": 85, "comment": "评语"}`,
+评分维度：知识正确性、逻辑完整性、表述清晰度。以 JSON 格式返回：{"score": 85, "comment": "评语"}
+
+【编程题判分】当题目为编程题时，还需综合评估：代码正确性（能否通过测试用例）、边界处理、代码效率与可读性。若学生代码未通过测试用例，应根据其逻辑正确程度酌情给分，而非直接 0 分。`,
     gradeCoding: `你是一名资深编程阅卷老师。根据题目描述、测试用例、参考答案和学生代码，分析代码正确性、效率和可读性，给出 0-100 分。
 以 JSON 格式返回：{"score": 85, "comment": "评语"}`,
     analysis: `你是一位学习顾问。基于学生本次答题的错误题目和涉及的知识点，生成一段复习指导意见。
@@ -102,6 +109,7 @@ export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     editorTheme: "auto",
     storageLocation: "sibling",
     notebookId: "",
+    extraScope: "",
 };
 
 export function getDefaultConfig(): RecallGenConfig {

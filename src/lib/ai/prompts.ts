@@ -9,11 +9,11 @@ export function buildGenerateMessages(
     types: QuestionType[],
     difficulty: DifficultyDistribution,
 ): Array<{ role: "system" | "user"; content: string }> {
-    const system = [prompts.generate];
-    if (types.includes("coding")) {
-        system.push(prompts.coding);
-    }
-    system.push("严格按 JSON Schema 输出，禁止输出多余文本或代码围栏。");
+    const system = [
+        prompts.generate,
+        prompts.coding,
+        "严格按 JSON Schema 输出，禁止输出多余文本或代码围栏。",
+    ];
 
     const user = [
         `笔记内容：`,
@@ -22,7 +22,9 @@ export function buildGenerateMessages(
         "----",
         `允许的题型：${types.join(", ")}`,
         `难度分布：初级 ${difficulty.easy} 题、中级 ${difficulty.medium} 题、高级 ${difficulty.hard} 题（共 ${difficulty.total} 题）。`,
+        `初级=基础概念识记与直接应用；中级=综合理解与多步推理；高级=深层原理、边缘情况与综合分析。`,
         `各题总数严格等于上述分布，不得超出。`,
+        `超纲范围：${general.extraScope || "仅限笔记内容范围"}`,
         `输出语言：${general.language === "zh" ? "中文" : "English"}`,
         `按以下 JSON 结构输出：{"questions":[{type,difficulty,question,options?,answer?,reference_answer?,language?,starter_code?,test_cases?,explanation?}]}。`,
         `single_choice/multiple_choice 的 answer 为选项索引（number 或 number[]）；true_false 为 boolean；fill_blank 的 answer 为每空可接受答案的二维数组；coding 的 answer 为参考答案代码。`,
@@ -34,46 +36,38 @@ export function buildGenerateMessages(
     ];
 }
 
-/** 主观题判分消息 */
+/** 主观题/编程题统一判分消息 */
 export function buildGradeSubjectiveMessages(
     prompts: PromptConfig,
     question: Question,
     userAnswer: string,
 ): Array<{ role: "system" | "user"; content: string }> {
-    const reference = "reference_answer" in question ? question.reference_answer : "";
-    const user = [
-        `题目：${question.question}`,
-        `参考答案要点：${reference}`,
-        `学生作答：${userAnswer}`,
-        `请以 JSON 输出：{"score":0-100,"comment":"评语"}`,
-    ].join("\n");
-    return [
-        { role: "system", content: prompts.gradeSubjective },
-        { role: "user", content: user },
-    ];
-}
+    const userParts: string[] = [`题目：${question.question}`];
 
-/** 编程题判分消息 */
-export function buildGradeCodingMessages(
-    prompts: PromptConfig,
-    question: Question,
-    userAnswer: string,
-): Array<{ role: "system" | "user"; content: string }> {
-    const coding = question as Extract<Question, { type: "coding" }>;
-    const cases = coding.test_cases?.map((t) => `输入:${t.input ?? ""} 期望:${t.expected}`).join("\n") ?? "";
-    const user = [
-        `题目：${question.question}`,
-        `参考答案：${coding.answer ?? ""}`,
-        `测试用例：${cases}`,
-        `学生代码：`,
-        "----",
-        userAnswer,
-        "----",
-        `请以 JSON 输出：{"score":0-100,"comment":"评语"}`,
-    ].join("\n");
+    if (question.type === "coding") {
+        const coding = question as Extract<Question, { type: "coding" }>;
+        const cases = coding.test_cases?.map((t) => `输入:${t.input ?? ""} 期望:${t.expected}`).join("\n") ?? "";
+        userParts.push(`参考答案：${coding.answer ?? ""}`);
+        userParts.push(`测试用例：${cases}`);
+        userParts.push(`学生代码：`);
+        userParts.push("----");
+        userParts.push(userAnswer);
+        userParts.push("----");
+    } else {
+        const reference = "reference_answer" in question ? question.reference_answer : "";
+        userParts.push(`参考答案要点：${reference}`);
+        userParts.push(`学生作答：${userAnswer}`);
+    }
+    userParts.push(`请以 JSON 输出：{"score":0-100,"comment":"评语"}`);
+
+    const systemPrompt = [
+        prompts.gradeSubjective,
+        prompts.gradeCoding,
+    ].join("\n\n");
+
     return [
-        { role: "system", content: prompts.gradeCoding },
-        { role: "user", content: user },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userParts.join("\n") },
     ];
 }
 

@@ -9,11 +9,12 @@ export type OpenQuizFn = (tabData: QuizTabData) => void;
 
 /**
  * 内容选取与触发注册。
- * 三种入口：块菜单、文档标题图标菜单、命令面板（含笔记本）。
+ * 入口：块菜单、文档标题图标菜单、文档树右键菜单、命令面板。
  */
 export class QuizSelector {
     private readonly boundBlock = (e: CustomEvent) => this.onBlockIcon(e);
     private readonly boundTitle = (e: CustomEvent) => this.onTitleIcon(e);
+    private readonly boundDocTree = (e: CustomEvent) => this.onDocTreeMenu(e);
 
     constructor(
         private readonly plugin: Plugin,
@@ -23,12 +24,15 @@ export class QuizSelector {
     register(): void {
         this.plugin.eventBus.on("click-blockicon", this.boundBlock);
         this.plugin.eventBus.on("click-editortitleicon", this.boundTitle);
+        this.plugin.eventBus.on("open-menu-doctree", this.boundDocTree);
         this.plugin.addCommand({
             langKey: "generateQuiz",
+            langText: this.plugin.i18n.generateQuiz ?? "💡 生成复习题",
             callback: () => void this.onCommand(),
         });
         this.plugin.addCommand({
             langKey: "generateNotebookQuiz",
+            langText: this.plugin.i18n.generateNotebookQuiz ?? "📚 从笔记本生成复习题",
             callback: () => void this.onNotebookCommand(),
         });
     }
@@ -36,11 +40,13 @@ export class QuizSelector {
     unregister(): void {
         this.plugin.eventBus.off("click-blockicon", this.boundBlock);
         this.plugin.eventBus.off("click-editortitleicon", this.boundTitle);
+        this.plugin.eventBus.off("open-menu-doctree", this.boundDocTree);
     }
 
     /** 块图标菜单：生成复习题 */
     private onBlockIcon(e: CustomEvent) {
         const detail = (e as any).detail;
+        if (!detail?.menu) return;
         detail.menu.addItem({
             icon: "iconSparkles",
             label: this.plugin.i18n.generateQuiz ?? "生成复习题",
@@ -51,13 +57,41 @@ export class QuizSelector {
     /** 文档标题图标菜单：生成复习题 */
     private onTitleIcon(e: CustomEvent) {
         const detail = (e as any).detail;
-        const rootId: string = detail?.data?.rootID;
+        if (!detail?.menu) return;
+        const rootId: string = detail?.data?.rootID || detail?.data?.id || detail?.protyle?.block?.rootID;
         if (!rootId) return;
         detail.menu.addItem({
             icon: "iconSparkles",
             label: this.plugin.i18n.generateQuiz ?? "生成复习题",
             click: () => void this.fromDoc(rootId),
         });
+    }
+
+    /** 文档树右键菜单：文档→生成复习题，笔记本→从笔记本生成 */
+    private onDocTreeMenu(e: CustomEvent) {
+        const detail = (e as any).detail;
+        if (!detail?.menu || !detail?.type) return;
+        const elements: NodeListOf<HTMLElement> = detail.elements;
+        if (!elements || elements.length === 0) return;
+
+        if (detail.type === "doc") {
+            const docId = elements[0].getAttribute("data-node-id");
+            if (!docId) return;
+            detail.menu.addItem({
+                icon: "iconSparkles",
+                label: this.plugin.i18n.generateQuiz ?? "生成复习题",
+                click: () => void this.fromDoc(docId),
+            });
+        } else if (detail.type === "notebook") {
+            const nbId = elements[0].getAttribute("data-url") || elements[0].getAttribute("data-box");
+            const nbName = elements[0].querySelector(".b3-list-item__text")?.textContent ?? "笔记本";
+            if (!nbId) return;
+            detail.menu.addItem({
+                icon: "iconSparkles",
+                label: this.plugin.i18n.generateNotebookQuiz ?? "从笔记本生成复习题",
+                click: () => void this.fromNotebook(nbId, nbName),
+            });
+        }
     }
 
     /** 命令面板：从当前文档生成 */
@@ -87,7 +121,6 @@ export class QuizSelector {
                 click: () => void this.fromNotebook(nb.id, nb.name),
             });
         }
-        // 在屏幕中央弹出菜单
         const rect = document.body.getBoundingClientRect();
         menu.open({ x: rect.width / 2 - 100, y: rect.height / 2 - 50 });
     }
@@ -159,7 +192,6 @@ export class QuizSelector {
 async function collectDocIds(notebookId: string): Promise<string[]> {
     const rows = await sql(`SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' ORDER BY hpath ASC LIMIT 100`);
     if (rows && rows.length > 0) return rows.map((r: any) => r.id as string);
-    // SQL 不可用时回退到树遍历
     const tree = await listDocTree(notebookId as NotebookId, "/").catch(() => [] as IDocTreeNode[]);
     const ids: string[] = [];
     function walk(nodes: IDocTreeNode[]) {

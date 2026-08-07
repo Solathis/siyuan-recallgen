@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { button, card, field, input, select, switchCls, checkbox, alert, alertTitle, alertDescription, cn } from "./components";
+    import { button, card, field, input, textarea, select, switchCls, checkbox, alert, alertTitle, alertDescription, cn } from "./components";
     import type { RecallGenConfig, StorageLocation } from "@/types/config";
     import type { QuestionType } from "@/types/quiz";
 
@@ -81,6 +81,11 @@
                 <p class={alertDescription}>初级+中级+高级之和须等于总题数（{config.general.difficulty.total}）</p>
             </div>
         {/if}
+        <div class={field.field}>
+            <span class={field.label}>超纲范围</span>
+            <span class={field.description}>允许出题涵盖笔记外的扩展知识点，留空则仅限笔记内容</span>
+            <textarea class={cn(textarea, "rg-scope-ta")} placeholder="例如：可扩展到相关算法、数据结构、系统设计等" on:input={(e) => patchGeneral({ extraScope: v(e) })}>{config.general.extraScope}</textarea>
+        </div>
         <label class="rg-check-item">
             <input class={switchCls} type="checkbox" checked={config.general.countdownEnabled} on:change={(e) => patchGeneral({ countdownEnabled: checked(e) })} />
             启用倒计时
@@ -113,5 +118,6 @@
     .rg-checks { display: flex; flex-wrap: wrap; gap: 12px; }
     .rg-check-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--b3-theme-on-background); }
     :global(.rg-input--invalid) { border-color: var(--b3-card-error); }
+    :global(.rg-scope-ta) { min-height: 60px; resize: vertical; }
     @media (max-width: 640px) { .rg-row-3 { flex-direction: column; } }
 </style>

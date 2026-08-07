@@ -16,7 +16,6 @@
     $: tipText = hover ? fmtTip(hover) : "\u00a0";
 
     const MONTHS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
-    const WEEKDAYS = ["", "一", "", "三", "", "五", ""];
 
     function fmtDay(d: Date): string {
         const p = (n: number) => String(n).padStart(2, "0");
@@ -47,7 +46,7 @@
             cur.setDate(cur.getDate() + 1);
         }
         if (col.length > 0) out.push(col);
-        while (out.length < WEEKS) out.push(Array.from({ length: 7 }, (_, i) => ({ date: "", score: null, count: 0 })));
+        while (out.length < WEEKS) out.push(Array.from({ length: 7 }, () => ({ date: "", score: null, count: 0 })));
         return out;
     }
 
@@ -81,43 +80,40 @@
     function onEnter(cell: Cell) { hover = cell; }
     function onLeave() { hover = null; }
 
-    $: monthLabels = cols.map((col) => {
-        const first = col.find((c) => c.date);
-        if (!first) return "";
-        return MONTHS[new Date(first.date + "T00:00:00").getMonth()];
-    });
+    /** 月份标签：仅在月份变化时显示，避免重复 */
+    $: monthLabels = (() => {
+        let prevMonth = -1;
+        return cols.map((col) => {
+            const first = col.find((c) => c.date);
+            if (!first) return "";
+            const m = new Date(first.date + "T00:00:00").getMonth();
+            if (m !== prevMonth) { prevMonth = m; return MONTHS[m]; }
+            return "";
+        });
+    })();
     $: sortedRanges = [...(config?.ranges ?? [])].sort((a, b) => a.min - b.min);
 </script>
 
 <div class={h.root}>
     <div class={h.tip}>{tipText}</div>
-    <div class="rg-heatmap__chart">
-        <div class="rg-heatmap__weekdays">
-            {#each WEEKDAYS as wd}
-                <span class="rg-heatmap__weekday">{wd}</span>
-            {/each}
-        </div>
-        <div class="rg-heatmap__right">
-            <div class={h.months} style="grid-template-columns: repeat({WEEKS}, 1fr)">
-                {#each monthLabels as label}
-                    <span class={h.monthLabel}>{label}</span>
+    <div class={h.months} style="grid-template-columns: repeat({WEEKS}, 1fr)">
+        {#each monthLabels as label}
+            <span class={h.monthLabel}>{label}</span>
+        {/each}
+    </div>
+    <div class={h.grid} style="grid-template-columns: repeat({WEEKS}, 1fr)">
+        {#each cols as col}
+            <div class={h.col}>
+                {#each col as cell}
+                    <div class={h.cell}
+                         style="background:{colorFor(cell.score)}"
+                         on:mouseenter={() => onEnter(cell)}
+                         on:mouseleave={onLeave}
+                         role="button" tabindex="-1"
+                    ></div>
                 {/each}
             </div>
-            <div class={h.grid} style="grid-template-columns: repeat({WEEKS}, 1fr)">
-                {#each cols as col}
-                    <div class={h.col}>
-                        {#each col as cell}
-                            <div class={h.cell}
-                                 style="background:{colorFor(cell.score)}"
-                                 on:mouseenter={() => onEnter(cell)}
-                                 on:mouseleave={onLeave}
-                                 role="button" tabindex="-1"
-                            ></div>
-                        {/each}
-                    </div>
-                {/each}
-            </div>
-        </div>
+        {/each}
     </div>
     <div class={h.legend}>
         <span class={h.legendText}>少</span>

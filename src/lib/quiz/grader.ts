@@ -1,6 +1,6 @@
 import PromiseLimitPool from "@/libs/promise-pool";
 import { callLLM, AIError, type ChatMessage } from "../ai/client";
-import { buildGradeCodingMessages, buildGradeSubjectiveMessages } from "../ai/prompts";
+import { buildGradeSubjectiveMessages } from "../ai/prompts";
 import { GRADING_SCHEMA, buildJsonSchemaResponseFormat, buildJsonObjectResponseFormat, parseJsonLoose } from "../ai/schema";
 import type { AIProvider, RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, UserAnswer } from "@/types/quiz";
@@ -108,9 +108,7 @@ function checkFillBlank(accepted: string[][], user: string[]): boolean {
 /** 主观/编程题 AI 判分 */
 async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | undefined): Promise<GradingResult> {
     const userText = ua?.type === "subjective" || ua?.type === "coding" ? ua.value : "";
-    const messages = q.type === "subjective"
-        ? buildGradeSubjectiveMessages(config.prompts, q, userText)
-        : buildGradeCodingMessages(config.prompts, q, userText);
+    const messages = buildGradeSubjectiveMessages(config.prompts, q, userText);
     const responseFormat = pickGradingFormat(config.ai.provider);
     const result = await callLLM(config.ai, messages as ChatMessage[], {
         responseFormat,
