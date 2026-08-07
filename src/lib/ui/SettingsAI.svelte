@@ -87,5 +87,7 @@
     .rg-row-2 { display: flex; gap: 12px; }
     .rg-row-2 > * { flex: 1; }
     .rg-check-item { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--b3-theme-on-background); flex-wrap: wrap; }
+    .rg-key-row { display: flex; gap: 8px; }
+    .rg-key-input { flex: 1; }
     @media (max-width: 640px) { .rg-row-2 { flex-direction: column; } }
 </style>

@@ -4,7 +4,7 @@
     import QuestionView from "./QuestionView.svelte";
     import ResultPanel from "./ResultPanel.svelte";
     import { showMessage } from "siyuan";
-    import { button, badge, alert, alertTitle, alertDescription, cn } from "./components";
+    import { button, badge, card, alert, alertTitle, alertDescription, cn } from "./components";
     import type { QuizService, QuizTabData } from "../quiz/service";
     import type { GradingResult, PanelState, Question, QuizSession, UserAnswer } from "@/types/quiz";
 
@@ -14,6 +14,7 @@
     let panelState: PanelState = "loading_generating";
     let session: QuizSession | null = null;
     let error: string | null = null;
+    let errorPhase: "generate" | "grade" | "other" = "other";
     let results: GradingResult[] | null = null;
     let analysis: string | null = null;
     let progressValue: number | null = null;
@@ -26,6 +27,36 @@
     let countdownLeft = 0;
 
     $: questions = session?.questions ?? [];
+    $: hasError = !!error && questions.length === 0;
+
+    /** 解析错误类型与建议 */
+    function parseError(msg: string): { title: string; detail: string; hint: string } {
+        // HTTP 状态错误
+        const httpMatch = msg.match(/HTTP (\d+)/);
+        if (httpMatch) {
+            const code = parseInt(httpMatch[1]);
+            if (code === 400)
+                return { title: "请求被拒绝（400）", detail: msg, hint: "可能是 response_format 不被网关支持，请在设置中关闭 JSON Schema 严格模式" };
+            if (code === 401 || code === 403)
+                return { title: "认证失败（" + code + "）", detail: msg, hint: "请检查 API Key 和 Base URL 是否正确" };
+            if (code === 429)
+                return { title: "请求频率超限（429）", detail: msg, hint: "API 调用过于频繁，请稍后重试或更换 Key" };
+            if (code >= 500)
+                return { title: "AI 服务端错误（" + code + "）", detail: msg, hint: "AI 服务暂不可用，请稍后重试" };
+            return { title: "网络错误（" + code + "）", detail: msg, hint: "请检查 Base URL 和网络连接" };
+        }
+        // 配置错误
+        if (msg.includes("未配置") || msg.includes("未设置"))
+            return { title: "配置不完整", detail: msg, hint: "请在设置中完成 AI 服务配置后再试" };
+        // 超时
+        if (msg.includes("timeout") || msg.includes("超时"))
+            return { title: "请求超时", detail: msg, hint: "AI 生成耗时过长，请在设置中增大超时时间" };
+        // JSON 解析
+        if (msg.includes("JSON") || msg.includes("解析"))
+            return { title: "AI 响应解析失败", detail: msg, hint: "模型返回格式异常，建议开启 JSON Schema 或更换模型" };
+        return { title: "发生错误", detail: msg, hint: "请检查配置后重试" };
+    }
+    $: errorInfo = error ? parseError(error) : null;
 
     onMount(async () => {
         if (tabData.mode === "resume" && tabData.quizId) {
@@ -61,6 +92,7 @@
         error = null;
         if (!checkAiConfig()) {
             panelState = "answering";
+            errorPhase = "generate";
             return;
         }
         panelState = "loading_generating";
@@ -70,6 +102,7 @@
             const qs = await service.generate(tabData.content ?? "");
             if (qs.length === 0) {
                 error = "AI 未生成任何题目，请检查内容或重试";
+                errorPhase = "generate";
                 panelState = "answering";
                 return;
             }
@@ -81,6 +114,7 @@
             if (countdownEnabled) { countdownLeft = countdownSec; startCountdown(); }
         } catch (e) {
             error = (e as Error).message;
+            errorPhase = "generate";
             panelState = "answering";
         }
     }
@@ -125,6 +159,7 @@
             panelState = "result";
         } catch (e) {
             error = (e as Error).message;
+            errorPhase = "grade";
             panelState = "result";
         }
     }
@@ -145,6 +180,14 @@
         try { await service.saveResultToDoc(session, analysis ?? ""); showMessage("已保存到文档"); }
         catch (e) { error = (e as Error).message; }
     }
+    async function retryGenerate() {
+        error = null;
+        await startGenerate();
+    }
+    async function retryGrade() {
+        error = null;
+        await submit();
+    }
     function typeLabel(t: string): string {
         const m: Record<string, string> = {
             single_choice: "单选", multiple_choice: "多选", fill_blank: "填空",
@@ -160,10 +203,17 @@
             <ProgressBar value={progressValue} label={progressLabel} />
         </div>
     {:else if panelState === "answering"}
-        {#if error}
-            <div class={alert("destructive")}><p class={alertTitle}>出错了</p><p class={alertDescription}>{error}</p></div>
-        {/if}
-        {#if questions.length > 0}
+        {#if hasError && errorInfo}
+            <div class="rg-error">
+                <div class="rg-error__icon">⚠</div>
+                <h3 class="rg-error__title">{errorInfo.title}</h3>
+                <div class="rg-error__detail">{errorInfo.detail}</div>
+                <div class="rg-error__hint">💡 {errorInfo.hint}</div>
+                <div class="rg-error__actions">
+                    <button class={button({ variant: "default" })} on:click={retryGenerate}>重试</button>
+                </div>
+            </div>
+        {:else if questions.length > 0}
             <div class="rg-panel__scroll">
                 <div class="rg-panel__list">
                     {#each questions as q, i}
@@ -187,10 +237,17 @@
             </footer>
         {/if}
     {:else if panelState === "result"}
-        {#if error}
-            <div class={alert("destructive")}><p class={alertTitle}>出错了</p><p class={alertDescription}>{error}</p></div>
-        {/if}
-        {#if results && session}
+        {#if hasError && errorInfo}
+            <div class="rg-error">
+                <div class="rg-error__icon">⚠</div>
+                <h3 class="rg-error__title">{errorInfo.title}</h3>
+                <div class="rg-error__detail">{errorInfo.detail}</div>
+                <div class="rg-error__hint">💡 {errorInfo.hint}</div>
+                <div class="rg-error__actions">
+                    <button class={button({ variant: "default" })} on:click={retryGrade}>重试判分</button>
+                </div>
+            </div>
+        {:else if results && session}
             <ResultPanel {service} results={results} questions={session.questions} {analysis} on:save={() => saveToDoc()} />
         {/if}
     {/if}
@@ -204,4 +261,10 @@
     .rg-panel__q-item { display: flex; flex-direction: column; gap: 8px; }
     .rg-panel__q-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .rg-panel__footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--b3-border-color); flex-shrink: 0; }
+    .rg-error { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 48px 24px; max-width: 480px; margin: 0 auto; }
+    .rg-error__icon { font-size: 48px; line-height: 1; }
+    .rg-error__title { font-size: 18px; font-weight: 600; margin: 0; color: var(--b3-card-error); }
+    .rg-error__detail { font-size: 13px; color: var(--b3-theme-on-surface-light); word-break: break-all; max-height: 120px; overflow-y: auto; font-family: var(--b3-font-family-code, monospace); background: var(--b3-theme-surface); padding: 8px 12px; border-radius: 6px; width: 100%; box-sizing: border-box; }
+    .rg-error__hint { font-size: 13px; color: var(--b3-theme-on-surface-light); }
+    .rg-error__actions { display: flex; gap: 8px; margin-top: 4px; }
 </style>
