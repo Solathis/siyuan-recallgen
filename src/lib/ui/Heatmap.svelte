@@ -96,12 +96,12 @@
     <div class={h.tip} style="left:{tipX}px; top:{tipY}px; transform:translate(-50%,-100%); opacity:{tipVisible ? 1 : 0}">
         {tipDate} · {tipScore}
     </div>
-    <div class={h.months}>
+    <div class={h.months} style="grid-template-columns: repeat({cols.length}, 1fr)">
         {#each monthLabels as label}
             <span class={h.monthLabel}>{label}</span>
         {/each}
     </div>
-    <div class={h.grid}>
+    <div class={h.grid} style="grid-template-columns: repeat({cols.length}, 1fr)">
         {#each cols as col}
             <div class={h.col}>
                 {#each col as cell}

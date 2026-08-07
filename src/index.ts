@@ -1,4 +1,4 @@
-import { Plugin, showMessage, getFrontend, openTab, Setting } from "siyuan";
+import { Plugin, showMessage, getFrontend, openTab, Setting, Dialog } from "siyuan";
 import type { Custom } from "siyuan";
 import "./index.scss";
 
@@ -58,44 +58,9 @@ export default class RecallGenPlugin extends Plugin {
                 self.quizComp = null;
             },
         });
-        // 思源原生设置对话框：齿轮点击 → openSetting → setting.open()
-        this.setting = new Setting({
-            width: "900px",
-            height: "80vh",
-            confirmCallback: () => {
-                // SettingPanel 已在每次修改时通过 save 事件持久化，此处无需额外操作
-            },
-            destroyCallback: () => {
-                self.settingComp?.$destroy();
-                self.settingComp = null;
-            },
-        });
-        this.setting.addItem({
-            title: "",
-            direction: "column",
-            createActionElement: () => {
-                const div = document.createElement("div");
-                div.className = "rg-setting-container";
-                void self.scoreStore.list().then((scores) => {
-                    self.settingComp = new SettingPanel({
-                        target: div,
-                        props: {
-                            config: self.config,
-                            scores,
-                            onTestConnection: () => aiTestConnection(self.config.ai),
-                            onClearScores: async () => { await self.scoreStore.clear(); },
-                            onClearProgress: async () => { await self.progressStore.clearAll(); },
-                        },
-                    });
-                    self.settingComp.$on("save", async (e: { detail: RecallGenConfig }) => {
-                        self.config = e.detail;
-                        await self.configStore.set(self.config);
-                    });
-                });
-                return div;
-            },
-        });
-        this.openSetting = () => this.setting.open(this.displayName ?? "RecallGen");
+        // 仅创建 Setting 实例以在插件列表显示齿轮图标，不使用 addItem 避免被 fn__flex-center/fn__size200 限制宽度
+        this.setting = new Setting({});
+        this.openSetting = () => this.openSettingsDialog();
 
         this.selector = new QuizSelector(this, (tabData) => this.openQuizTab(tabData));
         this.selector.register();
@@ -112,6 +77,38 @@ export default class RecallGenPlugin extends Plugin {
         await this.removeData("recallgen-config.json").catch(() => {});
         await this.removeData("recallgen-scores.json").catch(() => {});
         await this.removeData("recallgen-progress.json").catch(() => {});
+    }
+
+    private openSettingsDialog() {
+        const self = this;
+        const dialog = new Dialog({
+            title: this.displayName ?? "RecallGen",
+            content: '<div class="rg-setting-root"></div>',
+            width: "900px",
+            height: "70vh",
+            destroyCallback: () => {
+                self.settingComp?.$destroy();
+                self.settingComp = null;
+            },
+        });
+        const root = dialog.element.querySelector(".rg-setting-root") as HTMLElement;
+        if (!root) return;
+        void this.scoreStore.list().then((scores) => {
+            self.settingComp = new SettingPanel({
+                target: root,
+                props: {
+                    config: self.config,
+                    scores,
+                    onTestConnection: () => aiTestConnection(self.config.ai),
+                    onClearScores: async () => { await self.scoreStore.clear(); },
+                    onClearProgress: async () => { await self.progressStore.clearAll(); },
+                },
+            });
+            self.settingComp.$on("save", async (e: { detail: RecallGenConfig }) => {
+                self.config = e.detail;
+                await self.configStore.set(self.config);
+            });
+        });
     }
 
     private buildService(): QuizService {

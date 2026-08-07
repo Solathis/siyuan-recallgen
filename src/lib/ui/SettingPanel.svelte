@@ -72,6 +72,7 @@
         border: 1px solid var(--b3-border-color);
         border-radius: calc(var(--b3-border-radius) * 1.5);
         background: var(--b3-theme-background);
+        flex: 1;
     }
     .rg-setting-main {
         flex: 1;

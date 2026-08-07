@@ -267,14 +267,18 @@
     font-weight: 600;
 }
 
-/* === Heatmap (HTML grid) === */
-.rg-heatmap { position: relative; display: flex; flex-direction: column; gap: 6px; }
-.rg-heatmap__months { display: flex; gap: 0; height: 14px; margin-left: 0; }
-.rg-heatmap__month { font-size: 10px; color: var(--b3-theme-on-surface-light); width: 14px; white-space: nowrap; }
-.rg-heatmap__grid { display: flex; gap: 2px; }
-.rg-heatmap__col { display: flex; flex-direction: column; gap: 2px; }
+/* === Heatmap (CSS grid 铺满宽度) === */
+.rg-heatmap { position: relative; display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.rg-heatmap__months { display: grid; height: 14px; width: 100%; }
+.rg-heatmap__month { font-size: 10px; color: var(--b3-theme-on-surface-light); text-align: left; white-space: nowrap; overflow: visible; }
+.rg-heatmap__grid { display: grid; gap: 3px; width: 100%; }
+.rg-heatmap__col { display: flex; flex-direction: column; gap: 3px; align-items: center; }
 .rg-heatmap__cell {
-    width: 12px; height: 12px; border-radius: 2px; cursor: pointer;
+    width: 100%;
+    aspect-ratio: 1;
+    max-width: 14px;
+    border-radius: 2px;
+    cursor: pointer;
     transition: transform .08s;
 }
 .rg-heatmap__cell:hover { transform: scale(1.25); }
@@ -292,10 +296,10 @@
     border-radius: 2px; border: 1px solid var(--b3-border-color);
 }
 
-/* === 设置面板容器：自身管理高度，不操纵思源对话框内部结构 === */
-.rg-setting-container {
-    width: 100%;
-    height: 560px;
-    max-height: 72vh;
-    overflow: hidden;
+/* === 设置面板根容器（Dialog 内，无 fn__flex-center/fn__size200 限制） === */
+.rg-setting-root {
+    height: 100%;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
 }
