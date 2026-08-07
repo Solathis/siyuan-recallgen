@@ -22,6 +22,9 @@ export interface QuizService {
     loadProgress(id: string): Promise<QuizSession | null>;
     clearProgress(id: string): Promise<void>;
     saveScore(record: ScoreRecord): Promise<void>;
+    testConnection(): Promise<boolean>;
+    clearScores(): Promise<void>;
+    clearProgress(): Promise<void>;
 }
 
 /** Tab 初始数据 */

@@ -1,39 +1,23 @@
 <script lang="ts">
-    import type { ScoreRecord, ScoreRange } from "@/types/quiz";
-    import type { HeatmapConfig } from "@/types/config";
+    import type { ScoreRecord, ScoreRange, HeatmapConfig as HMConfig } from "@/types/quiz";
 
     export let records: ScoreRecord[] = [];
-    export let config: HeatmapConfig = defaultCfg();
-    export let weeks = 13;
+    export let config: HMConfig;
+
+    $: weeks = Math.max(1, Math.ceil((config?.days ?? 90) / 7));
 
     type Cell = { date: string; score: number | null; count: number };
 
     $: days = buildCells(records, config, weeks);
-
-    function defaultCfg(): HeatmapConfig {
-        return {
-            enabled: true,
-            metric: "highest",
-            range: 90,
-            colorRanges: [
-                { min: 90, color: "#196127" },
-                { min: 80, color: "#40c463" },
-                { min: 60, color: "#9be9a8" },
-                { min: 30, color: "#f6c344" },
-                { min: 0, color: "#e0e0e0" },
-            ],
-        };
-    }
 
     function fmtDay(d: Date): string {
         const p = (n: number) => String(n).padStart(2, "0");
         return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
     }
 
-    function buildCells(recs: ScoreRecord[], cfg: HeatmapConfig, wk: number): Cell[][] {
+    function buildCells(recs: ScoreRecord[], cfg: HMConfig, wk: number): Cell[][] {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        // 对齐到周一开始：getDay() 周日=0..周六=6 → 周一为首需偏移
         const todayDow = (today.getDay() + 6) % 7;
         const totalDays = wk * 7;
         const start = new Date(today);
@@ -58,7 +42,7 @@
         return cols;
     }
 
-    function aggregate(recs: ScoreRecord[], metric: "highest" | "average"): Map<string, { score: number; count: number }> {
+    function aggregate(recs: ScoreRecord[], metric: "max" | "avg"): Map<string, { score: number; count: number }> {
         const m = new Map<string, { scores: number[]; count: number }>();
         for (const r of recs) {
             const d = new Date(r.timestamp);
@@ -71,7 +55,7 @@
         }
         const out = new Map<string, { score: number; count: number }>();
         for (const [k, v] of m) {
-            const score = metric === "highest"
+            const score = metric === "max"
                 ? Math.max(...v.scores)
                 : v.scores.reduce((a, b) => a + b, 0) / v.scores.length;
             out.set(k, { score: Math.round(score), count: v.count });
@@ -81,7 +65,7 @@
 
     function colorFor(score: number | null): string {
         if (score === null) return "#ebedf0";
-        const ranges: ScoreRange[] = [...config.colorRanges].sort((a, b) => b.min - a.min);
+        const ranges: ScoreRange[] = [...(config?.ranges ?? [])].sort((a, b) => b.min - a.min);
         for (const r of ranges) {
             if (score >= r.min) return r.color;
         }
@@ -120,7 +104,7 @@
     </svg>
     <div class="rg-heatmap__legend">
         <span>少</span>
-        {#each [...config.colorRanges].sort((a, b) => a.min - b.min) as r}
+        {#each [...(config?.ranges ?? [])].sort((a, b) => a.min - b.min) as r}
             <span class="rg-legend__swatch" style="background:{r.color}" title={"\u2265" + r.min}></span>
         {/each}
         <span>多</span>
