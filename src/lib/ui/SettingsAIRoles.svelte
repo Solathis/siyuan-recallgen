@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { button, badge, card, field, select, cn } from "./components";
+    import { card, field, select, cn } from "./components";
     import type { RecallGenConfig } from "@/types/config";
 
     export let config: RecallGenConfig;
@@ -12,7 +12,25 @@
         dispatch("save", { ...config, ai: { ...config.ai, roles: { ...config.ai.roles, ...patch } } });
     }
 
-    function onRoleChange(roleKey: "generator" | "reviewer" | "grader", e: Event) {
+    /** 角色当前模型所属端点 ID */
+    function endpointIdOf(roleKey: "generator" | "reviewer" | "grader"): string {
+        const modelId = config.ai.roles[roleKey];
+        const model = config.ai.models.find((m) => m.id === modelId);
+        return model?.endpointId ?? config.ai.endpoints[0]?.id ?? "";
+    }
+
+    /** 指定端点下的模型 */
+    function modelsOf(epId: string) {
+        return config.ai.models.filter((m) => m.endpointId === epId);
+    }
+
+    function onRoleEndpoint(roleKey: "generator" | "reviewer" | "grader", e: Event) {
+        const epId = v(e);
+        const first = modelsOf(epId)[0];
+        if (first) patchRoles({ [roleKey]: first.id } as Partial<typeof config.ai.roles>);
+    }
+
+    function onRoleModel(roleKey: "generator" | "reviewer" | "grader", e: Event) {
         patchRoles({ [roleKey]: v(e) } as Partial<typeof config.ai.roles>);
     }
 
@@ -26,7 +44,7 @@
 <div class={card.root}>
     <div class={card.header}>
         <h3 class={card.title}>AI 身份</h3>
-        <p class={card.description}>为出题、审题、判题三个环节分别指定 AI 模型</p>
+        <p class={card.description}>为出题、审题、判题三个环节分别指定端点与模型</p>
     </div>
     <div class={cn(card.content, field.group)}>
         {#each ROLES as r}
@@ -38,10 +56,18 @@
                         <span class={field.description}>{r.desc}</span>
                     </div>
                 </div>
-                <div class="rg-role-select">
+                <div class="rg-role-row">
+                    <label class={field.label}>端点</label>
+                    <select class={select} value={endpointIdOf(r.key)} on:change={(e) => onRoleEndpoint(r.key, e)}>
+                        {#each config.ai.endpoints as ep}
+                            <option value={ep.id}>{ep.name}</option>
+                        {/each}
+                    </select>
+                </div>
+                <div class="rg-role-row">
                     <label class={field.label}>模型</label>
-                    <select class={select} value={config.ai.roles[r.key]} on:change={(e) => onRoleChange(r.key, e)}>
-                        {#each config.ai.models as m}
+                    <select class={select} value={config.ai.roles[r.key]} on:change={(e) => onRoleModel(r.key, e)}>
+                        {#each modelsOf(endpointIdOf(r.key)) as m}
                             <option value={m.id}>{m.name}</option>
                         {/each}
                     </select>
@@ -64,6 +90,12 @@
     .rg-role-icon { font-size: 20px; line-height: 1.2; flex-shrink: 0; }
     .rg-role-info { display: flex; flex-direction: column; gap: 2px; }
     .rg-role-label { font-weight: 600; font-size: 14px; color: var(--b3-theme-on-background); }
-    .rg-role-select { display: flex; flex-direction: column; gap: 4px; }
+    .rg-role-row { display: flex; align-items: center; gap: 8px; }
+    .rg-role-row label { width: 56px; flex-shrink: 0; font-size: 13px; }
+    .rg-role-row select { flex: 1; }
     .rg-role-hint { padding: 8px 0; }
+    @media (max-width: 640px) {
+        .rg-role-row { flex-direction: column; align-items: stretch; }
+        .rg-role-row label { width: auto; }
+    }
 </style>

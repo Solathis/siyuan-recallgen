@@ -146,7 +146,7 @@ export function buildRegenerateMessages(
         "你之前生成的部分题目未通过审题，请根据审题意见重新生成这些题目。",
     ];
     const items = failedQuestions.map((q, i) => {
-        return `【第${i + 1}题（需重新生成）】\n原题: ${q.question}\n审题意见: ${reasons[i] ?? "未通过"}`;
+        return `【第${i + 1}题（需重新生成）】\n原题型: ${q.type}\n原难度: ${q.difficulty}\n原题: ${q.question}\n审题意见: ${reasons[i] ?? "未通过"}`;
     });
     const user = [
         `原始笔记内容：`,
@@ -154,7 +154,7 @@ export function buildRegenerateMessages(
         content,
         "----",
         `以下题目未通过审核，请重新生成：\n\n${items.join("\n\n")}`,
-        `要求重新生成 ${failedQuestions.length} 道题，题型和难度保持与原题一致。`,
+        `要求重新生成 ${failedQuestions.length} 道题，每道题的题型和难度必须与上方对应的原题型和原难度完全一致。`,
         `输出语言：${general.language === "zh" ? "中文" : "English"}`,
         `按以下 JSON 结构输出：{"questions":[{type,difficulty,question,options?,answer?,reference_answer?,language?,starter_code?,test_cases?,explanation?}]}。`,
     ].join("\n");

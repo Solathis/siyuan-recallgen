@@ -25,7 +25,33 @@
         return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     }
 
+    // ── 测试连接：端点+模型级联 ──
+
+    function testEndpointId(): string {
+        const model = config.ai.models.find((m) => m.id === testModelId);
+        return model?.endpointId ?? config.ai.endpoints[0]?.id ?? "";
+    }
+    function modelsOf(epId: string): AIModel[] {
+        return config.ai.models.filter((m) => m.endpointId === epId);
+    }
+    function onTestEndpointChange(e: Event) {
+        const epId = v(e);
+        const first = modelsOf(epId)[0];
+        if (first) {
+            testModelId = first.id;
+            patchAi({ testModelId: first.id });
+        }
+    }
+    function onTestModelChange(e: Event) {
+        testModelId = v(e);
+        patchAi({ testModelId });
+    }
+
     // ── 端点 CRUD ──────────────────────────────────────────────
+
+    function modelsOfEndpoint(epId: string): AIModel[] {
+        return config.ai.models.filter((m) => m.endpointId === epId);
+    }
 
     function addEndpoint() {
         const ep: AIEndpoint = {
@@ -62,9 +88,6 @@
 
     // ── 模型 CRUD ──────────────────────────────────────────────
 
-    function modelsOf(epId: string): AIModel[] {
-        return config.ai.models.filter((m) => m.endpointId === epId);
-    }
     function addModel(epId: string) {
         const m: AIModel = {
             id: genId("m"),
@@ -92,12 +115,8 @@
         patchModel(id, { temperature: parseFloat(v(e)) || 0 });
     }
 
-    // ── 测试连接 ──────────────────────────────────────────────
+    // ── 测试连接 ──
 
-    function onTestModelChange(e: Event) {
-        testModelId = v(e);
-        patchAi({ testModelId });
-    }
     async function testConn() {
         connState = "testing";
         connError = "";
@@ -186,9 +205,17 @@
         <div class="rg-section-head"><span class="rg-section-title">测试连接</span></div>
         <div class={field.group}>
             <div class="rg-row">
-                <label class={field.label}>测试模型</label>
+                <label class={field.label}>端点</label>
+                <select class={select} value={testEndpointId()} on:change={onTestEndpointChange}>
+                    {#each config.ai.endpoints as ep}
+                        <option value={ep.id}>{ep.name}</option>
+                    {/each}
+                </select>
+            </div>
+            <div class="rg-row">
+                <label class={field.label}>模型</label>
                 <select class={select} value={testModelId} on:change={onTestModelChange}>
-                    {#each config.ai.models as m}
+                    {#each modelsOf(testEndpointId()) as m}
                         <option value={m.id}>{m.name}</option>
                     {/each}
                 </select>
