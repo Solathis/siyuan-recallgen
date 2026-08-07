@@ -19,7 +19,6 @@ import { getDefaultConfig } from "@/types/config";
 const ICON = `<symbol id="iconRecallGen" viewBox="0 0 16 16"><path fill="currentColor" d="M8 1l1.8 3.7L14 5.3l-2.9 2.8.7 4L8 10.2 4.2 12.1l.7-4L2 5.3l4.2-.6L8 1z"/></symbol>`;
 
 const QUIZ_TAB = "quiz";
-const SETTINGS_TAB = "settings";
 
 export default class RecallGenPlugin extends Plugin {
     isMobile = false;
@@ -59,13 +58,25 @@ export default class RecallGenPlugin extends Plugin {
                 self.quizComp = null;
             },
         });
-        this.addTab({
-            type: SETTINGS_TAB,
-            init: function () {
-                const c = this as unknown as Custom;
+        // 思源原生设置对话框：齿轮点击 → openSetting → setting.open()
+        this.setting = new Setting({
+            width: "900px",
+            height: "80vh",
+            confirmCallback: () => {
+                // SettingPanel 已在每次修改时通过 save 事件持久化，此处无需额外操作
+            },
+            destroyCallback: () => {
+                self.settingComp?.$destroy();
+                self.settingComp = null;
+            },
+        });
+        this.setting.addItem({
+            title: "",
+            direction: "column",
+            createActionElement: () => {
                 const div = document.createElement("div");
-                (c.element as HTMLElement).appendChild(div);
-                self.scoreStore.list().then((scores) => {
+                div.className = "rg-setting-container";
+                void self.scoreStore.list().then((scores) => {
                     self.settingComp = new SettingPanel({
                         target: div,
                         props: {
@@ -81,17 +92,10 @@ export default class RecallGenPlugin extends Plugin {
                         await self.configStore.set(self.config);
                     });
                 });
-            },
-            destroy: () => {
-                self.settingComp?.$destroy();
-                self.settingComp = null;
+                return div;
             },
         });
-
-        // 创建 Setting 实例使思源插件列表显示“设置”齿轮；点击齿轮调用 openSetting
-        this.setting = new Setting({ width: "900px", height: "80vh" });
-        // 设置入口：思源插件列表齿轮 → openSetting → 打开设置 Tab（非顶栏按钮）
-        this.openSetting = () => this.openSettingsTab();
+        this.openSetting = () => this.setting.open(this.displayName ?? "RecallGen");
 
         this.selector = new QuizSelector(this, (tabData) => this.openQuizTab(tabData));
         this.selector.register();
@@ -135,18 +139,6 @@ export default class RecallGenPlugin extends Plugin {
                 icon: "iconRecallGen",
                 title: tabData.sourceTitle ? `复习题 · ${tabData.sourceTitle}` : "复习题",
                 data: tabData,
-            },
-        });
-    }
-
-    openSettingsTab() {
-        openTab({
-            app: (this as unknown as { app: import("siyuan").App }).app,
-            custom: {
-                id: this.name + SETTINGS_TAB,
-                icon: "iconRecallGen",
-                title: "RecallGen 设置",
-                data: null,
             },
         });
     }

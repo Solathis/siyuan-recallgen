@@ -226,3 +226,14 @@
     z-index: 99;
 }
 .rg-tooltip:hover::after { opacity: .95; }
+
+/* === 设置面板在思源原生设置对话框内填充 === */
+.rg-setting-container {
+    width: 100%;
+    min-height: 60vh;
+}
+.b3-dialog .b3-setting__item:has(> .rg-setting-container) {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+}
