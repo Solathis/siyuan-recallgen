@@ -11,7 +11,7 @@ import vitePluginYamlI18n from "./yaml-plugin";
 const env = process.env;
 const isSrcmap = env.VITE_SOURCEMAP === "inline";
 const isDev = env.NODE_ENV === "development";
-const outputDir = isDev ? "dev" : "dist";
+const outputDir = isDev ? "dev" : "F:/SiYuanBook/data/plugins/siyuan-recallgen";
 
 console.log("isDev=>", isDev);
 console.log("isSrcmap=>", isSrcmap);
@@ -67,7 +67,7 @@ export default defineConfig({
 
     build: {
         outDir: outputDir,
-        emptyOutDir: false,
+        emptyOutDir: true,
         minify: true,
         sourcemap: isSrcmap ? "inline" : false,
 
@@ -87,8 +87,8 @@ export default defineConfig({
                 ])
             ] : [
                 zipPack({
-                    inDir: "./dist",
-                    outDir: "./",
+                    inDir: outputDir,
+                    outDir: outputDir,
                     outFileName: "package.zip"
                 })
             ],
