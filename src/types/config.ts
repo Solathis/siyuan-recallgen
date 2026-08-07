@@ -82,7 +82,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
     maxTokens: 16384,
     timeout: 120000,
     jsonSchemaEnabled: true,
-    testPrompt: "ping",
+    testPrompt: "请用一句话简要介绍你自己",
 };
 
 export const DEFAULT_PROMPTS: PromptConfig = {

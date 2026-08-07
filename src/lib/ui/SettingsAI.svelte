@@ -8,10 +8,11 @@
 
     const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
     let connState: "idle" | "testing" | "ok" | "fail" = "idle";
+    let connError = "";
+    let showKey = false;
 
     function v(e: Event): string { return (e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value; }
     function vn(e: Event): number { return parseInt(v(e)) || 0; }
-    function vf(e: Event): number { return parseFloat(v(e)) || 0; }
     function checked(e: Event): boolean { return (e.target as HTMLInputElement).checked; }
 
     let _temperature = config.ai.temperature;
@@ -21,15 +22,20 @@
     }
     function onProviderChange(e: Event) {
         const provider = v(e) as AIProvider;
-        // ollama 仅支持 chat 协议
         if (provider === "ollama") patchAi({ provider, protocol: "chat" });
         else patchAi({ provider });
     }
     function onProtocolChange(e: Event) { patchAi({ protocol: v(e) as AIProtocol }); }
     async function testConn() {
         connState = "testing";
-        try { connState = (await onTestConnection()) ? "ok" : "fail"; }
-        catch { connState = "fail"; }
+        connError = "";
+        try {
+            await onTestConnection();
+            connState = "ok";
+        } catch (e) {
+            connState = "fail";
+            connError = (e as Error).message;
+        }
     }
 </script>
 
@@ -63,7 +69,22 @@
         </div>
         <div class={field.field}>
             <label class={field.label} for="rg-key">API Key</label>
-            <input id="rg-key" class={input} type="password" value={config.ai.apiKey} on:input={(e) => patchAi({ apiKey: v(e) })} />
+            <div class="rg-key-row">
+                <input
+                    id="rg-key"
+                    class={cn(input, "rg-key-input")}
+                    type={showKey ? "text" : "password"}
+                    value={config.ai.apiKey}
+                    on:input={(e) => patchAi({ apiKey: v(e) })}
+                />
+                <button
+                    class={button({ variant: "outline", size: "sm" })}
+                    on:click={() => showKey = !showKey}
+                    type="button"
+                >
+                    {showKey ? "隐藏" : "显示"}
+                </button>
+            </div>
         </div>
         <div class={field.field}>
             <label class={field.label} for="rg-model">模型</label>
@@ -83,17 +104,20 @@
                 <input id="rg-timeout" class={input} type="number" value={Math.round(config.ai.timeout / 1000)} on:input={(e) => patchAi({ timeout: vn(e) * 1000 })} />
             </div>
         </div>
-        <div class="rg-row">
+        <div class="rg-test-row">
             <button class={button({ variant: "outline", size: "sm" })} on:click={testConn} disabled={connState === "testing"}>
                 {connState === "testing" ? "测试中…" : "测试连接"}
             </button>
             {#if connState === "ok"}<span class={badge("success")}>连接成功</span>{/if}
             {#if connState === "fail"}<span class={badge("destructive")}>连接失败</span>{/if}
         </div>
+        {#if connState === "fail" && connError}
+            <div class="rg-conn-error">{connError}</div>
+        {/if}
         <div class={field.field}>
             <label class={field.label} for="rg-testprompt">测试提示词</label>
-            <input id="rg-testprompt" class={input} type="text" value={config.ai.testPrompt} placeholder="ping" on:input={(e) => patchAi({ testPrompt: v(e) })} />
-            <span class={field.description}>点击「测试连接」时发送给 AI 的消息内容，默认 ping</span>
+            <input id="rg-testprompt" class={input} type="text" value={config.ai.testPrompt} on:input={(e) => patchAi({ testPrompt: v(e) })} />
+            <span class={field.description}>点击「测试连接」时发送给 AI 的消息内容</span>
         </div>
         <label class="rg-check-item">
             <input class={switchCls} type="checkbox" checked={config.ai.jsonSchemaEnabled} on:change={(e) => patchAi({ jsonSchemaEnabled: checked(e) })} />
@@ -104,11 +128,22 @@
 </div>
 
 <style>
-    .rg-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .rg-test-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .rg-row-2 { display: flex; gap: 12px; }
     .rg-row-2 > * { flex: 1; }
     .rg-check-item { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--b3-theme-on-background); flex-wrap: wrap; }
     .rg-key-row { display: flex; gap: 8px; }
     .rg-key-input { flex: 1; }
+    .rg-conn-error {
+        font-size: 12px;
+        font-family: monospace;
+        color: var(--b3-card-error);
+        background: color-mix(in srgb, var(--b3-card-error) 8%, transparent);
+        padding: 6px 10px;
+        border-radius: var(--b3-border-radius);
+        word-break: break-all;
+        max-height: 80px;
+        overflow-y: auto;
+    }
     @media (max-width: 640px) { .rg-row-2 { flex-direction: column; } }
 </style>

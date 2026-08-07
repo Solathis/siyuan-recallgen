@@ -27,7 +27,6 @@ export interface LLMResult {
     raw: unknown;
 }
 
-/** forwardProxy 返回结构 */
 interface ForwardResponse {
     body: string;
     status: number;
@@ -48,6 +47,8 @@ interface ForwardRequest {
     responseEncoding: "text";
 }
 
+// ── 工具函数 ──────────────────────────────────────────────────────────
+
 function joinUrl(base: string, path: string): string {
     const b = base.replace(/\/+$/, "");
     const p = path.replace(/^\/+/, "");
@@ -58,18 +59,20 @@ function safeParse(text: string): unknown {
     try { return JSON.parse(text); } catch { return null; }
 }
 
-function buildAuthHeaders(config: AIConfig): Record<string, string>[] {
-    const headers: Record<string, string>[] = [];
-    const needAuth = config.provider !== "ollama" || !!config.apiKey;
-    if (!needAuth || !config.apiKey) return headers;
-    if (config.protocol === "messages") {
-        headers.push({ "x-api-key": config.apiKey });
-        headers.push({ "anthropic-version": "2023-06-01" });
-    } else {
-        headers.push({ Authorization: `Bearer ${config.apiKey}` });
-    }
-    return headers;
+function sleep(ms: number): Promise<void> {
+    return new Promise((r) => setTimeout(r, ms));
 }
+
+/** 判断错误是否可重试（限流、超时、5xx） */
+function isRetryable(err: unknown): boolean {
+    if (!(err instanceof AIError)) return false;
+    if (err.status === 429) return true;
+    if (err.status && err.status >= 500) return true;
+    const msg = err.message.toLowerCase();
+    return msg.includes("timeout") || msg.includes("rate limit");
+}
+
+// ── forwardProxy 封装（含客户端超时） ────────────────────────────────
 
 async function forward(
     url: string,
@@ -85,7 +88,12 @@ async function forward(
         payloadEncoding: "json",
         responseEncoding: "text",
     };
-    const resp = await fetchSyncPost("/api/network/forwardProxy", req);
+    // 客户端超时兜底：kernel forwardProxy 可能不 enforce timeout
+    const fetchPromise = fetchSyncPost("/api/network/forwardProxy", req);
+    const timer = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new AIError(`请求超时（${timeout / 1000}秒）`)), timeout + 5000),
+    );
+    const resp = await Promise.race([fetchPromise, timer]);
     if (resp.code !== 0) {
         throw new AIError(`forwardProxy 失败: ${resp.msg}`);
     }
@@ -98,7 +106,22 @@ function checkHttpOk(fr: ForwardResponse): void {
     }
 }
 
-// ── 协议1: OpenAI Chat Completions (/v1/chat/completions) ──────────────
+// ── 认证头 ────────────────────────────────────────────────────────────
+
+function buildAuthHeaders(config: AIConfig): Record<string, string>[] {
+    const headers: Record<string, string>[] = [];
+    const needAuth = config.provider !== "ollama" || !!config.apiKey;
+    if (!needAuth || !config.apiKey) return headers;
+    if (config.protocol === "messages") {
+        headers.push({ "x-api-key": config.apiKey });
+        headers.push({ "anthropic-version": "2023-06-01" });
+    } else {
+        headers.push({ Authorization: `Bearer ${config.apiKey}` });
+    }
+    return headers;
+}
+
+// ── 协议1: OpenAI Chat Completions ────────────────────────────────────
 
 function extractChatContent(parsed: unknown): string {
     const choices = (parsed as { choices?: Array<{ message?: { content?: string } }> })?.choices;
@@ -125,9 +148,8 @@ async function callChat(config: AIConfig, messages: ChatMessage[], opts: LLMCall
     return { content, raw: parsed };
 }
 
-// ── 协议2: OpenAI Responses API (/v1/responses) ───────────────────────
+// ── 协议2: OpenAI Responses API ───────────────────────────────────────
 
-/** 将 chat 格式的 response_format 转为 responses 格式的 text.format */
 function toResponsesFormat(rf: unknown): unknown {
     if (!rf) return undefined;
     const r = rf as { type: string; json_schema?: { name: string; schema: object; strict: boolean } };
@@ -164,9 +186,8 @@ async function callResponses(config: AIConfig, messages: ChatMessage[], opts: LL
     return { content, raw: parsed };
 }
 
-// ── 协议3: Anthropic Messages API (/v1/messages) ──────────────────────
+// ── 协议3: Anthropic Messages API ──────────────────────────────────────
 
-/** 从 messages 中抽取 system 消息并合并为顶层 system 字段 */
 function splitSystem(messages: ChatMessage[]): { system?: string; messages: ChatMessage[] } {
     const systemParts: string[] = [];
     const rest: ChatMessage[] = [];
@@ -195,7 +216,6 @@ async function callMessages(config: AIConfig, messages: ChatMessage[], opts: LLM
     };
     if (system) body.system = system;
     body.temperature = opts.temperature ?? config.temperature;
-    // Anthropic 无原生 response_format，靠 prompt + jsonrepair 兜底
     const fr = await forward(url, body, buildAuthHeaders(config), opts.timeout ?? config.timeout);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
@@ -205,17 +225,9 @@ async function callMessages(config: AIConfig, messages: ChatMessage[], opts: LLM
     return { content, raw: parsed };
 }
 
-// ── 统一入口 ──────────────────────────────────────────────────────────
+// ── 协议分发（单次调用，不含重试） ────────────────────────────────────
 
-/**
- * 调用 LLM，经思源内核 forwardProxy 转发。
- * 按 config.protocol 分发到对应协议处理器。
- */
-export async function callLLM(
-    config: AIConfig,
-    messages: ChatMessage[],
-    opts: LLMCallOptions = {},
-): Promise<LLMResult> {
+async function callOnce(config: AIConfig, messages: ChatMessage[], opts: LLMCallOptions): Promise<LLMResult> {
     switch (config.protocol) {
         case "chat": return callChat(config, messages, opts);
         case "responses": return callResponses(config, messages, opts);
@@ -223,13 +235,42 @@ export async function callLLM(
     }
 }
 
-/** 测试连接：发一条用户自定义消息验证配置可用 */
+// ── 统一入口（含指数退避重试） ────────────────────────────────────────
+
+const MAX_RETRIES = 2;
+const RETRY_BASE_MS = 3000;
+
+/**
+ * 调用 LLM，经思源内核 forwardProxy 转发。
+ * 对限流(429)、超时、5xx 自动重试最多 2 次，指数退避。
+ * // safe for concurrent calls（无共享状态）
+ */
+export async function callLLM(
+    config: AIConfig,
+    messages: ChatMessage[],
+    opts: LLMCallOptions = {},
+): Promise<LLMResult> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            return await callOnce(config, messages, opts);
+        } catch (e) {
+            lastError = e;
+            if (attempt < MAX_RETRIES && isRetryable(e)) {
+                await sleep(RETRY_BASE_MS * (attempt + 1));
+                continue;
+            }
+            throw e;
+        }
+    }
+    throw lastError;
+}
+
+/** 测试连接：发一条用户自定义消息验证配置可用。失败时抛出错误。 */
 export async function testConnection(config: AIConfig): Promise<boolean> {
-    const prompt = config.testPrompt?.trim() || "ping";
-    try {
-        await callLLM(config, [{ role: "user", content: prompt }], {
-            maxTokens: 16, temperature: 0,
-        });
-        return true;
-    } catch { return false; }
+    const prompt = config.testPrompt?.trim() || "请用一句话简要介绍你自己";
+    await callLLM(config, [{ role: "user", content: prompt }], {
+        maxTokens: 128, temperature: 0,
+    });
+    return true;
 }
