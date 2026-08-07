@@ -43,6 +43,7 @@ export class CodeEditor {
         private readonly parent: HTMLElement,
         private readonly lang: string,
         private readonly initialCode = "",
+        private readonly onChange?: (doc: string) => void,
     ) {}
 
     async mount(): Promise<void> {
@@ -56,6 +57,11 @@ export class CodeEditor {
                     keymap.of([...defaultKeymap, ...historyKeymap, ...closeBracketsKeymap, ...completionKeymap, indentWithTab]),
                     languageExt,
                     this.themeCompartment.of(this.resolveTheme()),
+                    EditorView.updateListener.of((v) => {
+                        if (v.docChanged && this.onChange) {
+                            this.onChange(v.state.doc.toString());
+                        }
+                    }),
                 ],
             }),
         });
