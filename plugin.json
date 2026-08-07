@@ -1,0 +1,47 @@
+{
+  "name": "recallgen",
+  "author": "Solathis",
+  "url": "",
+  "version": "0.1.0",
+  "minAppVersion": "3.7.0",
+  "backends": [
+    "windows",
+    "linux",
+    "darwin",
+    "ios",
+    "android",
+    "harmony",
+    "docker"
+  ],
+  "frontends": [
+    "desktop",
+    "mobile",
+    "browser-desktop",
+    "browser-mobile",
+    "desktop-window"
+  ],
+  "displayName": {
+    "default": "RecallGen",
+    "zh-CN": "知了·RecallGen"
+  },
+  "description": {
+    "default": "AI-powered quiz generation and spaced review for SiYuan notes",
+    "zh-CN": "基于 AI 的思源笔记智能复习插件：选块生成多题型试卷，内置答题面板与热力图"
+  },
+  "readme": {
+    "default": "README.md",
+    "zh-CN": "README.zh-CN.md"
+  },
+  "funding": {
+    "openCollective": "",
+    "patreon": "",
+    "github": "",
+    "custom": []
+  },
+  "keywords": [
+    "AI",
+    "quiz",
+    "review",
+    "复习"
+  ]
+}
