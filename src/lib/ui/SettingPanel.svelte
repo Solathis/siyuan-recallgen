@@ -5,6 +5,7 @@
     import SettingsPrompts from "./SettingsPrompts.svelte";
     import SettingsHeatmap from "./SettingsHeatmap.svelte";
     import SettingsData from "./SettingsData.svelte";
+    import { cn } from "./components";
     import type { RecallGenConfig } from "@/types/config";
     import type { ScoreRecord } from "@/types/quiz";
 
@@ -24,7 +25,9 @@
         { key: "data", label: "数据管理", icon: "🗑️" },
     ] as const;
 
-    let active = "ai";
+    type SectionKey = typeof SECTIONS[number]["key"];
+    let active: SectionKey = "ai";
+
     function handleSave(e: { detail: RecallGenConfig }) { dispatch("save", e.detail); }
 </script>
 
@@ -33,8 +36,7 @@
         {#each SECTIONS as s}
             <button
                 type="button"
-                class="rg-nav-btn"
-                class:active={active === s.key}
+                class={cn("rg-nav-btn", active === s.key && "rg-nav-btn--active")}
                 on:click={() => active = s.key}
             >
                 <span class="rg-nav-icon">{s.icon}</span>
@@ -60,17 +62,17 @@
 <style>
     .rg-setting-layout {
         display: flex;
-        gap: 0;
-        min-height: 60vh;
-        max-height: 70vh;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
     }
     .rg-setting-nav {
         flex-shrink: 0;
-        width: 160px;
+        width: 152px;
         display: flex;
         flex-direction: column;
-        gap: 2px;
-        padding: 8px 0;
+        gap: 1px;
+        padding: 8px 6px;
         border-right: 1px solid var(--b3-border-color);
         background: var(--b3-theme-background-light);
         overflow-y: auto;
@@ -79,23 +81,25 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 14px;
+        height: 40px;
+        padding: 0 12px;
         border: none;
+        border-left: 3px solid transparent;
+        border-radius: var(--b3-border-radius);
         background: transparent;
         color: var(--b3-theme-on-background);
         font-size: 13px;
         text-align: left;
         cursor: pointer;
         transition: background .12s;
-        border-left: 3px solid transparent;
     }
     .rg-nav-btn:hover { background: var(--b3-list-hover); }
-    .rg-nav-btn.active {
+    .rg-nav-btn--active {
         background: var(--b3-theme-background);
         border-left-color: var(--b3-theme-primary);
         font-weight: 600;
     }
-    .rg-nav-icon { font-size: 16px; flex-shrink: 0; }
+    .rg-nav-icon { font-size: 15px; flex-shrink: 0; line-height: 1; }
     .rg-nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rg-setting-content {
         flex: 1;
@@ -104,7 +108,7 @@
         padding: 12px 16px;
     }
     @media (max-width: 640px) {
-        .rg-setting-layout { flex-direction: column; max-height: none; }
+        .rg-setting-layout { flex-direction: column; }
         .rg-setting-nav {
             width: 100%;
             flex-direction: row;
@@ -113,8 +117,17 @@
             overflow-x: auto;
             padding: 6px 8px;
         }
-        .rg-nav-btn { border-left: none; border-bottom: 3px solid transparent; padding: 8px 12px; }
-        .rg-nav-btn.active { border-bottom-color: var(--b3-theme-primary); border-left-color: transparent; }
+        .rg-nav-btn {
+            height: 36px;
+            padding: 0 10px;
+            border-left: none;
+            border-bottom: 3px solid transparent;
+            border-radius: var(--b3-border-radius);
+        }
+        .rg-nav-btn--active {
+            border-bottom-color: var(--b3-theme-primary);
+            border-left-color: transparent;
+        }
         .rg-setting-content { padding: 12px; }
     }
 </style>

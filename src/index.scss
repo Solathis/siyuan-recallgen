@@ -227,13 +227,10 @@
 }
 .rg-tooltip:hover::after { opacity: .95; }
 
-/* === 设置面板在思源原生设置对话框内填充 === */
+/* === 设置面板容器：自身管理高度，不操纵思源对话框内部结构 === */
 .rg-setting-container {
     width: 100%;
-    min-height: 60vh;
-}
-.b3-dialog .b3-setting__item:has(> .rg-setting-container) {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 0;
+    height: calc(80vh - 110px);
+    min-height: 420px;
+    overflow: hidden;
 }
