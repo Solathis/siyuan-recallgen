@@ -21,6 +21,9 @@
     function checked(e: Event): boolean { return (e.target as HTMLInputElement).checked; }
     function vf(e: Event): number { return parseFloat(v(e)) || 0; }
 
+    let _extraScope = config.general.extraScopePct;
+    $: _extraScope = config.general.extraScopePct;
+
     $: diffOk = config.general.difficulty.easy + config.general.difficulty.medium + config.general.difficulty.hard === config.general.difficulty.total;
     $: totalValid = config.general.difficulty.total >= 1 && config.general.difficulty.total <= 50;
 
@@ -83,9 +86,9 @@
             </div>
         {/if}
         <div class={field.field}>
-            <span class={field.label}>超纲比例（{config.general.extraScopePct}%）</span>
+            <span class={field.label}>超纲比例（{_extraScope}%）</span>
             <span class={field.description}>允许 AI 出题时扩展到笔记外的相关知识点，0% = 仅限笔记内容</span>
-            <input class={slider} type="range" min="0" max="50" step="5" value={config.general.extraScopePct} on:input={(e) => patchGeneral({ extraScopePct: vf(e) })} />
+            <input class={slider} type="range" min="0" max="50" step="5" bind:value={_extraScope} on:change={() => patchGeneral({ extraScopePct: _extraScope })} />
         </div>
         <label class="rg-check-item">
             <input class={switchCls} type="checkbox" checked={config.general.countdownEnabled} on:change={(e) => patchGeneral({ countdownEnabled: checked(e) })} />
