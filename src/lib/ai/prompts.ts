@@ -90,24 +90,35 @@ export function buildAnalysisMessages(
     ];
 }
 
-/** AI 对话：以答题结果为上下文回答用户追问 */
+/** AI 对话：针对单道题目回答用户追问 */
 export function buildChatMessages(
     prompts: PromptConfig,
-    questions: Question[],
-    results: GradingResult[],
+    question: Question,
+    result: GradingResult,
     analysis: string,
     history: Array<{ role: "user" | "assistant"; content: string }>,
     userMessage: string,
 ): Array<{ role: "system" | "user" | "assistant"; content: string }> {
-    const ctx = results.map((r, i) => {
-        const q = questions[i];
-        return `【${r.score >= 60 ? "正确" : "错误"}·${r.score}分】${q.question}\n  你的答案：${r.userAnswer?.value ?? "未答"}\n  评语：${r.comment ?? ""}`;
-    }).join("\n\n");
+    const ctx = `题目：${question.question}\n` +
+        `题型：${question.type}\n` +
+        `你的答案：${result.userAnswer?.value ?? "未答"}\n` +
+        `得分：${result.score}/${result.maxScore}\n` +
+        `评语：${result.comment ?? ""}`;
+    const correctParts: string[] = [];
+    switch (question.type) {
+        case "single_choice": correctParts.push(`正确答案：${String.fromCharCode(65 + question.answer)}`); break;
+        case "multiple_choice": correctParts.push(`正确答案：${question.answer.map((i) => String.fromCharCode(65 + i)).sort().join("、")}`); break;
+        case "true_false": correctParts.push(`正确答案：${question.answer ? "正确" : "错误"}`); break;
+        case "fill_blank": correctParts.push(`正确答案：${question.answer.map((o) => o.join(" / ")).join("；")}`); break;
+        case "subjective": correctParts.push(`参考答案：${question.reference_answer}`); break;
+        case "coding": correctParts.push(`参考答案：${question.reference_answer ?? question.answer}`); break;
+    }
+    if (question.explanation) correctParts.push(`解析：${question.explanation}`);
     const system = [
         prompts.analysis,
-        `以下是学生本次答题情况：\n${ctx}`,
-        `薄弱点分析：\n${analysis}`,
-        "请基于以上信息回答学生的问题。如果问题超出本次答题范围，可以适当延伸但需说明。",
+        `以下是学生该题的答题情况：\n${ctx}\n\n${correctParts.join("\n")}`,
+        `整体薄弱点分析：${analysis}`,
+        "请针对这道题回答学生的问题。如涉及相关概念可以适当延伸，但需围绕本题。",
     ];
     return [
         { role: "system", content: system.join("\n\n") },

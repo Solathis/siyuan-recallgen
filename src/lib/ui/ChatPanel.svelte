@@ -5,8 +5,8 @@
     import type { GradingResult, Question } from "@/types/quiz";
 
     export let service: QuizService;
-    export let questions: Question[];
-    export let results: GradingResult[];
+    export let question: Question;
+    export let result: GradingResult;
     export let analysis: string;
 
     let history: ChatTurn[] = [];
@@ -38,7 +38,7 @@
         await tick();
         scrollEl?.scrollTo({ top: scrollEl.scrollHeight, behavior: "smooth" });
         try {
-            const reply = await service.chat(questions, results, analysis, history.slice(0, -1), msg);
+            const reply = await service.chat(question, result, analysis, history.slice(0, -1), msg);
             history = [...history, { role: "assistant", content: reply }];
         } catch (e) {
             history = [...history, { role: "assistant", content: `（出错了：${(e as Error).message}）` }];

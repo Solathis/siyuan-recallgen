@@ -11,7 +11,11 @@
     export let analysis: string | null;
 
     const dispatch = createEventDispatcher<{ save: void }>();
-    let showChat = false;
+    let chatFor: number | null = null;
+
+    function toggleChat(i: number) {
+        chatFor = chatFor === i ? null : i;
+    }
 
     const TYPE_LABEL: Record<string, string> = {
         single_choice: "单选题", multiple_choice: "多选题", fill_blank: "填空题",
@@ -84,6 +88,16 @@
                     {#if r.comment}
                         <p class="rg-comment"><b>评语：</b>{r.comment}</p>
                     {/if}
+                    <div class="rg-qcard__actions">
+                        <button class={button({ variant: "outline", size: "sm" })} on:click={(e) => { e.preventDefault(); e.stopPropagation(); toggleChat(i); }}>
+                            {chatFor === i ? "收起答疑" : "AI 答疑"}
+                        </button>
+                    </div>
+                    {#if chatFor === i}
+                        <div class="rg-qcard__chat">
+                            <ChatPanel {service} question={q} result={r} analysis={analysis ?? ""} on:close={() => (chatFor = null)} />
+                        </div>
+                    {/if}
                 </div>
             </details>
         {/each}
@@ -98,15 +112,8 @@
 
     <hr class={separator} />
     <div class="rg-result__foot">
-        <button class={button({ variant: "outline", size: "sm" })} on:click={() => (showChat = !showChat)}>
-            {showChat ? "收起答疑" : "AI 答疑对话"}
-        </button>
         <button class={button({ variant: "default" })} on:click={() => dispatch("save")}>保存到文档</button>
     </div>
-
-    {#if showChat}
-        <ChatPanel {service} {questions} {results} analysis={analysis ?? ""} on:close={() => (showChat = false)} />
-    {/if}
 </div>
 
 <style>
@@ -128,5 +135,7 @@
     .rg-explain { color: var(--b3-theme-on-surface-light); }
     .rg-comment { background: var(--b3-theme-background-light); padding: 6px 8px; border-radius: var(--b3-border-radius); }
     .rg-result__foot { display: flex; justify-content: flex-end; }
+    .rg-qcard__actions { margin-top: 8px; }
+    .rg-qcard__chat { margin-top: 8px; }
     @media (max-width: 768px) { .rg-qcard__q { white-space: normal; } }
 </style>

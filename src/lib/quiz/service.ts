@@ -17,10 +17,10 @@ export interface QuizService {
         onProgress: (done: number, total: number) => void,
     ): Promise<GradingResult[]>;
     analyze(results: GradingResult[], questions: Question[]): Promise<string>;
-    /** AI 对话：基于答题结果回答用户追问 */
+    /** AI 对话：针对单道题目回答用户追问 */
     chat(
-        questions: Question[],
-        results: GradingResult[],
+        question: Question,
+        result: GradingResult,
         analysis: string,
         history: ChatTurn[],
         userMessage: string,

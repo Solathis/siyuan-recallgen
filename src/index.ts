@@ -117,7 +117,7 @@ export default class RecallGenPlugin extends Plugin {
             generate: (content: string) => generateQuestions(this.config, content),
             grade: (qs, ans, onProgress) => gradeAll(this.config, qs, ans, onProgress),
             analyze: (results, questions) => this.analyze(results, questions),
-            chat: (questions, results, analysis, history, userMessage) => this.chat(questions, results, analysis, history, userMessage),
+            chat: (question, result, analysis, history, userMessage) => this.chat(question, result, analysis, history, userMessage),
             saveResultToDoc: (session, analysis) => this.saveResultToDoc(session, analysis),
             saveProgress: (session) => this.progressStore.save(session),
             loadProgress: (id) => this.progressStore.load(id),
@@ -157,13 +157,13 @@ export default class RecallGenPlugin extends Plugin {
     }
 
     private async chat(
-        questions: Question[],
-        results: GradingResult[],
+        question: Question,
+        result: GradingResult,
         analysis: string,
         history: Array<{ role: "user" | "assistant"; content: string }>,
         userMessage: string,
     ): Promise<string> {
-        const messages = buildChatMessages(this.config.prompts, questions, results, analysis, history, userMessage);
+        const messages = buildChatMessages(this.config.prompts, question, result, analysis, history, userMessage);
         const res = await callLLM(this.config.ai, messages as ChatMessage[], {
             temperature: 0.6,
             maxTokens: 1024,
