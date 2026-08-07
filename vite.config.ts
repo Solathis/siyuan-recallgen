@@ -48,6 +48,23 @@ export default defineConfig({
         "process.env.NODE_ENV": JSON.stringify(env.NODE_ENV)
     },
 
+    optimizeDeps: {
+        // 预构建 CodeMirror 语言包，避免 dev 模式动态 import 解析失败
+        include: [
+            "@codemirror/state",
+            "@codemirror/view",
+            "@codemirror/commands",
+            "@codemirror/language",
+            "@codemirror/autocomplete",
+            "@codemirror/lang-python",
+            "@codemirror/lang-javascript",
+            "@codemirror/lang-css",
+            "@codemirror/lang-markdown",
+            "@codemirror/theme-one-dark",
+            "jsonrepair",
+        ],
+    },
+
     build: {
         outDir: outputDir,
         emptyOutDir: false,
