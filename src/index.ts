@@ -125,7 +125,7 @@ export default class RecallGenPlugin extends Plugin {
             grade: (qs, ans, onProgress) => gradeAll(this.config, qs, ans, onProgress),
             analyze: (results, questions) => this.analyze(results, questions),
             chat: (question, result, analysis, history, userMessage) => this.chat(question, result, analysis, history, userMessage),
-            saveResultToDoc: (session, analysis) => this.saveResultToDoc(session, analysis),
+            saveResultToDoc: (session, analysis, results, wrongOnly) => this.saveResultToDoc(session, analysis, results, wrongOnly),
             saveProgress: (session) => this.progressStore.save(session),
             loadProgress: (id) => this.progressStore.load(id),
             findProgressBySourceDocId: (sourceDocId) => this.progressStore.findBySourceDocId(sourceDocId),
@@ -158,8 +158,15 @@ export default class RecallGenPlugin extends Plugin {
         return res.content;
     }
 
-    private async saveResultToDoc(session: QuizSession, analysis: string): Promise<string> {
-        const docId = await saveAsNewDoc(this.config.general, session.questions, session.sourceDocId, session.sourceTitle);
+    private async saveResultToDoc(session: QuizSession, analysis: string, results: GradingResult[], wrongOnly?: boolean): Promise<string> {
+        const questions = wrongOnly
+            ? session.questions.filter((_, i) => results[i].score < 60)
+            : session.questions;
+        if (questions.length === 0) {
+            showMessage("没有错题可保存");
+            return "";
+        }
+        const docId = await saveAsNewDoc(this.config.general, questions, session.sourceDocId, session.sourceTitle);
         await appendAnalysis(docId, analysis);
         return docId;
     }

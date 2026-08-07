@@ -10,7 +10,7 @@
     export let questions: Question[];
     export let analysis: string | null;
 
-    const dispatch = createEventDispatcher<{ save: void }>();
+    const dispatch = createEventDispatcher<{ save: void; saveWrong: void; discard: void }>();
     let chatFor: number | null = null;
 
     function toggleChat(i: number) {
@@ -21,6 +21,7 @@
         single_choice: "单选题", multiple_choice: "多选题", fill_blank: "填空题",
         true_false: "判断题", subjective: "主观题", coding: "编程题",
     };
+    const DIFF_LABEL: Record<string, string> = { easy: "初级", medium: "中级", hard: "高级" };
 
     $: total = results.reduce((s, r) => s + r.score, 0);
     $: max = results.reduce((s, r) => s + r.maxScore, 0);
@@ -50,6 +51,11 @@
         }
         return "";
     }
+    function isCorrectOption(q: Question, idx: number): boolean {
+        if (q.type === "single_choice") return q.answer === idx;
+        if (q.type === "multiple_choice") return q.answer.includes(idx);
+        return false;
+    }
 </script>
 
 <div class="rg-result">
@@ -74,10 +80,20 @@
             <details class="rg-qcard" class:ok={r.score >= 60} class:bad={r.score < 60}>
                 <summary class="rg-qcard__summary">
                     <span class={badge(r.score >= 60 ? "success" : "destructive")}>{TYPE_LABEL[q.type] ?? q.type}</span>
+                    <span class={badge("outline")}>{DIFF_LABEL[q.difficulty] ?? q.difficulty}</span>
                     <span class="rg-qcard__score">{r.score.toFixed(0)}/{r.maxScore}</span>
                     <span class="rg-qcard__q">{q.question}</span>
                 </summary>
                 <div class="rg-qcard__body">
+                    {#if q.type === "single_choice" || q.type === "multiple_choice"}
+                        <div class="rg-qcard__options">
+                            {#each q.options as opt, j}
+                                <div class="rg-qcard__opt" class:is-correct={isCorrectOption(q, j)}>
+                                    <b>{String.fromCharCode(65 + j)}.</b> {opt}
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
                     <p><b>你的答案：</b>{userText(r)}</p>
                     {#if q.type !== "subjective" && q.type !== "coding"}
                         <p><b>正确答案：</b>{correctText(q)}</p>
@@ -112,6 +128,8 @@
 
     <hr class={separator} />
     <div class="rg-result__foot">
+        <button class={button({ variant: "ghost", size: "sm" })} on:click={() => dispatch("discard")}>放弃保存</button>
+        <button class={button({ variant: "outline" })} on:click={() => dispatch("saveWrong")}>仅保存错题</button>
         <button class={button({ variant: "default" })} on:click={() => dispatch("save")}>保存到文档</button>
     </div>
 </div>
@@ -132,6 +150,9 @@
     .rg-qcard.bad .rg-qcard__score { color: var(--b3-card-error); }
     .rg-qcard__q { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rg-qcard__body { padding: 4px 12px 12px; font-size: 13px; line-height: 1.7; }
+    .rg-qcard__options { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+    .rg-qcard__opt { padding: 4px 8px; border-radius: var(--b3-border-radius); }
+    .rg-qcard__opt.is-correct { background: color-mix(in srgb, var(--b3-card-success, #65a84c) 12%, transparent); font-weight: 600; }
     .rg-explain { color: var(--b3-theme-on-surface-light); }
     .rg-comment { background: var(--b3-theme-background-light); padding: 6px 8px; border-radius: var(--b3-border-radius); }
     .rg-result__foot { display: flex; justify-content: flex-end; }

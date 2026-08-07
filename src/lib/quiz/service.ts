@@ -25,7 +25,7 @@ export interface QuizService {
         history: ChatTurn[],
         userMessage: string,
     ): Promise<string>;
-    saveResultToDoc(session: QuizSession, analysis: string): Promise<string>;
+    saveResultToDoc(session: QuizSession, analysis: string, results: GradingResult[], wrongOnly?: boolean): Promise<string>;
     saveProgress(session: QuizSession): Promise<void>;
     loadProgress(id: string): Promise<QuizSession | null>;
     findProgressBySourceDocId(sourceDocId: string): Promise<QuizSession | null>;

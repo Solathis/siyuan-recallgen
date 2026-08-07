@@ -3,7 +3,6 @@
   "author": "Solathis",
   "url": "",
   "version": "0.1.0",
-  "icon": "icon.png",
   "minAppVersion": "3.7.0",
   "backends": [
     "windows",

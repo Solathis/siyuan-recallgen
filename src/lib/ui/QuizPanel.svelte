@@ -199,10 +199,12 @@
         if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
         return `rg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
-    async function saveToDoc() {
+    async function saveToDoc(wrongOnly: boolean) {
         if (!session || !results) return;
-        try { await service.saveResultToDoc(session, analysis ?? ""); showMessage("已保存到文档"); }
-        catch (e) { error = (e as Error).message; }
+        try {
+            await service.saveResultToDoc(session, analysis ?? "", results, wrongOnly);
+            showMessage(wrongOnly ? "已保存错题到文档" : "已保存到文档");
+        } catch (e) { error = (e as Error).message; }
     }
     async function retryGenerate() {
         error = null;
@@ -246,6 +248,15 @@
         };
         return m[t] ?? t;
     }
+    function diffLabel(d: string): string {
+        const m: Record<string, string> = { easy: "初级", medium: "中级", hard: "高级" };
+        return m[d] ?? d;
+    }
+    function diffBadge(d: string): "secondary" | "warning" | "destructive" {
+        if (d === "easy") return "secondary";
+        if (d === "medium") return "warning";
+        return "destructive";
+    }
 </script>
 
 <div class="rg-panel" style="--rg-panel-width: {config.general.panelWidth}px">
@@ -287,6 +298,7 @@
                         <div class="rg-panel__q-item">
                             <div class="rg-panel__q-header">
                                 <span class={badge("secondary")}>第 {i + 1} 题</span>
+                                <span class={badge(diffBadge(q.difficulty))}>{diffLabel(q.difficulty)}</span>
                                 <span class={badge("outline")}>{typeLabel(q.type)}</span>
                                 {#if isAnswered(q)}<span class={badge("success")}>已答</span>{/if}
                             </div>
@@ -308,7 +320,7 @@
                 </div>
             </div>
         {:else if results && session}
-            <ResultPanel {service} results={results} questions={session.questions} {analysis} on:save={() => saveToDoc()} />
+            <ResultPanel {service} results={results} questions={session.questions} {analysis} on:save={() => saveToDoc(false)} on:saveWrong={() => saveToDoc(true)} on:discard={() => closeTab()} />
         {/if}
     {/if}
     </div>
