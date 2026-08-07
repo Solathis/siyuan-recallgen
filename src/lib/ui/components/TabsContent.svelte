@@ -1,13 +1,11 @@
 <script lang="ts">
     import { writable, type Writable } from "svelte/store";
     import { getContext } from "svelte";
-    import { tabs as t } from "./index";
-
-    const KEY = Symbol("rg-tabs");
+    import { tabs as t, TABS_KEY } from "./index";
 
     export let value: string = "";
 
-    const active = getContext<Writable<string>>(KEY) ?? writable(value);
+    const active = getContext<Writable<string>>(TABS_KEY) ?? writable(value);
     let show = false;
     $: show = value === $active;
 </script>

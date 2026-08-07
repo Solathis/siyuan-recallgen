@@ -1,17 +1,15 @@
 <script lang="ts">
     import { writable, type Writable } from "svelte/store";
     import { getContext, setContext } from "svelte";
-    import { tabs as t } from "./index";
-
-    const KEY = Symbol("rg-tabs");
+    import { tabs as t, TABS_KEY } from "./index";
 
     export let value: string = "";
 
     function store(): Writable<string> {
-        let s = getContext<Writable<string>>(KEY);
+        let s = getContext<Writable<string>>(TABS_KEY);
         if (!s) {
             s = writable(value);
-            setContext(KEY, s);
+            setContext(TABS_KEY, s);
         }
         return s;
     }

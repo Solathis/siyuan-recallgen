@@ -103,18 +103,18 @@
     .rg-score-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .rg-score { display: flex; align-items: baseline; gap: 6px; }
     .rg-score__num { font-size: 28px; font-weight: 700; color: var(--b3-theme-primary); }
-    .rg-score__unit { font-size: 13px; color: var(--b3-theme-on-surface); }
-    .rg-score__total { font-size: 13px; color: var(--b3-theme-on-surface); }
+    .rg-score__unit { font-size: 13px; color: var(--b3-theme-on-surface-light); }
+    .rg-score__total { font-size: 13px; color: var(--b3-theme-on-surface-light); }
     .rg-result__list { display: flex; flex-direction: column; gap: 8px; }
     .rg-qcard { border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); overflow: hidden; }
     .rg-qcard__summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; list-style: none; }
     .rg-qcard__summary::-webkit-details-marker { display: none; }
-    .rg-qcard__score { font-size: 12px; font-weight: 600; color: var(--b3-theme-on-surface); min-width: 48px; }
+    .rg-qcard__score { font-size: 12px; font-weight: 600; color: var(--b3-theme-on-surface-light); min-width: 48px; }
     .rg-qcard.ok .rg-qcard__score { color: var(--b3-card-success); }
     .rg-qcard.bad .rg-qcard__score { color: var(--b3-card-error); }
     .rg-qcard__q { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rg-qcard__body { padding: 4px 12px 12px; font-size: 13px; line-height: 1.7; }
-    .rg-explain { color: var(--b3-theme-on-surface); }
+    .rg-explain { color: var(--b3-theme-on-surface-light); }
     .rg-comment { background: var(--b3-theme-background-light); padding: 6px 8px; border-radius: var(--b3-border-radius); }
     .rg-result__foot { display: flex; justify-content: flex-end; }
     @media (max-width: 768px) { .rg-qcard__q { white-space: normal; } }

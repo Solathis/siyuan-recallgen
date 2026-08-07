@@ -104,3 +104,6 @@ export const collapsible = {
 };
 
 export const tooltip = "rg-tooltip";
+
+/** 共享 context key，所有 Tabs 组件必须使用同一个 Symbol 实例 */
+export const TABS_KEY = Symbol("rg-tabs");

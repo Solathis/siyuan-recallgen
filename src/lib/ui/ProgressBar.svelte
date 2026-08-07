@@ -15,5 +15,5 @@
 
 <style>
     .rg-progress-wrap { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 480px; }
-    .rg-progress-label { font-size: 13px; color: var(--b3-theme-on-surface); }
+    .rg-progress-label { font-size: 13px; color: var(--b3-theme-on-surface-light); }
 </style>
