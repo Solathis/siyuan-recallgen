@@ -1,6 +1,6 @@
 import type { StoragePlugin } from "./store";
 import type { RecallGenConfig } from "@/types/config";
-import { getDefaultConfig } from "@/types/config";
+import { getDefaultConfig, migrateAIConfig } from "@/types/config";
 import { AsyncStore } from "./store";
 
 const CONFIG_NAME = "recallgen-config.json";
@@ -35,7 +35,7 @@ export class ConfigStore extends AsyncStore {
             this.config = getDefaultConfig();
         }
         this.config = {
-            ai: { ...this.config.ai, ...patch.ai },
+            ai: patch.ai ?? this.config.ai,
             prompts: { ...this.config.prompts, ...patch.prompts },
             general: { ...this.config.general, ...patch.general },
             heatmap: { ...this.config.heatmap, ...patch.heatmap },
@@ -47,7 +47,7 @@ export class ConfigStore extends AsyncStore {
     private mergeDefaults(partial: Partial<RecallGenConfig>): RecallGenConfig {
         const def = getDefaultConfig();
         return {
-            ai: { ...def.ai, ...partial.ai },
+            ai: migrateAIConfig(partial.ai),
             prompts: { ...def.prompts, ...partial.prompts },
             general: { ...def.general, ...partial.general },
             heatmap: { ...def.heatmap, ...partial.heatmap },

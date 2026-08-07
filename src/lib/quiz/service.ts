@@ -6,11 +6,12 @@ import type {
     ScoreRecord,
     UserAnswer,
 } from "@/types/quiz";
+import type { GenProgressCallback } from "../quiz/generator";
 
 /** QuizPanel 与插件后端交互的接口，由 index.ts 实现 */
 export interface QuizService {
     getConfig(): RecallGenConfig;
-    generate(content: string): Promise<Question[]>;
+    generate(content: string, onProgress?: GenProgressCallback): Promise<Question[]>;
     grade(
         questions: Question[],
         answers: Record<string, UserAnswer>,

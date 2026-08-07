@@ -97,12 +97,22 @@
     /** 检查 AI 配置是否有效 */
     function checkAiConfig(): boolean {
         const ai = config.ai;
-        if (!ai.model) {
-            error = "未配置 AI 模型，请先在设置中填写模型名称";
+        if (!ai.models || ai.models.length === 0) {
+            error = "未配置任何 AI 模型，请先在设置中添加端点和模型";
             return false;
         }
-        if (ai.provider !== "ollama" && !ai.apiKey) {
-            error = "未配置 API Key，请先在设置中填写";
+        const genModel = ai.models.find((m) => m.id === ai.roles.generator);
+        if (!genModel) {
+            error = "出题者模型未配置，请在 AI 身份中指定";
+            return false;
+        }
+        const ep = ai.endpoints.find((e) => e.id === genModel.endpointId);
+        if (!ep) {
+            error = "出题者模型引用的端点不存在，请检查配置";
+            return false;
+        }
+        if (ep.provider !== "ollama" && !ep.apiKey) {
+            error = "API Key 未配置，请先在设置中填写";
             return false;
         }
         return true;
@@ -120,7 +130,11 @@
         progressValue = null;
         progressLabel = "AI 正在生成题目…";
         try {
-            const qs = await service.generate(tabData.content ?? "");
+            const qs = await service.generate(tabData.content ?? "", (phase, round, detail) => {
+                progressLabel = detail;
+                if (phase === "generating") progressValue = null;
+                else progressValue = round * 30;
+            });
             if (cancelled) return;
             if (qs.length === 0) {
                 error = "AI 未生成任何题目，请检查内容或重试";

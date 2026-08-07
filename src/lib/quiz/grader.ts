@@ -1,5 +1,5 @@
 import PromiseLimitPool from "@/libs/promise-pool";
-import { callLLM, AIError, type ChatMessage } from "../ai/client";
+import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
 import { buildGradeSubjectiveMessages } from "../ai/prompts";
 import { GRADING_SCHEMA, buildJsonSchemaResponseFormat, buildJsonObjectResponseFormat, parseJsonLoose } from "../ai/schema";
 import type { RecallGenConfig } from "@/types/config";
@@ -110,7 +110,8 @@ async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | un
     const userText = ua?.type === "subjective" || ua?.type === "coding" ? ua.value : "";
     const messages = buildGradeSubjectiveMessages(config.prompts, q, userText);
     const responseFormat = pickGradingFormat(config.ai.jsonSchemaEnabled);
-    const result = await callLLM(config.ai, messages as ChatMessage[], {
+    const rc = resolveAI(config.ai, config.ai.roles.grader);
+    const result = await callLLM(rc, messages as ChatMessage[], {
         responseFormat,
         temperature: 0,
         maxTokens: 512,

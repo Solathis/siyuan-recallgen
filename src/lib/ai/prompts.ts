@@ -1,6 +1,9 @@
 import type { AIConfig, GeneralConfig, PromptConfig } from "@/types/config";
 import type { DifficultyDistribution, GradingResult, Question, QuestionType } from "@/types/quiz";
 
+// 重新导出 AIConfig 类型供 generator/grader 使用
+export type { AIConfig };
+
 /** 生成题目的消息序列 */
 export function buildGenerateMessages(
     prompts: PromptConfig,
@@ -90,6 +93,77 @@ export function buildAnalysisMessages(
     ];
 }
 
+/** 审题消息：让审题者审核题目列表 */
+export function buildReviewMessages(
+    prompts: PromptConfig,
+    questions: Question[],
+): Array<{ role: "system" | "user"; content: string }> {
+    const items = questions.map((q, i) => {
+        const parts = [`【第${i + 1}题】`, `题型: ${q.type}`, `难度: ${q.difficulty}`, `题干: ${q.question}`];
+        if (q.explanation) parts.push(`解析: ${q.explanation}`);
+        switch (q.type) {
+            case "single_choice":
+                parts.push(`选项: ${q.options.map((o, j) => String.fromCharCode(65 + j) + ". " + o).join(" | ")}`);
+                parts.push(`答案: ${String.fromCharCode(65 + q.answer)}`);
+                break;
+            case "multiple_choice":
+                parts.push(`选项: ${q.options.map((o, j) => String.fromCharCode(65 + j) + ". " + o).join(" | ")}`);
+                parts.push(`答案: ${q.answer.map((j) => String.fromCharCode(65 + j)).sort().join("")}`);
+                break;
+            case "true_false":
+                parts.push(`答案: ${q.answer ? "正确" : "错误"}`);
+                break;
+            case "fill_blank":
+                parts.push(`答案: ${q.answer.map((o) => o.join(" / ")).join("；")}`);
+                break;
+            case "subjective":
+                parts.push(`参考答案: ${q.reference_answer}`);
+                break;
+            case "coding":
+                parts.push(`参考答案: ${q.answer ?? ""}`);
+                if (q.test_cases) parts.push(`测试用例: ${q.test_cases.map((t) => `输入:${t.input ?? ""} 期望:${t.expected}`).join("; ")}`);
+                break;
+        }
+        return parts.join("\n");
+    });
+    return [
+        { role: "system", content: prompts.review },
+        { role: "user", content: `请审核以下 ${questions.length} 道题目：\n\n${items.join("\n\n")}` },
+    ];
+}
+
+/** 重新生成失败题目的消息：让出题者只重新生成被拒的题目 */
+export function buildRegenerateMessages(
+    prompts: PromptConfig,
+    general: GeneralConfig,
+    failedQuestions: Question[],
+    reasons: string[],
+    content: string,
+): Array<{ role: "system" | "user"; content: string }> {
+    const system = [
+        prompts.generate,
+        "严格按 JSON Schema 输出，禁止输出多余文本或代码围栏。",
+        "你之前生成的部分题目未通过审题，请根据审题意见重新生成这些题目。",
+    ];
+    const items = failedQuestions.map((q, i) => {
+        return `【第${i + 1}题（需重新生成）】\n原题: ${q.question}\n审题意见: ${reasons[i] ?? "未通过"}`;
+    });
+    const user = [
+        `原始笔记内容：`,
+        "----",
+        content,
+        "----",
+        `以下题目未通过审核，请重新生成：\n\n${items.join("\n\n")}`,
+        `要求重新生成 ${failedQuestions.length} 道题，题型和难度保持与原题一致。`,
+        `输出语言：${general.language === "zh" ? "中文" : "English"}`,
+        `按以下 JSON 结构输出：{"questions":[{type,difficulty,question,options?,answer?,reference_answer?,language?,starter_code?,test_cases?,explanation?}]}。`,
+    ].join("\n");
+    return [
+        { role: "system", content: system.join("\n\n") },
+        { role: "user", content: user },
+    ];
+}
+
 /** AI 对话：针对单道题目回答用户追问 */
 export function buildChatMessages(
     prompts: PromptConfig,
@@ -127,5 +201,4 @@ export function buildChatMessages(
     ];
 }
 
-/** 取 AI 调用所需的 AIConfig 子集（仅类型层面复用） */
-export type { AIConfig };
+

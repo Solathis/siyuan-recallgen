@@ -7,9 +7,9 @@
     export let config: RecallGenConfig;
     const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
 
-    const PROMPT_KEYS = ["generate", "gradeSubjective", "analysis"] as const;
+    const PROMPT_KEYS = ["generate", "review", "gradeSubjective", "analysis"] as const;
     const PROMPT_LABELS: Record<string, string> = {
-        generate: "出题提示词（含编程题指令）", gradeSubjective: "主观题/编程题判分", analysis: "薄弱点分析",
+        generate: "出题提示词（含编程题指令）", review: "审题提示词", gradeSubjective: "主观题/编程题判分", analysis: "薄弱点分析",
     };
 
     function v(e: Event): string { return (e.target as HTMLTextAreaElement).value; }

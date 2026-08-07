@@ -9,20 +9,45 @@ export type AIProtocol = "chat" | "responses" | "messages";
 /** 题目存储位置策略 */
 export type StorageLocation = "sibling" | "notebook";
 
-/** AI 接口配置 */
-export interface AIConfig {
+// ── 多端点多模型架构 ────────────────────────────────────────────────
+
+/** API 端点：一个服务商连接配置 */
+export interface AIEndpoint {
+    id: string;
+    name: string;
     provider: AIProvider;
-    /** API 协议：chat=OpenAI Chat Completions, responses=OpenAI Responses, messages=Anthropic Messages */
     protocol: AIProtocol;
     baseUrl: string;
     apiKey: string;
-    model: string;
+}
+
+/** AI 模型：绑定到某个端点，携带独立温度/token 参数 */
+export interface AIModel {
+    id: string;
+    name: string;
+    endpointId: string;
     temperature: number;
     maxTokens: number;
+}
+
+/** AI 角色：出题者 / 审题者 / 判题者，各指向一个模型 ID */
+export interface AIRoles {
+    generator: string;
+    reviewer: string;
+    grader: string;
+}
+
+/** AI 接口配置（多端点 + 多模型 + 三角色） */
+export interface AIConfig {
+    endpoints: AIEndpoint[];
+    models: AIModel[];
+    roles: AIRoles;
     /** forwardProxy 超时毫秒 */
     timeout: number;
-    /** JSON Schema 约束输出开关，默认开启 */
+    /** JSON Schema 严格模式开关 */
     jsonSchemaEnabled: boolean;
+    /** 测试连接使用的模型 ID */
+    testModelId: string;
     /** 测试连接的自定义提示词 */
     testPrompt: string;
 }
@@ -31,6 +56,8 @@ export interface AIConfig {
 export interface PromptConfig {
     /** 生成系统提示词（含编程题指令） */
     generate: string;
+    /** 审题提示词 */
+    review: string;
     /** 主观题/编程题判分提示词 */
     gradeSubjective: string;
     /** 薄弱点分析提示词 */
@@ -48,7 +75,7 @@ export interface GeneralConfig {
     storageLocation: StorageLocation;
     /** 指定笔记本 ID（storageLocation=notebook 时生效） */
     notebookId: string;
-    /** 超纲比例（0-100），允许出题涵盖笔记外扩展知识点的百分比 */
+    /** 超纲比例（0-100） */
     extraScopePct: number;
     /** 答题面板宽度（px） */
     panelWidth: number;
@@ -62,6 +89,8 @@ export interface RecallGenConfig {
     heatmap: HeatmapConfig;
 }
 
+// ── 默认值 ──────────────────────────────────────────────────────────
+
 export const DEFAULT_HEATMAP: HeatmapConfig = {
     enabled: true,
     metric: "avg",
@@ -74,16 +103,32 @@ export const DEFAULT_HEATMAP: HeatmapConfig = {
     ],
 };
 
-export const DEFAULT_AI_CONFIG: AIConfig = {
+const DEFAULT_ENDPOINT: AIEndpoint = {
+    id: "ep-default",
+    name: "默认端点",
     provider: "openai",
     protocol: "chat",
     baseUrl: "https://api.openai.com/v1",
     apiKey: "",
-    model: "gpt-4o-mini",
-    temperature: 0.7,
-    maxTokens: 16384,
+};
+
+/** 生成默认模型列表：出题/审题/判题三角色，同一端点，不同温度与 token */
+function defaultModels(): AIModel[] {
+    const base = { endpointId: DEFAULT_ENDPOINT.id };
+    return [
+        { ...base, id: "m-gen", name: "gpt-4o-mini", temperature: 0.7, maxTokens: 16384 },
+        { ...base, id: "m-review", name: "gpt-4o-mini", temperature: 0.3, maxTokens: 4096 },
+        { ...base, id: "m-grade", name: "gpt-4o-mini", temperature: 0, maxTokens: 512 },
+    ];
+}
+
+export const DEFAULT_AI_CONFIG: AIConfig = {
+    endpoints: [{ ...DEFAULT_ENDPOINT }],
+    models: defaultModels(),
+    roles: { generator: "m-gen", reviewer: "m-review", grader: "m-grade" },
     timeout: 120000,
     jsonSchemaEnabled: true,
+    testModelId: "m-gen",
     testPrompt: "请用一句话简要介绍你自己",
 };
 
@@ -98,6 +143,17 @@ export const DEFAULT_PROMPTS: PromptConfig = {
 6. 难度说明：初级（基础概念识记与直接应用）、中级（综合理解与多步推理）、高级（深层原理、边缘情况与综合分析）。
 
 【编程题指令】若选中内容含代码或涉及编程，可生成编程题（编写函数、修复代码、预测输出）。编程题必须包含：题目描述、初始代码模板（可选）、测试用例（输入/期望输出）、参考答案与解析。编程题题干中必须包含完整的代码上下文，不得引用笔记中的代码片段。`,
+    review: `你是一位严谨的审题专家。审查题目是否严谨、正确、无歧义。
+审查维度：
+1. 题干是否自包含，不依赖外部上下文或笔记原文。
+2. 答案是否正确且唯一（选择题）。
+3. 选项之间是否有区分度，避免模棱两可。
+4. 解析是否准确说明答案依据。
+5. 难度是否与标注匹配（初级/中级/高级）。
+6. 编程题是否有完整测试用例。
+
+如果题目不通过，请在 reason 中说明具体问题。
+对每道题给出审核结论，以 JSON 输出：{"reviews":[{"index":0,"passed":true,"reason":""}]}`,
     gradeSubjective: `你是一名严格但公正的阅卷老师。根据题目、参考答案要点和学生作答，给出 0-100 的评分，并附上简要评语。
 评分维度：知识正确性、逻辑完整性、表述清晰度。以 JSON 格式返回：{"score": 85, "comment": "评语"}
 
@@ -121,12 +177,78 @@ export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
 
 export function getDefaultConfig(): RecallGenConfig {
     return {
-        ai: { ...DEFAULT_AI_CONFIG },
+        ai: {
+            endpoints: DEFAULT_AI_CONFIG.endpoints.map((e) => ({ ...e })),
+            models: DEFAULT_AI_CONFIG.models.map((m) => ({ ...m })),
+            roles: { ...DEFAULT_AI_CONFIG.roles },
+            timeout: DEFAULT_AI_CONFIG.timeout,
+            jsonSchemaEnabled: DEFAULT_AI_CONFIG.jsonSchemaEnabled,
+            testModelId: DEFAULT_AI_CONFIG.testModelId,
+            testPrompt: DEFAULT_AI_CONFIG.testPrompt,
+        },
         prompts: { ...DEFAULT_PROMPTS },
         general: { ...DEFAULT_GENERAL_CONFIG, difficulty: { ...DEFAULT_GENERAL_CONFIG.difficulty } },
         heatmap: {
             ...DEFAULT_HEATMAP,
             ranges: DEFAULT_HEATMAP.ranges.map((r) => ({ ...r })),
         },
+    };
+}
+
+/**
+ * 将旧版单端点 AIConfig 迁移到多端点格式。
+ * 兼容 endpoints 数组已存在的新格式。
+ */
+export function migrateAIConfig(old: Partial<AIConfig> | undefined | null): AIConfig {
+    const def = DEFAULT_AI_CONFIG;
+    if (!old) return { ...def, endpoints: def.endpoints.map((e) => ({ ...e })), models: def.models.map((m) => ({ ...m })), roles: { ...def.roles } };
+
+    // 新格式：已有 endpoints 数组
+    if (Array.isArray(old.endpoints) && old.endpoints.length > 0) {
+        return {
+            endpoints: old.endpoints,
+            models: old.models ?? def.models,
+            roles: { ...def.roles, ...old.roles },
+            timeout: old.timeout ?? def.timeout,
+            jsonSchemaEnabled: old.jsonSchemaEnabled ?? def.jsonSchemaEnabled,
+            testModelId: old.testModelId ?? def.testModelId,
+            testPrompt: old.testPrompt ?? def.testPrompt,
+        };
+    }
+
+    // 旧格式迁移：provider/protocol/baseUrl/apiKey/model/temperature/maxTokens → 单端点三模型
+    const provider = (old as Record<string, unknown>).provider as AIProvider | undefined;
+    const protocol = (old as Record<string, unknown>).protocol as AIProtocol | undefined;
+    const baseUrl = (old as Record<string, unknown>).baseUrl as string | undefined;
+    const apiKey = (old as Record<string, unknown>).apiKey as string | undefined;
+    const model = (old as Record<string, unknown>).model as string | undefined;
+    const temperature = (old as Record<string, unknown>).temperature as number | undefined;
+    const maxTokens = (old as Record<string, unknown>).maxTokens as number | undefined;
+
+    const endpoint: AIEndpoint = {
+        id: "ep-default",
+        name: "默认端点",
+        provider: provider ?? "openai",
+        protocol: protocol ?? "chat",
+        baseUrl: baseUrl ?? "https://api.openai.com/v1",
+        apiKey: apiKey ?? "",
+    };
+    const mName = model ?? "gpt-4o-mini";
+    const mTemp = temperature ?? 0.7;
+    const mTok = maxTokens ?? 16384;
+    const models: AIModel[] = [
+        { id: "m-gen", name: mName, endpointId: "ep-default", temperature: mTemp, maxTokens: mTok },
+        { id: "m-review", name: mName, endpointId: "ep-default", temperature: 0.3, maxTokens: 4096 },
+        { id: "m-grade", name: mName, endpointId: "ep-default", temperature: 0, maxTokens: 512 },
+    ];
+
+    return {
+        endpoints: [endpoint],
+        models,
+        roles: { generator: "m-gen", reviewer: "m-review", grader: "m-grade" },
+        timeout: (old as Record<string, unknown>).timeout as number | undefined ?? def.timeout,
+        jsonSchemaEnabled: (old as Record<string, unknown>).jsonSchemaEnabled as boolean | undefined ?? def.jsonSchemaEnabled,
+        testModelId: "m-gen",
+        testPrompt: ((old as Record<string, unknown>).testPrompt as string | undefined) ?? def.testPrompt,
     };
 }

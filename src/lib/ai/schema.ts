@@ -49,6 +49,26 @@ export const QUIZ_SCHEMA = {
     required: ["questions"],
 } as const;
 
+/** 审题结果 Schema：{reviews:[{index,passed,reason}]} */
+export const REVIEW_SCHEMA = {
+    type: "object",
+    properties: {
+        reviews: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    index: { type: "number", description: "题目索引（0-based）" },
+                    passed: { type: "boolean", description: "是否通过审核" },
+                    reason: { type: "string", description: "不通过时的原因说明" },
+                },
+                required: ["index", "passed"],
+            },
+        },
+    },
+    required: ["reviews"],
+} as const;
+
 /** 判分结果 Schema：{score:number, comment:string} */
 export const GRADING_SCHEMA = {
     type: "object",

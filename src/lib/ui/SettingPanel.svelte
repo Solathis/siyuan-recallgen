@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import SettingsAI from "./SettingsAI.svelte";
+    import SettingsAIRoles from "./SettingsAIRoles.svelte";
     import SettingsGeneral from "./SettingsGeneral.svelte";
     import SettingsPrompts from "./SettingsPrompts.svelte";
     import SettingsHeatmap from "./SettingsHeatmap.svelte";
@@ -19,6 +20,7 @@
 
     const SECTIONS = [
         { key: "ai", label: "AI 服务", icon: "🔌" },
+        { key: "roles", label: "AI 身份", icon: "👥" },
         { key: "general", label: "题目与答题", icon: "📝" },
         { key: "prompts", label: "提示词", icon: "💬" },
         { key: "heatmap", label: "热力图", icon: "📊" },
@@ -52,6 +54,8 @@
             <div class="rg-setting-inner">
                 {#if active === "ai"}
                     <SettingsAI {config} {onTestConnection} on:save={handleSave} />
+                {:else if active === "roles"}
+                    <SettingsAIRoles {config} on:save={handleSave} />
                 {:else if active === "general"}
                     <SettingsGeneral {config} on:save={handleSave} />
                 {:else if active === "prompts"}
