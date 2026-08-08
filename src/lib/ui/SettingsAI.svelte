@@ -182,6 +182,14 @@
                         <span class="rg-models-title">模型</span>
                         <button class={button({ variant: "outline", size: "sm" })} on:click={() => addModel(ep.id)} type="button">+ 添加模型</button>
                     </div>
+                    {#if modelsOf(ep.id).length > 0}
+                        <div class="rg-model-header">
+                            <span class="rg-model-header-name">模型名称</span>
+                            <span class="rg-model-header-num">温度</span>
+                            <span class="rg-model-header-num">Max Tokens</span>
+                            <span class="rg-model-header-op">操作</span>
+                        </div>
+                    {/if}
                     {#each modelsOf(ep.id) as m (m.id)}
                         <div class="rg-model-row">
                             <input class={cn(input, "rg-model-name")} type="text" value={m.name} on:input={(e) => patchModel(m.id, { name: v(e) })} placeholder="模型名称（如 gpt-4o-mini）" />
@@ -275,6 +283,10 @@
     .rg-model-row { display: flex; align-items: center; gap: 6px; }
     .rg-model-name { flex: 1; }
     .rg-model-num { width: 80px; flex-shrink: 0; text-align: center; }
+    .rg-model-header { display: flex; align-items: center; gap: 6px; padding: 0 0 2px; font-size: 11px; font-weight: 600; color: var(--b3-theme-on-surface-light); border-bottom: 1px solid var(--b3-border-color); }
+    .rg-model-header-name { flex: 1; }
+    .rg-model-header-num { width: 80px; flex-shrink: 0; text-align: center; }
+    .rg-model-header-op { width: 48px; flex-shrink: 0; text-align: center; }
     .rg-section-sep { border-top: 1px solid var(--b3-border-color); margin: 4px 0; }
     .rg-section-head { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 8px; }
     .rg-section-title { font-weight: 600; font-size: 14px; color: var(--b3-theme-on-background); }

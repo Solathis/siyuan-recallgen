@@ -187,13 +187,19 @@
                 progressValue = total ? (done / total) * 100 : null;
                 progressLabel = `判分中 ${done}/${total}`;
             });
-            progressLabel = "正在生成薄弱点分析…";
-            progressValue = null;
-            analysis = await service.analyze(results, session.questions);
+            // 判分完成后立即保存成绩，不受后续分析影响
             const totalScore = results.reduce((s, r) => s + r.score, 0);
             const maxScore = results.reduce((s, r) => s + r.maxScore, 0);
             await service.saveScore({ id: genId(), quizId: session.id, title: session.sourceTitle, timestamp: Date.now(), totalScore, maxScore, questionCount: session.questions.length, detail: results });
             await service.clearProgress(session.id);
+            // 薄弱点分析失败不影响成绩记录
+            progressLabel = "正在生成薄弱点分析…";
+            progressValue = null;
+            try {
+                analysis = await service.analyze(results, session.questions);
+            } catch (e) {
+                analysis = `薄弱点分析失败：${(e as Error).message}`;
+            }
             panelState = "result";
         } catch (e) {
             error = (e as Error).message;
