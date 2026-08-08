@@ -1,7 +1,7 @@
 import PromiseLimitPool from "@/libs/promise-pool";
 import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
 import { buildGradeSubjectiveMessages } from "../ai/prompts";
-import { GRADING_SCHEMA, buildJsonSchemaResponseFormat, buildJsonObjectResponseFormat, parseJsonLoose } from "../ai/schema";
+import { GRADING_SCHEMA, buildTools, buildToolChoice, buildJsonObjectResponseFormat, parseJsonLoose } from "../ai/schema";
 import type { RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, UserAnswer } from "@/types/quiz";
 
@@ -109,10 +109,10 @@ function checkFillBlank(accepted: string[][], user: string[]): boolean {
 async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | undefined): Promise<GradingResult> {
     const userText = ua?.type === "subjective" || ua?.type === "coding" ? ua.value : "";
     const messages = buildGradeSubjectiveMessages(config.prompts, q, userText);
-    const responseFormat = pickGradingFormat(config.ai.jsonSchemaEnabled);
+    const callOpts = pickGradingOpts(config.ai.jsonSchemaEnabled);
     const rc = resolveAI(config.ai, config.ai.roles.grader);
     const result = await callLLM(rc, messages as ChatMessage[], {
-        responseFormat,
+        ...callOpts,
         temperature: 0,
         maxTokens: 512,
     });
@@ -130,10 +130,19 @@ async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | un
     };
 }
 
-function pickGradingFormat(jsonSchemaEnabled: boolean): unknown {
-    return jsonSchemaEnabled
-        ? buildJsonSchemaResponseFormat("recallgen_grading", GRADING_SCHEMA as object)
-        : buildJsonObjectResponseFormat();
+/**
+ * 按 jsonSchemaEnabled 选择判分调用选项：
+ * true → tools/function calling
+ * false → response_format: json_object
+ */
+function pickGradingOpts(jsonSchemaEnabled: boolean): { tools?: unknown[]; toolChoice?: unknown; responseFormat?: unknown } {
+    if (jsonSchemaEnabled) {
+        return {
+            tools: buildTools("recallgen_grading", "判分", GRADING_SCHEMA as object),
+            toolChoice: buildToolChoice("recallgen_grading"),
+        };
+    }
+    return { responseFormat: buildJsonObjectResponseFormat() };
 }
 
 function clampScore(v: unknown): number {

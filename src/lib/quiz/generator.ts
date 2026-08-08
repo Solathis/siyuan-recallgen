@@ -3,7 +3,8 @@ import { buildGenerateMessages, buildReviewMessages, buildRegenerateMessages } f
 import {
     QUIZ_SCHEMA,
     REVIEW_SCHEMA,
-    buildJsonSchemaResponseFormat,
+    buildTools,
+    buildToolChoice,
     buildJsonObjectResponseFormat,
     parseJsonLoose,
 } from "../ai/schema";
@@ -46,9 +47,8 @@ export async function generateQuestions(
     onProgress?.("generating", 1, "AI 正在生成题目…");
     const genAI = resolveAI(ai, ai.roles.generator);
     const messages = buildGenerateMessages(prompts, general, content, types, difficulty);
-    const responseFormat = pickResponseFormat(ai.jsonSchemaEnabled);
-    console.log("[RecallGen] 生成请求 responseFormat:", JSON.stringify(responseFormat));
-    const result = await callLLM(genAI, messages as ChatMessage[], { responseFormat });
+    const callOpts = pickCallOpts(ai.jsonSchemaEnabled, "recallgen_quiz", "生成复习题目", QUIZ_SCHEMA as object);
+    const result = await callLLM(genAI, messages as ChatMessage[], callOpts);
     console.log("[RecallGen] 生成响应原文(前300字):", result.content.slice(0, 300));
 
     const parsed = parseJsonLoose(result.content) as Record<string, unknown>;
@@ -87,8 +87,8 @@ async function reviewLoop(
     const { ai, prompts } = config;
     const reviewAI = resolveAI(ai, ai.roles.reviewer);
     const genAI = resolveAI(ai, ai.roles.generator);
-    const reviewFormat = pickReviewFormat(ai.jsonSchemaEnabled);
-    const genFormat = pickResponseFormat(ai.jsonSchemaEnabled);
+    const reviewOpts = pickCallOpts(ai.jsonSchemaEnabled, "recallgen_review", "审核题目质量", REVIEW_SCHEMA as object);
+    const genOpts = pickCallOpts(ai.jsonSchemaEnabled, "recallgen_quiz", "生成复习题目", QUIZ_SCHEMA as object);
     const types = config.general.allowedTypes;
 
     for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
@@ -96,7 +96,7 @@ async function reviewLoop(
 
         const reviewMessages = buildReviewMessages(prompts, questions);
         const reviewResult = await callLLM(reviewAI, reviewMessages as ChatMessage[], {
-            responseFormat: reviewFormat,
+            ...reviewOpts,
             temperature: 0.3,
         });
 
@@ -131,7 +131,7 @@ async function reviewLoop(
         onProgress?.("regenerating", round, `第 ${round} 轮：重新生成 ${failedIndices.length} 道未通过题目…`);
         const failedQuestions = failedIndices.map((i) => questions[i]);
         const regenMessages = buildRegenerateMessages(prompts, config.general, failedQuestions, reasons, content);
-        const regenResult = await callLLM(genAI, regenMessages as ChatMessage[], { responseFormat: genFormat });
+        const regenResult = await callLLM(genAI, regenMessages as ChatMessage[], genOpts);
 
         const regenParsed = parseJsonLoose(regenResult.content) as { questions?: unknown[] };
         if (!regenParsed?.questions || !Array.isArray(regenParsed.questions)) {
@@ -151,18 +151,24 @@ async function reviewLoop(
     return questions;
 }
 
-/** 按 jsonSchemaEnabled 选择 response_format：true=json_schema（严格），false=json_object（宽松兼容） */
-function pickResponseFormat(jsonSchemaEnabled: boolean): unknown {
-    return jsonSchemaEnabled
-        ? buildJsonSchemaResponseFormat("recallgen_quiz", QUIZ_SCHEMA as object)
-        : buildJsonObjectResponseFormat();
-}
-
-/** 审题 response_format */
-function pickReviewFormat(jsonSchemaEnabled: boolean): unknown {
-    return jsonSchemaEnabled
-        ? buildJsonSchemaResponseFormat("recallgen_review", REVIEW_SCHEMA as object)
-        : buildJsonObjectResponseFormat();
+/**
+ * 按 jsonSchemaEnabled 选择调用选项：
+ * true → tools/function calling（严格 Schema 约束）
+ * false → response_format: json_object（宽松兼容）
+ */
+function pickCallOpts(
+    jsonSchemaEnabled: boolean,
+    name: string,
+    description: string,
+    schema: object,
+): { tools?: unknown[]; toolChoice?: unknown; responseFormat?: unknown } {
+    if (jsonSchemaEnabled) {
+        return {
+            tools: buildTools(name, description, schema),
+            toolChoice: buildToolChoice(name),
+        };
+    }
+    return { responseFormat: buildJsonObjectResponseFormat() };
 }
 
 /** 宽松校验：逐题 try-catch，单题失败返回 null 而非整批异常 */

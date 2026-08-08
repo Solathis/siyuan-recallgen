@@ -18,7 +18,11 @@ export interface LLMCallOptions {
     temperature?: number;
     maxTokens?: number;
     timeout?: number;
-    /** 结构化输出约束（OpenAI response_format 格式）；undefined 表示不约束 */
+    /** tools/function calling 声明（优先于 responseFormat） */
+    tools?: unknown[];
+    /** 工具选择策略，默认 "auto" */
+    toolChoice?: unknown;
+    /** 结构化输出约束（当 tools 未使用时） */
     responseFormat?: unknown;
 }
 
@@ -155,9 +159,21 @@ function buildAuthHeaders(rc: ResolvedAIConfig): Record<string, string>[] {
 // ── 协议1: OpenAI Chat Completions ────────────────────────────────────
 
 function extractChatContent(parsed: unknown): string {
-    const choices = (parsed as { choices?: Array<{ message?: { content?: string } }> })?.choices;
-    const first = choices?.[0]?.message?.content;
-    return typeof first === "string" && first.length > 0 ? first : "";
+    const choices = (parsed as {
+        choices?: Array<{
+            message?: {
+                content?: string;
+                tool_calls?: Array<{ function?: { arguments?: string } }>;
+            };
+        }>;
+    })?.choices;
+    const msg = choices?.[0]?.message;
+    if (!msg) return "";
+    // 优先从 tool_calls 提取（function calling 模式）
+    const toolArgs = msg.tool_calls?.[0]?.function?.arguments;
+    if (typeof toolArgs === "string" && toolArgs.length > 0) return toolArgs;
+    // 回退到 content
+    return typeof msg.content === "string" && msg.content.length > 0 ? msg.content : "";
 }
 
 async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLMCallOptions): Promise<LLMResult> {
@@ -169,8 +185,13 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
         max_tokens: opts.maxTokens ?? rc.maxTokens,
         stream: false,
     };
-    if (opts.responseFormat) body.response_format = opts.responseFormat;
-    console.log("[RecallGen] AI 请求 URL:", url, "| response_format:", JSON.stringify(body.response_format));
+    if (opts.tools) {
+        body.tools = opts.tools;
+        body.tool_choice = opts.toolChoice ?? "auto";
+    } else if (opts.responseFormat) {
+        body.response_format = opts.responseFormat;
+    }
+    console.log("[RecallGen] AI 请求 URL:", url, "| tools:", !!opts.tools, "| response_format:", !!opts.responseFormat);
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);

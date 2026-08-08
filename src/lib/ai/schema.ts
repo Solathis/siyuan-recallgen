@@ -1,9 +1,8 @@
 import { jsonrepair } from "jsonrepair";
 
 /**
- * 题目 JSON Schema：统一对象 + type 鉴别字段。
- * answer 字段使用 anyOf 联合类型，兼容所有题型答案格式。
- * strict:false 宽松模式，兼容 OpenAI 与第三方 API 网关。
+ * 题目 JSON Schema：遵循标准规则（additionalProperties:false + required + 简单类型）。
+ * answer 字段不约束 type（因题型不同类型不同），仅用 description 说明。
  */
 export const QUIZ_SCHEMA = {
     type: "object",
@@ -25,13 +24,6 @@ export const QUIZ_SCHEMA = {
                         description: "选项文本数组，仅 single_choice/multiple_choice 使用",
                     },
                     answer: {
-                        anyOf: [
-                            { type: "number" },
-                            { type: "boolean" },
-                            { type: "string" },
-                            { type: "array", items: { type: "number" } },
-                            { type: "array", items: { type: "array", items: { type: "string" } } },
-                        ],
                         description: "single_choice:number; multiple_choice:number[]; true_false:boolean; fill_blank:string[][]; coding:string",
                     },
                     reference_answer: { type: "string", description: "主观题参考答案要点 / 编程题参考说明" },
@@ -46,15 +38,19 @@ export const QUIZ_SCHEMA = {
                                 expected: { type: "string" },
                                 description: { type: "string" },
                             },
+                            required: ["input", "expected"],
+                            additionalProperties: false,
                         },
                     },
                     explanation: { type: "string" },
                 },
                 required: ["type", "difficulty", "question"],
+                additionalProperties: false,
             },
         },
     },
     required: ["questions"],
+    additionalProperties: false,
 } as const;
 
 /** 审题结果 Schema：{reviews:[{index,passed,reason}]} */
@@ -71,10 +67,12 @@ export const REVIEW_SCHEMA = {
                     reason: { type: "string", description: "不通过时的原因说明" },
                 },
                 required: ["index", "passed"],
+                additionalProperties: false,
             },
         },
     },
     required: ["reviews"],
+    additionalProperties: false,
 } as const;
 
 /** 判分结果 Schema：{score:number, comment:string} */
@@ -85,17 +83,23 @@ export const GRADING_SCHEMA = {
         comment: { type: "string" },
     },
     required: ["score", "comment"],
+    additionalProperties: false,
 } as const;
 
-/** OpenAI 兼容 json_schema response_format（strict=false 以兼容宽松模型） */
-export function buildJsonSchemaResponseFormat(name: string, schema: object): unknown {
-    return {
-        type: "json_schema",
-        json_schema: { name, schema, strict: false },
-    };
+/** 构建 tools/function calling 声明（遵循标准格式） */
+export function buildTools(name: string, description: string, schema: object): unknown[] {
+    return [{
+        type: "function",
+        function: { name, description, parameters: schema },
+    }];
 }
 
-/** 仅强制返回合法 JSON（不支持 json_schema 的模型走此路径） */
+/** 构建强制工具选择：要求模型必须调用指定函数 */
+export function buildToolChoice(name: string): unknown {
+    return { type: "function", function: { name } };
+}
+
+/** 仅强制返回合法 JSON（jsonSchemaEnabled=false 时使用） */
 export function buildJsonObjectResponseFormat(): unknown {
     return { type: "json_object" };
 }
