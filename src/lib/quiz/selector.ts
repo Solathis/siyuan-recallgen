@@ -7,8 +7,8 @@ const MIN_LEN = 50;
 
 export type OpenQuizFn = (tabData: QuizTabData) => void;
 
-/** 日期范围："today" | "yesterday" */
-type DateRange = "today" | "yesterday";
+/** 日期范围："today"=今日 | "beforeToday"=今天之前 */
+type DateRange = "today" | "beforeToday";
 
 /** 格式化 Date 为 SiYuan created 字段格式 YYYYMMDDHHmmss */
 function fmtTS(d: Date): string {
@@ -16,28 +16,28 @@ function fmtTS(d: Date): string {
     return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-/** 获取今日/昨日的起止时间戳 */
-function dateRange(range: DateRange): { start: string; end: string } {
+/** 构造日期查询 SQL 条件 */
+function dateClause(range: DateRange): string {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    const start = new Date(now);
-    const end = new Date(now);
-    end.setHours(23, 59, 59);
-    if (range === "yesterday") {
-        start.setDate(start.getDate() - 1);
-        end.setDate(end.getDate() - 1);
+    const todayStart = fmtTS(now);
+    if (range === "today") {
+        const end = new Date(now);
+        end.setHours(23, 59, 59);
+        return `created >= '${todayStart}' AND created <= '${fmtTS(end)}'`;
     }
-    return { start: fmtTS(start), end: fmtTS(end) };
+    // beforeToday: 今天之前的所有笔记
+    return `created < '${todayStart}'`;
 }
 
-/** 收集指定笔记本内某日期范围创建的文档 ID */
+/** 收集指定笔记本内某日期范围的文档 ID */
 async function collectDocIdsByDate(notebookId: string, range: DateRange): Promise<string[]> {
-    const { start, end } = dateRange(range);
-    const rows = await sql(`SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' AND created >= '${start}' AND created <= '${end}' ORDER BY hpath ASC LIMIT 100`);
+    const clause = dateClause(range);
+    const rows = await sql(`SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' AND ${clause} ORDER BY hpath ASC LIMIT 100`);
     return rows?.map((r: any) => r.id as string) ?? [];
 }
 
-/** 收集所有打开笔记本内某日期范围创建的文档 ID */
+/** 收集所有打开笔记本内某日期范围的文档 ID */
 async function collectAllDocIdsByDate(range: DateRange): Promise<{ id: string; name: string }[]> {
     const res = await lsNotebooks().catch(() => null);
     const notebooks = res?.notebooks?.filter((n: Notebook) => !n.closed) ?? [];
@@ -96,7 +96,7 @@ export class QuizSelector {
         });
     }
 
-    /** 文档标题图标菜单：生成复习题 + 从笔记本生成 + 今日/昨日笔记 */
+    /** 文档标题图标菜单：生成复习题 + 从笔记本生成 + 今日/今天之前笔记 */
     private onTitleIcon(e: CustomEvent) {
         const detail = (e as any).detail;
         if (!detail?.menu) return;
@@ -118,12 +118,12 @@ export class QuizSelector {
         });
         detail.menu.addItem({
             icon: "iconHistory",
-            label: "从昨日笔记生成",
-            click: () => void this.fromDateRange("yesterday"),
+            label: "从今天之前笔记生成",
+            click: () => void this.fromDateRange("beforeToday"),
         });
     }
 
-    /** 文档树右键菜单：文档→生成复习题，笔记本→从笔记本生成 */
+    /** 文档树右键菜单：文档→生成复习题，笔记本→从笔记本生成+日期范围 */
     private onDocTreeMenu(e: CustomEvent) {
         const detail = (e as any).detail;
         if (!detail?.menu || !detail?.type) return;
@@ -161,8 +161,8 @@ export class QuizSelector {
             });
             detail.menu.addItem({
                 icon: "iconHistory",
-                label: "从昨日笔记生成",
-                click: () => void this.fromNotebookByDate(nbId, nbName, "yesterday"),
+                label: "从今天之前笔记生成",
+                click: () => void this.fromNotebookByDate(nbId, nbName, "beforeToday"),
             });
         }
     }
@@ -233,44 +233,44 @@ export class QuizSelector {
             showMessage("笔记本中没有文档");
             return;
         }
-        let content = "";
-        for (const id of docIds) {
-            const exp = await exportMdContent(id).catch(() => null);
-            if (exp?.content) content += exp.content + "\n\n---\n\n";
+        const content = await collectContent(docIds);
+        if (!content.trim()) {
+            showMessage("笔记本中的文档内容为空");
+            return;
         }
         await this.launch(content, notebookId, `笔记本·${notebookName}`);
     }
 
-    /** 从所有笔记本中收集今日/昨日笔记并生成 */
+    /** 从所有笔记本中收集今日/今天之前笔记并生成 */
     private async fromDateRange(range: DateRange) {
-        const label = range === "today" ? "今日" : "昨日";
+        const label = range === "today" ? "今日" : "今天之前";
         showMessage(`正在加载${label}笔记…`);
         const docs = await collectAllDocIdsByDate(range);
         if (docs.length === 0) {
-            showMessage(`${label}没有笔记`);
+            showMessage(`${label}没有笔记，已停止生成`);
             return;
         }
-        let content = "";
-        for (const doc of docs) {
-            const exp = await exportMdContent(doc.id).catch(() => null);
-            if (exp?.content) content += exp.content + "\n\n---\n\n";
+        const content = await collectContent(docs.map((d) => d.id));
+        if (!content.trim()) {
+            showMessage(`${label}笔记内容为空，已停止生成`);
+            return;
         }
         await this.launch(content, `date-${range}`, `${label}笔记（${docs.length} 篇）`);
     }
 
-    /** 从指定笔记本中收集今日/昨日笔记并生成 */
+    /** 从指定笔记本中收集今日/今天之前笔记并生成 */
     private async fromNotebookByDate(notebookId: string, notebookName: string, range: DateRange) {
-        const label = range === "today" ? "今日" : "昨日";
+        const label = range === "today" ? "今日" : "今天之前";
         showMessage(`正在加载「${notebookName}」${label}笔记…`);
         const docIds = await collectDocIdsByDate(notebookId, range);
         if (docIds.length === 0) {
-            showMessage(`「${notebookName}」${label}没有笔记`);
+            showMessage(`「${notebookName}」${label}没有笔记，已停止生成`);
             return;
         }
-        let content = "";
-        for (const id of docIds) {
-            const exp = await exportMdContent(id).catch(() => null);
-            if (exp?.content) content += exp.content + "\n\n---\n\n";
+        const content = await collectContent(docIds);
+        if (!content.trim()) {
+            showMessage(`「${notebookName}」${label}笔记内容为空，已停止生成`);
+            return;
         }
         await this.launch(content, notebookId, `${notebookName}·${label}笔记`);
     }
@@ -314,6 +314,16 @@ async function collectDocIds(notebookId: string): Promise<string[]> {
     }
     walk(tree);
     return ids;
+}
+
+/** 批量导出文档内容，用 --- 分隔 */
+async function collectContent(docIds: string[]): Promise<string> {
+    let content = "";
+    for (const id of docIds) {
+        const exp = await exportMdContent(id).catch(() => null);
+        if (exp?.content) content += exp.content + "\n\n---\n\n";
+    }
+    return content;
 }
 
 async function safeTitle(rootId?: string): Promise<string> {
