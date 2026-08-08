@@ -112,23 +112,21 @@ const DEFAULT_ENDPOINT: AIEndpoint = {
     apiKey: "",
 };
 
-/** 生成默认模型列表：出题/审题/判题三角色，同一端点，不同温度与 token */
+/** 默认单模型，三个角色共用 */
 function defaultModels(): AIModel[] {
     const base = { endpointId: DEFAULT_ENDPOINT.id };
     return [
-        { ...base, id: "m-gen", name: "gpt-4o-mini", temperature: 0.7, maxTokens: 16384 },
-        { ...base, id: "m-review", name: "gpt-4o-mini", temperature: 0.3, maxTokens: 4096 },
-        { ...base, id: "m-grade", name: "gpt-4o-mini", temperature: 0, maxTokens: 512 },
+        { ...base, id: "m-default", name: "gpt-4o-mini", temperature: 0.7, maxTokens: 16384 },
     ];
 }
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
     endpoints: [{ ...DEFAULT_ENDPOINT }],
     models: defaultModels(),
-    roles: { generator: "m-gen", reviewer: "m-review", grader: "m-grade" },
+    roles: { generator: "m-default", reviewer: "m-default", grader: "m-default" },
     timeout: 120000,
     jsonSchemaEnabled: true,
-    testModelId: "m-gen",
+    testModelId: "m-default",
     testPrompt: "请用一句话简要介绍你自己",
 };
 
@@ -237,18 +235,16 @@ export function migrateAIConfig(old: Partial<AIConfig> | undefined | null): AICo
     const mTemp = temperature ?? 0.7;
     const mTok = maxTokens ?? 16384;
     const models: AIModel[] = [
-        { id: "m-gen", name: mName, endpointId: "ep-default", temperature: mTemp, maxTokens: mTok },
-        { id: "m-review", name: mName, endpointId: "ep-default", temperature: 0.3, maxTokens: 4096 },
-        { id: "m-grade", name: mName, endpointId: "ep-default", temperature: 0, maxTokens: 512 },
+        { id: "m-default", name: mName, endpointId: "ep-default", temperature: mTemp, maxTokens: mTok },
     ];
 
     return {
         endpoints: [endpoint],
         models,
-        roles: { generator: "m-gen", reviewer: "m-review", grader: "m-grade" },
+        roles: { generator: "m-default", reviewer: "m-default", grader: "m-default" },
         timeout: (old as Record<string, unknown>).timeout as number | undefined ?? def.timeout,
         jsonSchemaEnabled: (old as Record<string, unknown>).jsonSchemaEnabled as boolean | undefined ?? def.jsonSchemaEnabled,
-        testModelId: "m-gen",
+        testModelId: "m-default",
         testPrompt: ((old as Record<string, unknown>).testPrompt as string | undefined) ?? def.testPrompt,
     };
 }
