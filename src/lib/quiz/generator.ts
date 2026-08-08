@@ -47,13 +47,27 @@ export async function generateQuestions(
     const genAI = resolveAI(ai, ai.roles.generator);
     const messages = buildGenerateMessages(prompts, general, content, types, difficulty);
     const responseFormat = pickResponseFormat(ai.jsonSchemaEnabled);
+    console.log("[RecallGen] 生成请求 responseFormat:", JSON.stringify(responseFormat));
     const result = await callLLM(genAI, messages as ChatMessage[], { responseFormat });
+    console.log("[RecallGen] 生成响应原文(前300字):", result.content.slice(0, 300));
 
-    const parsed = parseJsonLoose(result.content) as { questions?: unknown[] };
-    if (!parsed?.questions || !Array.isArray(parsed.questions)) {
-        throw new AIError("AI 返回缺少 questions 数组");
+    const parsed = parseJsonLoose(result.content) as Record<string, unknown>;
+    // 兼容 AI 返回 {questions:[]} / {data:[]} / 直接返回数组等情况
+    let rawQuestions: unknown[] | null = null;
+    if (Array.isArray(parsed?.questions)) {
+        rawQuestions = parsed.questions;
+    } else if (Array.isArray(parsed?.data)) {
+        rawQuestions = parsed.data;
+    } else if (Array.isArray(parsed)) {
+        rawQuestions = parsed;
+    } else if (Array.isArray(parsed?.items)) {
+        rawQuestions = parsed.items;
     }
-    let questions = validateQuestions(parsed.questions, types, difficulty);
+    if (!rawQuestions) {
+        console.error("[RecallGen] 解析后结构:", JSON.stringify(parsed).slice(0, 500));
+        throw new AIError(`AI 返回缺少 questions 数组（解析后 keys: ${Object.keys(parsed ?? {}).join(",")}）`);
+    }
+    let questions = validateQuestions(rawQuestions, types, difficulty);
 
     // 2. 审题循环（仅当审题者模型存在时执行）
     if (ai.roles.reviewer && ai.models.some((m) => m.id === ai.roles.reviewer)) {

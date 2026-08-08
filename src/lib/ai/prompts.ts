@@ -15,6 +15,7 @@ export function buildGenerateMessages(
     const system = [
         prompts.generate,
         "严格按 JSON Schema 输出，禁止输出多余文本或代码围栏。",
+        "输出必须是一个 JSON 对象，顶层包含 questions 数组，格式：{\"questions\":[...]}。不要输出任何其他键名。",
     ];
 
     const user = [
@@ -28,7 +29,8 @@ export function buildGenerateMessages(
         `各题总数严格等于上述分布，不得超出。`,
         `超纲范围：允许 ${general.extraScopePct}% 的题目超出笔记内容，扩展到相关知识点`,
         `输出语言：${general.language === "zh" ? "中文" : "English"}`,
-        `按以下 JSON 结构输出：{"questions":[{type,difficulty,question,options?,answer?,reference_answer?,language?,starter_code?,test_cases?,explanation?}]}。`,
+        `输出必须严格为 JSON 对象 {"questions":[...]}，顶层唯一键为 questions。禁止输出其他键名如 data/items 等。`,
+        `各字段：type(题型), difficulty(难度), question(题干), options(选项数组), answer(答案), reference_answer(参考答案), language(编程语言), starter_code(初始代码), test_cases(测试用例), explanation(解析)。`,
         `single_choice/multiple_choice 的 answer 为选项索引（number 或 number[]）；true_false 为 boolean；fill_blank 的 answer 为每空可接受答案的二维数组；coding 的 answer 为参考答案代码。`,
     ].join("\n");
 
@@ -211,7 +213,7 @@ export function buildRegenerateMessages(
         `以下题目未通过审核，请重新生成：\n\n${items.join("\n\n")}`,
         `要求重新生成 ${failedQuestions.length} 道题，每道题的题型和难度必须与上方对应的原题型和原难度完全一致。`,
         `输出语言：${general.language === "zh" ? "中文" : "English"}`,
-        `按以下 JSON 结构输出：{"questions":[{type,difficulty,question,options?,answer?,reference_answer?,language?,starter_code?,test_cases?,explanation?}]}。`,
+        `输出必须严格为 JSON 对象 {"questions":[...]}，顶层唯一键为 questions。`,
     ].join("\n");
     return [
         { role: "system", content: system.join("\n\n") },

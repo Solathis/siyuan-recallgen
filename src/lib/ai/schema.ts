@@ -1,8 +1,9 @@
 import { jsonrepair } from "jsonrepair";
 
 /**
- * 题目 JSON Schema：统一对象 + type 鉴别字段，permissive（非 strict），
- * 兼容 OpenAI json_schema 与不支持该格式的模型（后者仅作提示词引导）。
+ * 题目 JSON Schema：统一对象 + type 鉴别字段。
+ * answer 字段使用 anyOf 联合类型，兼容所有题型答案格式。
+ * strict:false 宽松模式，兼容 OpenAI 与第三方 API 网关。
  */
 export const QUIZ_SCHEMA = {
     type: "object",
@@ -24,7 +25,14 @@ export const QUIZ_SCHEMA = {
                         description: "选项文本数组，仅 single_choice/multiple_choice 使用",
                     },
                     answer: {
-                        description: "single_choice:数字索引；multiple_choice:数字索引数组；true_false:布尔；fill_blank:每空可接受答案的二维数组；subjective:空；coding:参考答案代码",
+                        anyOf: [
+                            { type: "number" },
+                            { type: "boolean" },
+                            { type: "string" },
+                            { type: "array", items: { type: "number" } },
+                            { type: "array", items: { type: "array", items: { type: "string" } } },
+                        ],
+                        description: "single_choice:number; multiple_choice:number[]; true_false:boolean; fill_blank:string[][]; coding:string",
                     },
                     reference_answer: { type: "string", description: "主观题参考答案要点 / 编程题参考说明" },
                     language: { type: "string", description: "编程题语言：python/javascript/go 等" },

@@ -170,6 +170,7 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
         stream: false,
     };
     if (opts.responseFormat) body.response_format = opts.responseFormat;
+    console.log("[RecallGen] AI 请求 URL:", url, "| response_format:", JSON.stringify(body.response_format));
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
