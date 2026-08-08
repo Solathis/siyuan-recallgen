@@ -76,7 +76,6 @@ async function reviewLoop(
     const reviewFormat = pickReviewFormat(ai.jsonSchemaEnabled);
     const genFormat = pickResponseFormat(ai.jsonSchemaEnabled);
     const types = config.general.allowedTypes;
-    const difficulty = config.general.difficulty;
 
     for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
         onProgress?.("reviewing", round, `第 ${round} 轮审题中…`);
@@ -124,12 +123,12 @@ async function reviewLoop(
         if (!regenParsed?.questions || !Array.isArray(regenParsed.questions)) {
             break; // 重新生成失败，保留原题
         }
-        const regenQuestions = validateQuestions(regenParsed.questions, types, difficulty);
+        const regenQuestions = validateQuestionsLenient(regenParsed.questions, types);
 
-        // 替换失败题（按顺序替换）
+        // 逐题替换失败题，单题校验失败则保留原题
         for (let i = 0; i < failedIndices.length && i < regenQuestions.length; i++) {
             const newQ = regenQuestions[i];
-            // 保持原题 id 不变
+            if (!newQ) continue;
             newQ.id = questions[failedIndices[i]].id;
             questions[failedIndices[i]] = newQ;
         }
@@ -150,6 +149,31 @@ function pickReviewFormat(jsonSchemaEnabled: boolean): unknown {
     return jsonSchemaEnabled
         ? buildJsonSchemaResponseFormat("recallgen_review", REVIEW_SCHEMA as object)
         : buildJsonObjectResponseFormat();
+}
+
+/** 宽松校验：逐题 try-catch，单题失败返回 null 而非整批异常 */
+function validateQuestionsLenient(
+    raw: unknown[],
+    allowedTypes: QuestionType[],
+): (Question | null)[] {
+    return raw.map((item, i) => {
+        try {
+            const obj = item as Record<string, unknown>;
+            const type = obj.type as QuestionType;
+            if (!allowedTypes.includes(type)) return null;
+            const base = {
+                id: `q-${i + 1}`,
+                type,
+                difficulty: (obj.difficulty as Question["difficulty"]) ?? "medium",
+                question: String(obj.question ?? ""),
+                explanation: obj.explanation ? String(obj.explanation) : undefined,
+                weight: 1,
+            };
+            return coerceByType(base, type, obj);
+        } catch {
+            return null;
+        }
+    });
 }
 
 /** 校验并转换为强类型 Question[]，赋 id */
@@ -208,10 +232,14 @@ function coerceByType(
             return { ...base, type, answer } as Question;
         }
         case "true_false": {
-            if (typeof item.answer !== "boolean") {
-                throw new AIError("判断题 answer 非布尔");
+            if (typeof item.answer === "boolean") return { ...base, type, answer: item.answer } as Question;
+            if (typeof item.answer === "string") {
+                const s = item.answer.trim().toLowerCase();
+                if (s === "true" || s === "正确" || s === "1") return { ...base, type, answer: true } as Question;
+                if (s === "false" || s === "错误" || s === "0") return { ...base, type, answer: false } as Question;
             }
-            return { ...base, type, answer: item.answer } as Question;
+            if (typeof item.answer === "number") return { ...base, type, answer: item.answer !== 0 } as Question;
+            throw new AIError("判断题 answer 非布尔的");
         }
         case "subjective": {
             const reference_answer = String(item.reference_answer ?? "");
@@ -248,7 +276,15 @@ function toStringArray(v: unknown): string[] {
     return Array.isArray(v) ? v.map((x) => String(x)) : [];
 }
 function toNumber(v: unknown): number | null {
-    return typeof v === "number" ? v : null;
+    if (typeof v === "number") return v;
+    if (typeof v === "string") {
+        const n = parseInt(v, 10);
+        if (!Number.isNaN(n)) return n;
+        // 字母索引 A=0, B=1, …
+        const upper = v.trim().toUpperCase();
+        if (upper.length === 1 && upper >= "A" && upper <= "Z") return upper.charCodeAt(0) - 65;
+    }
+    return null;
 }
 function toNumberArray(v: unknown): number[] {
     return Array.isArray(v) ? v.map((x) => Number(x)).filter((n) => !Number.isNaN(n)) : [];
