@@ -191,12 +191,19 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
     } else if (opts.responseFormat) {
         body.response_format = opts.responseFormat;
     }
-    console.log("[RecallGen] AI 请求 URL:", url, "| tools:", !!opts.tools, "| response_format:", !!opts.responseFormat);
+    console.log("[RecallGen] === AI 请求 ===");
+    console.log("[RecallGen] URL:", url);
+    console.log("[RecallGen] model:", rc.model);
+    console.log("[RecallGen] body:", JSON.stringify(body, null, 2).slice(0, 2000));
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
     checkHttpOk(fr);
+    console.log("[RecallGen] === AI 响应 ===");
+    console.log("[RecallGen] HTTP status:", fr.status);
+    console.log("[RecallGen] body(前2000字):", fr.body.slice(0, 2000));
     const parsed = safeParse(fr.body);
     if (parsed === null) throw new AIError("AI 响应非 JSON");
     const content = extractChatContent(parsed);
+    console.log("[RecallGen] extractChatContent 结果(前500字):", content.slice(0, 500));
     if (!content) throw new AIError("AI 响应缺少 content");
     return { content, raw: parsed };
 }
