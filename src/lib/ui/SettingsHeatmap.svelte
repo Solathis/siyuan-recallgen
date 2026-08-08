@@ -34,7 +34,7 @@
         <p class={card.description}>成绩日历与配色区间</p>
     </div>
     <div class={cn(card.content, field.group)}>
-        <Heatmap {scores} config={config.heatmap} />
+        <Heatmap records={scores} config={config.heatmap} />
         <div class={field.field}>
             <label class={field.label} for="rg-metric">聚合方式</label>
             <select id="rg-metric" class={select} value={config.heatmap.metric} on:change={onMetricChange}>
