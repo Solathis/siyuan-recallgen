@@ -9,7 +9,7 @@ import { ConfigStore, ScoreStore, ProgressStore } from "@/lib/storage";
 import { QuizSelector } from "@/lib/quiz/selector";
 import { generateQuestions, type GenProgressCallback } from "@/lib/quiz/generator";
 import { gradeAll } from "@/lib/quiz/grader";
-import { buildAnalysisMessages, buildChatMessages } from "@/lib/ai/prompts";
+import { buildAnalysisMessages, buildChatMessages, buildGlobalChatMessages } from "@/lib/ai/prompts";
 import { callLLM, resolveAI, testConnection as aiTestConnection, type ChatMessage } from "@/lib/ai/client";
 import { saveAsNewDoc, appendAnalysis } from "@/lib/quiz/docWriter";
 import type { QuizService, QuizTabData } from "@/lib/quiz/service";
@@ -161,6 +161,7 @@ export default class RecallGenPlugin extends Plugin {
             grade: (qs, ans, onProgress) => gradeAll(this.config, qs, ans, onProgress),
             analyze: (results, questions) => this.analyze(results, questions),
             chat: (question, result, analysis, history, userMessage) => this.chat(question, result, analysis, history, userMessage),
+            chatGlobal: (questions, results, analysis, history, userMessage) => this.chatGlobal(questions, results, analysis, history, userMessage),
             saveResultToDoc: (session, analysis, results, wrongOnly) => this.saveResultToDoc(session, analysis, results, wrongOnly),
             saveProgress: (session) => this.progressStore.save(session),
             loadProgress: (id) => this.progressStore.load(id),
@@ -229,6 +230,22 @@ export default class RecallGenPlugin extends Plugin {
         userMessage: string,
     ): Promise<string> {
         const messages = buildChatMessages(this.config.prompts, question, result, analysis, history, userMessage);
+        const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
+        const res = await callLLM(rc, messages as ChatMessage[], {
+            temperature: 0.6,
+            maxTokens: 1024,
+        });
+        return res.content;
+    }
+
+    private async chatGlobal(
+        questions: Question[],
+        results: GradingResult[],
+        analysis: string,
+        history: Array<{ role: "user" | "assistant"; content: string }>,
+        userMessage: string,
+    ): Promise<string> {
+        const messages = buildGlobalChatMessages(this.config.prompts, questions, results, analysis, history, userMessage);
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
         const res = await callLLM(rc, messages as ChatMessage[], {
             temperature: 0.6,

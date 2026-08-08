@@ -28,6 +28,14 @@ export interface QuizService {
         history: ChatTurn[],
         userMessage: string,
     ): Promise<string>;
+    /** 全局 AI 答疑：针对整套试卷回答用户追问 */
+    chatGlobal(
+        questions: Question[],
+        results: GradingResult[],
+        analysis: string,
+        history: ChatTurn[],
+        userMessage: string,
+    ): Promise<string>;
     saveResultToDoc(session: QuizSession, analysis: string, results: GradingResult[], wrongOnly?: boolean): Promise<string>;
     saveProgress(session: QuizSession): Promise<void>;
     loadProgress(id: string): Promise<QuizSession | null>;

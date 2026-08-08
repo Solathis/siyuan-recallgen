@@ -257,3 +257,40 @@ export function buildChatMessages(
 }
 
 
+
+/** 全局 AI 答疑消息：针对整套试卷 */
+export function buildGlobalChatMessages(
+    prompts: PromptConfig,
+    questions: Question[],
+    results: GradingResult[],
+    analysis: string,
+    history: Array<{ role: "user" | "assistant"; content: string }>,
+    userMessage: string,
+): Array<{ role: "system" | "user" | "assistant"; content: string }> {
+    const summary = questions.map((q, i) => {
+        const r = results[i];
+        const ua = r?.userAnswer;
+        let uaStr = "未答";
+        if (ua) {
+            switch (ua.type) {
+                case "single_choice": uaStr = String.fromCharCode(65 + ua.value); break;
+                case "multiple_choice": uaStr = ua.value.map((j) => String.fromCharCode(65 + j)).sort().join("、"); break;
+                case "true_false": uaStr = ua.value ? "正确" : "错误"; break;
+                case "fill_blank": uaStr = ua.value.join("；"); break;
+                case "subjective": case "coding": uaStr = ua.value; break;
+            }
+        }
+        return `${i + 1}. [${q.type}] ${q.question}\n   学生答案：${uaStr} | 得分：${r?.score ?? 0}/${r?.maxScore ?? 100}`;
+    }).join("\n\n");
+    const system = [
+        prompts.analysis,
+        `以下是学生本次答题的整体情况：\n${summary}`,
+        `整体薄弱点分析：${analysis}`,
+        "请针对学生关于本次答题的问题进行回答，可以涉及多道题目的知识点关联。",
+    ];
+    return [
+        { role: "system", content: system.join("\n\n") },
+        ...history,
+        { role: "user", content: userMessage },
+    ];
+}

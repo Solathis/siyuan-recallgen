@@ -142,6 +142,8 @@ export interface ScoreRecord {
     questions?: Question[];
     /** 薄弱点分析文本 */
     analysis?: string;
+    /** 答题耗时（秒） */
+    duration?: number;
     /** 来源文档/笔记本 ID */
     sourceDocId?: string;
     /** 来源标题 */

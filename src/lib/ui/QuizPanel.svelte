@@ -247,6 +247,7 @@
                 timestamp: Date.now(), totalScore, maxScore, questionCount: session.questions.length,
                 detail: results, questions: session.questions, analysis: "",
                 sourceDocId: session.sourceDocId, sourceTitle: session.sourceTitle,
+                duration: Math.round((Date.now() - session.createdAt) / 1000),
             });
             await service.clearProgress(session.id);
             // 薄弱点分析失败不影响成绩记录
@@ -437,7 +438,7 @@
                 </div>
             </div>
         {:else if results && session}
-            <ResultPanel {service} results={results} questions={session.questions} {analysis} on:save={() => saveToDoc(false)} on:saveWrong={() => saveToDoc(true)} on:discard={() => closeTab()} />
+            <ResultPanel {service} results={results} questions={session.questions} {analysis} duration={duration} on:save={() => saveToDoc(false)} on:saveWrong={() => saveToDoc(true)} on:discard={() => closeTab()} />
         {/if}
     {/if}
     </div>
