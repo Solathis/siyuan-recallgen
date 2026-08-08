@@ -89,9 +89,14 @@
     // ── 模型 CRUD ──────────────────────────────────────────────
 
     function addModel(epId: string) {
+        const existing = modelsOf(epId);
+        // 同端点下不允许同名模型
+        let name = "";
+        let n = existing.length + 1;
+        while (existing.some((m) => m.name === name)) { name = `模型 ${n++}`; }
         const m: AIModel = {
             id: genId("m"),
-            name: "",
+            name,
             endpointId: epId,
             temperature: 0.7,
             maxTokens: 4096,
@@ -107,6 +112,17 @@
         patchAi({ models: config.ai.models.filter((m) => m.id !== id) });
     }
     function patchModel(id: string, patch: Partial<AIModel>) {
+        // 同端点下不允许同名模型
+        if (patch.name !== undefined) {
+            const model = config.ai.models.find((m) => m.id === id);
+            if (model) {
+                const dup = config.ai.models.some((m) => m.endpointId === model.endpointId && m.id !== id && m.name === patch.name);
+                if (dup) {
+                    alert(`该端点下已存在同名模型「${patch.name}」`);
+                    return;
+                }
+            }
+        }
         patchAi({
             models: config.ai.models.map((m) => m.id === id ? { ...m, ...patch } : m),
         });
