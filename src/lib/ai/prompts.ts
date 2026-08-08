@@ -189,7 +189,19 @@ export function buildRegenerateMessages(
         "你之前生成的部分题目未通过审题，请根据审题意见重新生成这些题目。",
     ];
     const items = failedQuestions.map((q, i) => {
-        return `【第${i + 1}题（需重新生成）】\n原题型: ${q.type}\n原难度: ${q.difficulty}\n原题: ${q.question}\n审题意见: ${reasons[i] ?? "未通过"}`;
+        const qany = q as any;
+        const parts = [
+            `【第${i + 1}题（需重新生成）】`,
+            `原题型: ${q.type}`,
+            `原难度: ${q.difficulty}`,
+            `原题: ${q.question}`,
+        ];
+        if (qany.options) parts.push(`原选项: ${qany.options.map((o, j) => String.fromCharCode(65 + j) + ". " + o).join(", ")}`);
+        if (qany.answer !== undefined) parts.push(`原答案: ${formatCorrect(q)}`);
+        if (qany.reference_answer) parts.push(`原参考答案: ${qany.reference_answer}`);
+        if (qany.explanation) parts.push(`原解析: ${qany.explanation}`);
+        parts.push(`审题意见: ${reasons[i] ?? "未通过"}`);
+        return parts.join("\n");
     });
     const user = [
         `原始笔记内容：`,

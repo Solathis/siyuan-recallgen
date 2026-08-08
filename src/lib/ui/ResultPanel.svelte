@@ -2,7 +2,7 @@
     import { createEventDispatcher } from "svelte";
     import { card, badge, button, progress as p, alert, alertTitle, alertDescription, separator, cn } from "./components";
     import ChatPanel from "./ChatPanel.svelte";
-    import { renderLatex } from "../ui/latex";
+    import { renderMarkdownLatex as renderLatex } from "../ui/latex";
     import type { QuizService } from "../quiz/service";
     import type { GradingResult, Question } from "@/types/quiz";
 

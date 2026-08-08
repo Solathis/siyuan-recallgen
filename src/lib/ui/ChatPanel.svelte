@@ -1,7 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher, onMount, onDestroy } from "svelte";
     import { button, input, textarea, card, cn } from "./components";
-    import { renderLatex } from "../ui/latex";
+    import { renderMarkdownLatex as renderLatex } from "../ui/latex";
     import type { QuizService, ChatTurn } from "../quiz/service";
     import type { GradingResult, Question } from "@/types/quiz";
 

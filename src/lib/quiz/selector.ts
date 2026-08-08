@@ -97,6 +97,16 @@ export class QuizSelector {
                 label: this.plugin.i18n.generateQuiz ?? "生成复习题",
                 click: () => void this.fromDoc(docId),
             });
+            detail.menu.addItem({
+                icon: "iconCalendar",
+                label: "从今日笔记生成",
+                click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-today", sourceTitle: "今日笔记", dateRange: "today" }),
+            });
+            detail.menu.addItem({
+                icon: "iconHistory",
+                label: "从近 N 天笔记生成",
+                click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-before", sourceTitle: "近 N 天笔记", dateRange: "beforeToday" }),
+            });
         } else if (detail.type === "notebook") {
             const el = elements[0];
             const nbId = el.getAttribute("data-url")

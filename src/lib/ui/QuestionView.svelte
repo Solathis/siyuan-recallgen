@@ -2,7 +2,7 @@
     import { onMount, onDestroy, createEventDispatcher } from "svelte";
     import { CodeEditor } from "../editor/codemirror";
     import { card, field, input, textarea, badge, cn } from "./components";
-    import { renderLatex } from "../ui/latex";
+    import { renderMarkdownLatex as renderLatex } from "../ui/latex";
     import type { Question, UserAnswer } from "@/types/quiz";
 
     export let question: Question;
@@ -11,6 +11,7 @@
     const dispatch = createEventDispatcher<{ change: UserAnswer }>();
     let editor: CodeEditor | null = null;
     let editorEl: HTMLDivElement;
+    let preview = false;
 
     function emit(value: UserAnswer) {
         answer = value;
@@ -87,7 +88,17 @@
                 </label>
             </div>
         {:else if question.type === "subjective"}
-            <textarea class={cn(textarea, "rg-q__textarea")} placeholder="输入你的作答（支持 Markdown）" on:input={onSubjectiveInput}>{answer?.type === "subjective" ? answer.value : ""}</textarea>
+            <div class="rg-q__subjective">
+                <div class="rg-q__md-bar">
+                    <button class="rg-q__md-btn" class:active={!preview} on:click={() => preview = false}>编辑</button>
+                    <button class="rg-q__md-btn" class:active={preview} on:click={() => preview = true}>预览</button>
+                </div>
+                {#if preview}
+                    <div class="rg-q__md-preview">{@html renderLatex(answer?.type === "subjective" ? answer.value : "")}</div>
+                {:else}
+                    <textarea class={cn(textarea, "rg-q__textarea")} placeholder="输入你的作答（支持 Markdown 和 LaTeX）" on:input={onSubjectiveInput}>{answer?.type === "subjective" ? answer.value : ""}</textarea>
+                {/if}
+            </div>
         {:else if question.type === "coding"}
             <div class="rg-q__code" bind:this={editorEl}></div>
         {/if}
@@ -95,7 +106,7 @@
 </div>
 
 <style>
-    .rg-q__title { font-size: 15px; line-height: 1.7; margin: 0 0 12px; white-space: pre-wrap; }
+    .rg-q__title { font-size: 15px; line-height: 1.7; margin: 0 0 12px; }
     .rg-q__options { display: flex; flex-direction: column; gap: 6px; }
     .rg-q__opt { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--b3-border-radius); cursor: pointer; border: 1px solid transparent; transition: background .12s, border-color .12s; }
     .rg-q__opt:hover { background: var(--b3-list-hover); }
@@ -105,4 +116,14 @@
     .rg-q__code { border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); overflow: hidden; }
     :global(.rg-q__code .cm-editor) { font-size: 13px; }
     :global(.rg-q__code .cm-scroller) { min-height: 200px; }
+    .rg-q__subjective { display: flex; flex-direction: column; gap: 8px; }
+    .rg-q__md-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--b3-border-color); padding-bottom: 4px; }
+    .rg-q__md-btn { padding: 2px 12px; font-size: 12px; border: 1px solid transparent; border-radius: var(--b3-border-radius); background: transparent; cursor: pointer; color: var(--b3-theme-on-surface-light); }
+    .rg-q__md-btn.active { border-color: var(--b3-border-color); color: var(--b3-theme-primary); font-weight: 600; }
+    .rg-q__md-preview { min-height: 160px; padding: 8px 12px; border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); font-size: 14px; line-height: 1.7; overflow-y: auto; max-height: 400px; }
+    .rg-q__md-preview :global(p) { margin: 0 0 8px; }
+    .rg-q__md-preview :global(ul), .rg-q__md-preview :global(ol) { padding-left: 20px; margin: 0 0 8px; }
+    .rg-q__md-preview :global(pre) { background: var(--b3-theme-background-light); padding: 8px 12px; border-radius: var(--b3-border-radius); overflow-x: auto; }
+    .rg-q__md-preview :global(code) { font-family: var(--b3-font-family-code, monospace); font-size: 13px; }
+    .rg-q__md-preview :global(h1), .rg-q__md-preview :global(h2), .rg-q__md-preview :global(h3) { margin: 12px 0 8px; }
 </style>
