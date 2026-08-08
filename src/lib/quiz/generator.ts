@@ -49,7 +49,6 @@ export async function generateQuestions(
     const messages = buildGenerateMessages(prompts, general, content, types, difficulty);
     const callOpts = pickCallOpts(ai.jsonSchemaEnabled, "recallgen_quiz", "生成复习题目", QUIZ_SCHEMA as object);
     const result = await callLLM(genAI, messages as ChatMessage[], callOpts);
-    console.log("[RecallGen] 生成响应原文(前300字):", result.content.slice(0, 300));
 
     const parsed = parseJsonLoose(result.content) as Record<string, unknown>;
     // 兼容 AI 返回 {questions:[]} / {data:[]} / 直接返回数组等情况
@@ -64,7 +63,6 @@ export async function generateQuestions(
         rawQuestions = parsed.items;
     }
     if (!rawQuestions) {
-        console.error("[RecallGen] 解析后结构:", JSON.stringify(parsed).slice(0, 500));
         throw new AIError(`AI 返回缺少 questions 数组（解析后 keys: ${Object.keys(parsed ?? {}).join(",")}）`);
     }
     let questions = validateQuestions(rawQuestions, types, difficulty);

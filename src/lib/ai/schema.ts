@@ -123,7 +123,7 @@ export function parseJsonLoose(text: string): unknown {
         try {
             return JSON.parse(jsonrepair(extracted));
         } catch (e) {
-            throw new Error(`JSON 解析失败: ${(e as Error).message}`);
+            throw new Error(`JSON 解析失败: ${(e as Error).message}（原文前200字: ${cleaned.slice(0, 200)}）`);
         }
     }
     // 3. 对全文做 jsonrepair 最后尝试
@@ -134,10 +134,12 @@ export function parseJsonLoose(text: string): unknown {
     }
 }
 
-/** 剥离 LLM 常见的 ```json 包裹 */
+/** 剥离 LLM 常见的 ```json 包裹（仅在文本开头时生效，避免截断 JSON 内部的代码块） */
 function stripCodeFence(text: string): string {
-    const m = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    return m ? m[1].trim() : text.trim();
+    const trimmed = text.trim();
+    if (!trimmed.startsWith("```")) return trimmed;
+    const m = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/i);
+    return m ? m[1].trim() : trimmed;
 }
 
 /**
