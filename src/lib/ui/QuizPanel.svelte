@@ -241,13 +241,15 @@
             // 判分完成后立即保存成绩（含题目），不受后续分析影响
             const totalScore = results.reduce((s, r) => s + r.score, 0);
             const maxScore = results.reduce((s, r) => s + r.maxScore, 0);
+            const duration = Math.round((Date.now() - session.createdAt) / 1000);
+            durationVar = duration;
             const scoreId = genId();
             await service.saveScore({
                 id: scoreId, quizId: session.id, title: session.sourceTitle,
                 timestamp: Date.now(), totalScore, maxScore, questionCount: session.questions.length,
                 detail: results, questions: session.questions, analysis: "",
                 sourceDocId: session.sourceDocId, sourceTitle: session.sourceTitle,
-                duration: Math.round((Date.now() - session.createdAt) / 1000),
+                duration,
             });
             await service.clearProgress(session.id);
             // 薄弱点分析失败不影响成绩记录
@@ -267,6 +269,7 @@
         }
     }
 
+    let durationVar = 0;
     let countdownTimer: ReturnType<typeof setInterval> | null = null;
     function startCountdown() {
         countdownTimer = setInterval(() => {
@@ -438,7 +441,7 @@
                 </div>
             </div>
         {:else if results && session}
-            <ResultPanel {service} results={results} questions={session.questions} {analysis} duration={duration} on:save={() => saveToDoc(false)} on:saveWrong={() => saveToDoc(true)} on:discard={() => closeTab()} />
+            <ResultPanel {service} results={results} questions={session.questions} {analysis} duration={durationVar} on:save={() => saveToDoc(false)} on:saveWrong={() => saveToDoc(true)} on:discard={() => closeTab()} />
         {/if}
     {/if}
     </div>
