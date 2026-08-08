@@ -162,14 +162,14 @@ export const DEFAULT_PROMPTS: PromptConfig = {
 
 export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     allowedTypes: ["single_choice", "multiple_choice", "fill_blank", "true_false", "subjective", "coding"],
-    difficulty: { total: 10, easy: 4, medium: 4, hard: 2 },
+    difficulty: { total: 15, easy: 6, medium: 6, hard: 3 },
     language: "zh",
-    countdownEnabled: false,
+    countdownEnabled: true,
     countdownMinutes: 30,
     editorTheme: "auto",
     storageLocation: "sibling",
     notebookId: "",
-    extraScopePct: 0,
+    extraScopePct: 20,
     panelWidth: 1100,
 };
 

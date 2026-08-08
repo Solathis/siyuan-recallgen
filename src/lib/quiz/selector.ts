@@ -7,6 +7,48 @@ const MIN_LEN = 50;
 
 export type OpenQuizFn = (tabData: QuizTabData) => void;
 
+/** 日期范围："today" | "yesterday" */
+type DateRange = "today" | "yesterday";
+
+/** 格式化 Date 为 SiYuan created 字段格式 YYYYMMDDHHmmss */
+function fmtTS(d: Date): string {
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+/** 获取今日/昨日的起止时间戳 */
+function dateRange(range: DateRange): { start: string; end: string } {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const start = new Date(now);
+    const end = new Date(now);
+    end.setHours(23, 59, 59);
+    if (range === "yesterday") {
+        start.setDate(start.getDate() - 1);
+        end.setDate(end.getDate() - 1);
+    }
+    return { start: fmtTS(start), end: fmtTS(end) };
+}
+
+/** 收集指定笔记本内某日期范围创建的文档 ID */
+async function collectDocIdsByDate(notebookId: string, range: DateRange): Promise<string[]> {
+    const { start, end } = dateRange(range);
+    const rows = await sql(`SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' AND created >= '${start}' AND created <= '${end}' ORDER BY hpath ASC LIMIT 100`);
+    return rows?.map((r: any) => r.id as string) ?? [];
+}
+
+/** 收集所有打开笔记本内某日期范围创建的文档 ID */
+async function collectAllDocIdsByDate(range: DateRange): Promise<{ id: string; name: string }[]> {
+    const res = await lsNotebooks().catch(() => null);
+    const notebooks = res?.notebooks?.filter((n: Notebook) => !n.closed) ?? [];
+    const out: { id: string; name: string }[] = [];
+    for (const nb of notebooks) {
+        const ids = await collectDocIdsByDate(nb.id, range);
+        for (const id of ids) out.push({ id, name: nb.name });
+    }
+    return out;
+}
+
 /**
  * 内容选取与触发注册。
  * 入口：块菜单、文档标题图标菜单、文档树右键菜单、命令面板。
@@ -54,7 +96,7 @@ export class QuizSelector {
         });
     }
 
-    /** 文档标题图标菜单：生成复习题 + 从笔记本生成 */
+    /** 文档标题图标菜单：生成复习题 + 从笔记本生成 + 今日/昨日笔记 */
     private onTitleIcon(e: CustomEvent) {
         const detail = (e as any).detail;
         if (!detail?.menu) return;
@@ -68,6 +110,16 @@ export class QuizSelector {
             icon: "iconFiles",
             label: this.plugin.i18n.generateNotebookQuiz ?? "从笔记本生成复习题",
             click: () => void this.onNotebookCommand(),
+        });
+        detail.menu.addItem({
+            icon: "iconCalendar",
+            label: "从今日笔记生成",
+            click: () => void this.fromDateRange("today"),
+        });
+        detail.menu.addItem({
+            icon: "iconHistory",
+            label: "从昨日笔记生成",
+            click: () => void this.fromDateRange("yesterday"),
         });
     }
 
@@ -98,9 +150,19 @@ export class QuizSelector {
                 || el.querySelector("[title]")?.getAttribute("title")
                 || "笔记本";
             detail.menu.addItem({
-                icon: "iconSparkles",
+                icon: "iconFiles",
                 label: this.plugin.i18n.generateNotebookQuiz ?? "从笔记本生成复习题",
                 click: () => void this.fromNotebook(nbId, nbName),
+            });
+            detail.menu.addItem({
+                icon: "iconCalendar",
+                label: "从今日笔记生成",
+                click: () => void this.fromNotebookByDate(nbId, nbName, "today"),
+            });
+            detail.menu.addItem({
+                icon: "iconHistory",
+                label: "从昨日笔记生成",
+                click: () => void this.fromNotebookByDate(nbId, nbName, "yesterday"),
             });
         }
     }
@@ -177,6 +239,40 @@ export class QuizSelector {
             if (exp?.content) content += exp.content + "\n\n---\n\n";
         }
         await this.launch(content, notebookId, `笔记本·${notebookName}`);
+    }
+
+    /** 从所有笔记本中收集今日/昨日笔记并生成 */
+    private async fromDateRange(range: DateRange) {
+        const label = range === "today" ? "今日" : "昨日";
+        showMessage(`正在加载${label}笔记…`);
+        const docs = await collectAllDocIdsByDate(range);
+        if (docs.length === 0) {
+            showMessage(`${label}没有笔记`);
+            return;
+        }
+        let content = "";
+        for (const doc of docs) {
+            const exp = await exportMdContent(doc.id).catch(() => null);
+            if (exp?.content) content += exp.content + "\n\n---\n\n";
+        }
+        await this.launch(content, `date-${range}`, `${label}笔记（${docs.length} 篇）`);
+    }
+
+    /** 从指定笔记本中收集今日/昨日笔记并生成 */
+    private async fromNotebookByDate(notebookId: string, notebookName: string, range: DateRange) {
+        const label = range === "today" ? "今日" : "昨日";
+        showMessage(`正在加载「${notebookName}」${label}笔记…`);
+        const docIds = await collectDocIdsByDate(notebookId, range);
+        if (docIds.length === 0) {
+            showMessage(`「${notebookName}」${label}没有笔记`);
+            return;
+        }
+        let content = "";
+        for (const id of docIds) {
+            const exp = await exportMdContent(id).catch(() => null);
+            if (exp?.content) content += exp.content + "\n\n---\n\n";
+        }
+        await this.launch(content, notebookId, `${notebookName}·${label}笔记`);
     }
 
     private async launch(content: string, rootId: string, title: string) {
