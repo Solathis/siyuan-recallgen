@@ -1,5 +1,6 @@
 <script lang="ts">
     import { heatmap as h } from "./components";
+    import { t } from "../i18n";
     import type { ScoreRecord, ScoreRange, HeatmapConfig as HMConfig } from "@/types/quiz";
 
     export let records: ScoreRecord[] = [];
@@ -23,8 +24,8 @@
     }
 
     function fmtTip(cell: Cell): string {
-        if (cell.score === null) return `${cell.date} · 无记录`;
-        return `${cell.date} · ${cell.score} 分（${cell.count} 次）`;
+        if (cell.score === null) return `${cell.date} · ${t("heatmap.noRecord")}`;
+        return t("heatmap.scoreTip", cell.date, String(cell.score), String(cell.count));
     }
 
     function buildCols(recs: ScoreRecord[], cfg: HMConfig): Col[] {

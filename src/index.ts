@@ -14,6 +14,8 @@ import { callLLM, resolveAI, testConnection as aiTestConnection, type ChatMessag
 import { saveAsNewDoc, appendAnalysis } from "@/lib/quiz/docWriter";
 import type { QuizService, QuizTabData } from "@/lib/quiz/service";
 import { loadDateRangeNotes } from "@/lib/quiz/dateRange";
+import { initI18n, setFallback, t } from "@/lib/i18n";
+import enFallback from "@/../public/i18n/en.json";
 import type { RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, QuizSession } from "@/types/quiz";
 import { getDefaultConfig } from "@/types/config";
@@ -38,6 +40,8 @@ export default class RecallGenPlugin extends Plugin {
         const frontEnd = getFrontend();
         this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile";
         this.addIcons(ICON);
+        initI18n(this.i18n);
+        setFallback(enFallback as Record<string, string>);
 
         this.configStore = new ConfigStore(this);
         this.scoreStore = new ScoreStore(this);
@@ -101,7 +105,7 @@ export default class RecallGenPlugin extends Plugin {
 
         this.addTopBar({
             icon: "iconRecallGen",
-            title: "复习记录",
+            title: t("tab.history"),
             position: "right",
             callback: () => this.openHistoryTab(),
         });
@@ -112,7 +116,7 @@ export default class RecallGenPlugin extends Plugin {
         this.quizComp?.$destroy();
         this.settingComp?.$destroy();
         this.historyComp?.$destroy();
-        showMessage(this.i18n.byePlugin ?? "Bye, RecallGen");
+        showMessage(this.i18n.byePlugin ?? t("byePlugin"));
     }
 
     async uninstall() {
@@ -182,7 +186,7 @@ export default class RecallGenPlugin extends Plugin {
             custom: {
                 id: this.name + QUIZ_TAB,
                 icon: "iconRecallGen",
-                title: tabData.sourceTitle ? `复习题 · ${tabData.sourceTitle}` : "复习题",
+                title: tabData.sourceTitle ? t("tab.quiz", tabData.sourceTitle) : t("tab.quizDefault"),
                 data: tabData,
             },
         });
@@ -194,7 +198,7 @@ export default class RecallGenPlugin extends Plugin {
             custom: {
                 id: this.name + HISTORY_TAB,
                 icon: "iconRecallGen",
-                title: "复习记录",
+                title: t("tab.history"),
             },
         });
     }
@@ -214,7 +218,7 @@ export default class RecallGenPlugin extends Plugin {
             ? session.questions.filter((_, i) => results[i].score < 60)
             : session.questions;
         if (questions.length === 0) {
-            showMessage("没有错题可保存");
+            showMessage(t("quiz.noWrongToSave"));
             return "";
         }
         const docId = await saveAsNewDoc(this.config.general, questions, session.sourceDocId, session.sourceTitle);

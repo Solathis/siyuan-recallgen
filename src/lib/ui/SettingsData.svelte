@@ -1,5 +1,6 @@
 <script lang="ts">
     import { button, card } from "./components";
+    import { t } from "../i18n";
 
     export let onClearScores: () => Promise<void> = async () => {};
     export let onClearProgress: () => Promise<void> = async () => {};
@@ -7,12 +8,12 @@
 
 <div class={card.root}>
     <div class={card.header}>
-        <h3 class={card.title}>数据管理</h3>
-        <p class={card.description}>清除本地存储的记录</p>
+        <h3 class={card.title}>{t("settings.data.title")}</h3>
+        <p class={card.description}>{t("settings.data.desc")}</p>
     </div>
     <div class="rg-data-actions">
-        <button class={button({ variant: "outline" })} on:click={onClearScores}>清空成绩记录</button>
-        <button class={button({ variant: "destructive" })} on:click={onClearProgress}>清空答题进度</button>
+        <button class={button({ variant: "outline" })} on:click={onClearScores}>{t("settings.data.clearScores")}</button>
+        <button class={button({ variant: "destructive" })} on:click={onClearProgress}>{t("settings.data.clearProgress")}</button>
     </div>
 </div>
 

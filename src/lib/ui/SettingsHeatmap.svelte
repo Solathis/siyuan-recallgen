@@ -2,6 +2,7 @@
     import { createEventDispatcher } from "svelte";
     import Heatmap from "./Heatmap.svelte";
     import { button, card, field, input, select, cn } from "./components";
+    import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
     import type { ScoreRecord } from "@/types/quiz";
 
@@ -30,20 +31,20 @@
 
 <div class={card.root}>
     <div class={card.header}>
-        <h3 class={card.title}>热力图设置</h3>
-        <p class={card.description}>成绩日历与配色区间</p>
+        <h3 class={card.title}>{t("settings.heatmap.title")}</h3>
+        <p class={card.description}>{t("settings.heatmap.desc")}</p>
     </div>
     <div class={cn(card.content, field.group)}>
         <Heatmap records={scores} config={config.heatmap} />
         <div class={field.field}>
-            <label class={field.label} for="rg-metric">聚合方式</label>
+            <label class={field.label} for="rg-metric">{t("settings.heatmap.metric")}</label>
             <select id="rg-metric" class={select} value={config.heatmap.metric} on:change={onMetricChange}>
-                <option value="max">每日最高分</option>
-                <option value="avg">每日平均分</option>
+                <option value="max">{t("settings.heatmap.metricMax")}</option>
+                <option value="avg">{t("settings.heatmap.metricAvg")}</option>
             </select>
         </div>
         <div class={field.field}>
-            <span class={field.label}>配色区间</span>
+            <span class={field.label}>{t("settings.heatmap.colorRanges")}</span>
             <div class="rg-ranges">
                 {#each config.heatmap.ranges as r, i}
                     <div class="rg-range-row">
@@ -53,7 +54,7 @@
                         <button class={button({ variant: "ghost", size: "icon" })} on:click={() => removeRange(i)}>✕</button>
                     </div>
                 {/each}
-                <button class={button({ variant: "outline", size: "sm" })} on:click={addRange}>+ 添加区间</button>
+                <button class={button({ variant: "outline", size: "sm" })} on:click={addRange}>{t("settings.heatmap.addRange")}</button>
             </div>
         </div>
     </div>

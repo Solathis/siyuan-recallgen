@@ -3,6 +3,7 @@
     import { CodeEditor } from "../editor/codemirror";
     import { card, field, input, textarea, badge, cn } from "./components";
     import { renderMarkdownLatex as renderLatex } from "../ui/latex";
+    import { t } from "../i18n";
     import type { Question, UserAnswer } from "@/types/quiz";
 
     export let question: Question;
@@ -75,28 +76,28 @@
         {:else if question.type === "fill_blank"}
             <div class="rg-q__blanks">
                 {#each question.answer as _opts, i}
-                    <input class={input} type="text" placeholder="第 {i + 1} 空" value={answer?.type === "fill_blank" ? answer.value[i] ?? "" : ""} on:input={(e) => onBlankInput(i, e)} />
+                    <input class={input} type="text" placeholder={t("common.blank", String(i + 1))} value={answer?.type === "fill_blank" ? answer.value[i] ?? "" : ""} on:input={(e) => onBlankInput(i, e)} />
                 {/each}
             </div>
         {:else if question.type === "true_false"}
             <div class="rg-q__options">
                 <label class="rg-q__opt" class:checked={answer?.type === "true_false" && answer.value === true}>
-                    <input type="radio" name={question.id} checked={answer?.type === "true_false" && answer.value === true} on:change={() => setBool(true)} /><span>正确</span>
+                    <input type="radio" name={question.id} checked={answer?.type === "true_false" && answer.value === true} on:change={() => setBool(true)} /><span>{t("common.true")}</span>
                 </label>
                 <label class="rg-q__opt" class:checked={answer?.type === "true_false" && answer.value === false}>
-                    <input type="radio" name={question.id} checked={answer?.type === "true_false" && answer.value === false} on:change={() => setBool(false)} /><span>错误</span>
+                    <input type="radio" name={question.id} checked={answer?.type === "true_false" && answer.value === false} on:change={() => setBool(false)} /><span>{t("common.false")}</span>
                 </label>
             </div>
         {:else if question.type === "subjective"}
             <div class="rg-q__subjective">
                 <div class="rg-q__md-bar">
-                    <button class="rg-q__md-btn" class:active={!preview} on:click={() => preview = false}>编辑</button>
-                    <button class="rg-q__md-btn" class:active={preview} on:click={() => preview = true}>预览</button>
+                    <button class="rg-q__md-btn" class:active={!preview} on:click={() => preview = false}>{t("question.edit")}</button>
+                    <button class="rg-q__md-btn" class:active={preview} on:click={() => preview = true}>{t("question.preview")}</button>
                 </div>
                 {#if preview}
                     <div class="rg-q__md-preview">{@html renderLatex(answer?.type === "subjective" ? answer.value : "")}</div>
                 {:else}
-                    <textarea class={cn(textarea, "rg-q__textarea")} placeholder="输入你的作答（支持 Markdown 和 LaTeX）" on:input={onSubjectiveInput}>{answer?.type === "subjective" ? answer.value : ""}</textarea>
+                    <textarea class={cn(textarea, "rg-q__textarea")} placeholder={t("question.subjectivePlaceholder")} on:input={onSubjectiveInput}>{answer?.type === "subjective" ? answer.value : ""}</textarea>
                 {/if}
             </div>
         {:else if question.type === "coding"}

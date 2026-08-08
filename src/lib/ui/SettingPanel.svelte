@@ -7,24 +7,25 @@
     import SettingsHeatmap from "./SettingsHeatmap.svelte";
     import SettingsData from "./SettingsData.svelte";
     import { sidebarNav, sidebarNavItem, scrollArea, separator } from "./components";
+    import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
     import type { ScoreRecord } from "@/types/quiz";
 
     export let config: RecallGenConfig;
     export let scores: ScoreRecord[] = [];
-    export let onTestConnection: () => Promise<boolean> = async () => false;
+    export let onTestConnection: () => Promise<string> = async () => "";
     export let onClearScores: () => Promise<void> = async () => {};
     export let onClearProgress: () => Promise<void> = async () => {};
 
     const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
 
     const SECTIONS = [
-        { key: "ai", label: "AI 服务", icon: "🔌" },
-        { key: "roles", label: "AI 身份", icon: "👥" },
-        { key: "general", label: "题目与答题", icon: "📝" },
-        { key: "prompts", label: "提示词", icon: "💬" },
-        { key: "heatmap", label: "热力图", icon: "📊" },
-        { key: "data", label: "数据管理", icon: "🗑️" },
+        { key: "ai", label: t("settings.nav.ai"), icon: "🔌" },
+        { key: "roles", label: t("settings.nav.roles"), icon: "👥" },
+        { key: "general", label: t("settings.nav.general"), icon: "📝" },
+        { key: "prompts", label: t("settings.nav.prompts"), icon: "💬" },
+        { key: "heatmap", label: t("settings.nav.heatmap"), icon: "📊" },
+        { key: "data", label: t("settings.nav.data"), icon: "🗑️" },
     ] as const;
 
     type SectionKey = typeof SECTIONS[number]["key"];

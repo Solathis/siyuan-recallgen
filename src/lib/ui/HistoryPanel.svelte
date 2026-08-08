@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { button, badge, card, separator, cn } from "./components";
+    import { t } from "../i18n";
     import type { QuizService } from "../quiz/service";
     import type { ScoreRecord } from "@/types/quiz";
 
@@ -28,7 +29,7 @@
                 const d = new Date(r.timestamp);
                 key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
             } else {
-                key = r.sourceTitle?.replace(/·.*$/, "") || r.title.replace(/·.*$/, "") || "其他";
+                key = r.sourceTitle?.replace(/·.*$/, "") || r.title.replace(/·.*$/, "") || t("common.unanswered");
             }
             if (!map.has(key)) map.set(key, { key, items: [] });
             map.get(key)!.items.push(r);
@@ -54,24 +55,24 @@
 
 <div class="rg-history">
     <header class="rg-history__bar">
-        <h2 class="rg-history__title">📋 答题记录</h2>
+        <h2 class="rg-history__title">{t("history.title")}</h2>
         <div class="rg-history__controls">
             <div class="rg-history__group">
-                <button class="rg-history__seg" class:active={groupBy === "date"} on:click={() => groupBy = "date"}>按日期</button>
-                <button class="rg-history__seg" class:active={groupBy === "notebook"} on:click={() => groupBy = "notebook"}>按来源</button>
+                <button class="rg-history__seg" class:active={groupBy === "date"} on:click={() => groupBy = "date"}>{t("history.byDate")}</button>
+                <button class="rg-history__seg" class:active={groupBy === "notebook"} on:click={() => groupBy = "notebook"}>{t("history.bySource")}</button>
             </div>
             <div class="rg-history__group">
-                <button class="rg-history__seg" class:active={viewMode === "thumbnail"} on:click={() => viewMode = "thumbnail"} title="缩略图">▦</button>
-                <button class="rg-history__seg" class:active={viewMode === "list"} on:click={() => viewMode = "list"} title="列表">☰</button>
-                <button class="rg-history__seg" class:active={viewMode === "table"} on:click={() => viewMode = "table"} title="表格">⊏</button>
+                <button class="rg-history__seg" class:active={viewMode === "thumbnail"} on:click={() => viewMode = "thumbnail"} title={t("history.thumb")}>▦</button>
+                <button class="rg-history__seg" class:active={viewMode === "list"} on:click={() => viewMode = "list"} title={t("history.list")}>☰</button>
+                <button class="rg-history__seg" class:active={viewMode === "table"} on:click={() => viewMode = "table"} title={t("history.table")}>⊏</button>
             </div>
         </div>
     </header>
 
     {#if loading}
-        <div class="rg-history__empty">加载中…</div>
+        <div class="rg-history__empty">{t("common.loading")}</div>
     {:else if records.length === 0}
-        <div class="rg-history__empty">暂无答题记录</div>
+        <div class="rg-history__empty">{t("history.empty")}</div>
     {:else}
         {#each grouped as group}
             <section class="rg-history__group-section">
@@ -82,11 +83,11 @@
                         {#each group.items as r}
                             <div class="rg-thumb" on:click={() => onOpenReview(r)} role="button" tabindex="0">
                                 <div class="rg-thumb__score" style="color:{scoreColor(r)}">
-                                    {pct(r).toFixed(0)}<span class="rg-thumb__unit">分</span>
+                                    {pct(r).toFixed(0)}<span class="rg-thumb__unit">{t("history.pts")}</span>
                                 </div>
                                 <div class="rg-thumb__info">
                                     <div class="rg-thumb__title">{r.title}</div>
-                                    <div class="rg-thumb__meta">{r.questionCount} 题 · {timeStr(r.timestamp)}</div>
+                                    <div class="rg-thumb__meta">{t("result.qCount", String(r.questionCount))} · {timeStr(r.timestamp)}</div>
                                 </div>
                                 <div class="rg-thumb__bar">
                                     <div class="rg-thumb__bar-fill" style="width:{pct(r)}%;background:{scoreColor(r)}"></div>
@@ -100,7 +101,7 @@
                             <div class="rg-list__item" on:click={() => onOpenReview(r)} role="button" tabindex="0">
                                 <span class="rg-list__score" style="color:{scoreColor(r)}">{pct(r).toFixed(0)}</span>
                                 <span class="rg-list__title">{r.title}</span>
-                                <span class="rg-list__meta">{r.questionCount} 题</span>
+                                <span class="rg-list__meta">{t("result.qCount", String(r.questionCount))}</span>
                                 <span class="rg-list__time">{timeStr(r.timestamp)}</span>
                             </div>
                         {/each}
@@ -108,7 +109,7 @@
                 {:else}
                     <table class="rg-table">
                         <thead>
-                            <tr><th>标题</th><th>分数</th><th>题数</th><th>时间</th></tr>
+                            <tr><th>{t("history.colTitle")}</th><th>{t("history.colScore")}</th><th>{t("history.colCount")}</th><th>{t("history.colTime")}</th></tr>
                         </thead>
                         <tbody>
                             {#each group.items as r}

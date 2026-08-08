@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import { button, badge, card, field, input, select, label, switchCls, cn } from "./components";
+    import { t } from "../i18n";
     import type { RecallGenConfig, AIEndpoint, AIModel, AIProvider, AIProtocol } from "@/types/config";
 
     export let config: RecallGenConfig;
@@ -56,7 +57,7 @@
     function addEndpoint() {
         const ep: AIEndpoint = {
             id: genId("ep"),
-            name: `端点 ${config.ai.endpoints.length + 1}`,
+            name: t("settings.ai.endpointNum", String(config.ai.endpoints.length + 1)),
             provider: "openai",
             protocol: "chat",
             baseUrl: "",
@@ -67,7 +68,7 @@
     function removeEndpoint(id: string) {
         const modelsUsing = config.ai.models.filter((m) => m.endpointId === id);
         if (modelsUsing.length > 0) {
-            alert(`该端点下有 ${modelsUsing.length} 个模型，请先删除这些模型`);
+            alert(t("settings.ai.alertModelsInUse", String(modelsUsing.length)));
             return;
         }
         patchAi({ endpoints: config.ai.endpoints.filter((e) => e.id !== id) });
@@ -93,7 +94,7 @@
         // 同端点下不允许同名模型
         let name = "";
         let n = existing.length + 1;
-        while (existing.some((m) => m.name === name)) { name = `模型 ${n++}`; }
+        while (existing.some((m) => m.name === name)) { name = t("settings.ai.modelNum", String(n++)); }
         const m: AIModel = {
             id: genId("m"),
             name,
@@ -106,7 +107,7 @@
     function removeModel(id: string) {
         const roles = config.ai.roles;
         if (roles.generator === id || roles.reviewer === id || roles.grader === id) {
-            alert("该模型被角色引用，请先在「AI 身份」中更换");
+            alert(t("settings.ai.alertModelInRole"));
             return;
         }
         patchAi({ models: config.ai.models.filter((m) => m.id !== id) });
@@ -118,7 +119,7 @@
             if (model) {
                 const dup = config.ai.models.some((m) => m.endpointId === model.endpointId && m.id !== id && m.name === patch.name);
                 if (dup) {
-                    alert(`该端点下已存在同名模型「${patch.name}」`);
+                    alert(t("settings.ai.alertDupModelName", patch.name));
                     return;
                 }
             }
@@ -150,27 +151,27 @@
 
 <div class={card.root}>
     <div class={card.header}>
-        <h3 class={card.title}>AI 端点与模型</h3>
-        <p class={card.description}>每个端点下管理其模型，在「AI 身份」中分配角色</p>
+        <h3 class={card.title}>{t("settings.ai.title")}</h3>
+        <p class={card.description}>{t("settings.ai.desc")}</p>
     </div>
     <div class={cn(card.content, field.group)}>
         <!-- ── 按端点分组的端点+模型 ── -->
         {#each config.ai.endpoints as ep (ep.id)}
             <div class="rg-ep-block">
                 <div class="rg-ep-head">
-                    <input class={cn(input, "rg-ep-name")} type="text" value={ep.name} on:input={(e) => patchEndpoint(ep.id, { name: v(e) })} placeholder="端点名称" />
-                    <button class={button({ variant: "ghost", size: "sm" })} on:click={() => removeEndpoint(ep.id)} type="button">删除端点</button>
+                    <input class={cn(input, "rg-ep-name")} type="text" value={ep.name} on:input={(e) => patchEndpoint(ep.id, { name: v(e) })} placeholder={t("settings.ai.endpointName")} />
+                    <button class={button({ variant: "ghost", size: "sm" })} on:click={() => removeEndpoint(ep.id)} type="button">{t("settings.ai.deleteEndpoint")}</button>
                 </div>
                 <div class="rg-ep-config">
                     <div class="rg-row">
-                        <label class={field.label}>服务商</label>
+                        <label class={field.label}>{t("settings.ai.provider")}</label>
                         <select class={select} value={ep.provider} on:change={(e) => onEpProvider(ep.id, e)}>
-                            <option value="openai">OpenAI 兼容</option>
-                            <option value="ollama">Ollama</option>
+                            <option value="openai">{t("settings.ai.openaiCompat")}</option>
+                            <option value="ollama">{t("settings.ai.ollama")}</option>
                         </select>
                     </div>
                     <div class="rg-row">
-                        <label class={field.label}>协议</label>
+                        <label class={field.label}>{t("settings.ai.protocol")}</label>
                         <select class={select} value={ep.protocol} on:change={(e) => onEpProtocol(ep.id, e)} disabled={ep.provider === "ollama"}>
                             <option value="chat">Chat Completions</option>
                             <option value="responses">Responses API</option>
@@ -178,15 +179,15 @@
                         </select>
                     </div>
                     <div class="rg-row">
-                        <label class={field.label}>Base URL</label>
+                        <label class={field.label}>{t("settings.ai.baseUrl")}</label>
                         <input class={input} type="text" value={ep.baseUrl} on:input={(e) => patchEndpoint(ep.id, { baseUrl: v(e) })} placeholder="https://api.openai.com/v1" />
                     </div>
                     <div class="rg-row">
-                        <label class={field.label}>API Key</label>
+                        <label class={field.label}>{t("settings.ai.apiKey")}</label>
                         <div class="rg-key-row">
                             <input class={cn(input, "rg-key-input")} type={showKeys[ep.id] ? "text" : "password"} value={ep.apiKey} on:input={(e) => patchEndpoint(ep.id, { apiKey: v(e) })} placeholder="sk-..." />
                             <button class={button({ variant: "outline", size: "sm" })} on:click={() => showKeys[ep.id] = !showKeys[ep.id]} type="button">
-                                {showKeys[ep.id] ? "隐藏" : "显示"}
+                                {showKeys[ep.id] ? t("settings.ai.hideKey") : t("settings.ai.showKey")}
                             </button>
                         </div>
                     </div>
@@ -195,41 +196,40 @@
                 <!-- 该端点下的模型 -->
                 <div class="rg-models-area">
                     <div class="rg-models-head">
-                        <span class="rg-models-title">模型</span>
-                        <button class={button({ variant: "outline", size: "sm" })} on:click={() => addModel(ep.id)} type="button">+ 添加模型</button>
+                        <span class="rg-models-title">{t("settings.ai.models")}</span>
+                        <button class={button({ variant: "outline", size: "sm" })} on:click={() => addModel(ep.id)} type="button">{t("settings.ai.addModel")}</button>
                     </div>
                     {#if modelsOf(ep.id).length > 0}
                         <div class="rg-model-header">
-                            <span class="rg-model-header-name">模型名称</span>
-                            <span class="rg-model-header-num">温度</span>
-                            <span class="rg-model-header-num">Max Tokens</span>
-                            <span class="rg-model-header-op">操作</span>
+                            <span class="rg-model-header-name">{t("settings.ai.colName")}</span>
+                            <span class="rg-model-header-num">{t("settings.ai.colTemp")}</span>
+                            <span class="rg-model-header-num">{t("settings.ai.colMaxTokens")}</span>
+                            <span class="rg-model-header-op">{t("settings.ai.colAction")}</span>
                         </div>
                     {/if}
                     {#each modelsOf(ep.id) as m (m.id)}
                         <div class="rg-model-row">
-                            <input class={cn(input, "rg-model-name")} type="text" value={m.name} on:input={(e) => patchModel(m.id, { name: v(e) })} placeholder="模型名称（如 gpt-4o-mini）" />
-                            <input class={cn(input, "rg-model-num")} type="number" step="0.1" min="0" max="2" value={m.temperature} on:input={(e) => onModelTemp(m.id, e)} title="温度" />
+                            <input class={cn(input, "rg-model-name")} type="text" value={m.name} on:input={(e) => patchModel(m.id, { name: v(e) })} placeholder="gpt-4o-mini" />
+                            <input class={cn(input, "rg-model-num")} type="number" step="0.1" min="0" max="2" value={m.temperature} on:input={(e) => onModelTemp(m.id, e)} title={t("settings.ai.colTemp")} />
                             <input class={cn(input, "rg-model-num")} type="number" step="256" min="256" value={m.maxTokens} on:input={(e) => patchModel(m.id, { maxTokens: vn(e) })} title="Max Tokens" />
-                            <button class={button({ variant: "ghost", size: "sm" })} on:click={() => removeModel(m.id)} type="button">删除</button>
+                            <button class={button({ variant: "ghost", size: "sm" })} on:click={() => removeModel(m.id)} type="button">{t("common.delete")}</button>
                         </div>
                     {:else}
-                        <span class={field.description}>该端点下暂无模型</span>
+                        <span class={field.description}>{t("settings.ai.noModels")}</span>
                     {/each}
                 </div>
             </div>
         {:else}
-            <span class={field.description}>暂无端点，请点击下方按钮添加</span>
+            <span class={field.description}>{t("settings.ai.noEndpoints")}</span>
         {/each}
 
-        <button class={button({ variant: "outline" })} on:click={addEndpoint} type="button">+ 添加端点</button>
+        <button class={button({ variant: "outline" })} on:click={addEndpoint} type="button">{t("settings.ai.addEndpoint")}</button>
 
-        <!-- ── 测试连接 ── -->
         <div class="rg-section-sep"></div>
-        <div class="rg-section-head"><span class="rg-section-title">测试连接</span></div>
+        <div class="rg-section-head"><span class="rg-section-title">{t("settings.ai.testConn")}</span></div>
         <div class={field.group}>
             <div class="rg-row">
-                <label class={field.label}>端点</label>
+                <label class={field.label}>{t("settings.ai.testEndpoint")}</label>
                 <select class={select} value={testEndpointId()} on:change={onTestEndpointChange}>
                     {#each config.ai.endpoints as ep}
                         <option value={ep.id}>{ep.name}</option>
@@ -237,7 +237,7 @@
                 </select>
             </div>
             <div class="rg-row">
-                <label class={field.label}>模型</label>
+                <label class={field.label}>{t("settings.ai.testModel")}</label>
                 <select class={select} value={testModelId} on:change={onTestModelChange}>
                     {#each modelsOf(testEndpointId()) as m}
                         <option value={m.id}>{m.name}</option>
@@ -245,39 +245,38 @@
                 </select>
             </div>
             <div class="rg-row">
-                <label class={field.label}>测试提示词</label>
+                <label class={field.label}>{t("settings.ai.testPrompt")}</label>
                 <input class={input} type="text" value={config.ai.testPrompt} on:input={(e) => patchAi({ testPrompt: v(e) })} />
             </div>
             <div class="rg-test-row">
                 <button class={button({ variant: "outline", size: "sm" })} on:click={testConn} disabled={connState === "testing"} type="button">
-                    {connState === "testing" ? "测试中…" : "测试连接"}
+                    {connState === "testing" ? t("settings.ai.testing") : t("settings.ai.testConn")}
                 </button>
-                {#if connState === "ok"}<span class={badge("success")}>连接成功</span>{/if}
-                {#if connState === "fail"}<span class={badge("destructive")}>连接失败</span>{/if}
+                {#if connState === "ok"}<span class={badge("success")}>{t("settings.ai.connOk")}</span>{/if}
+                {#if connState === "fail"}<span class={badge("destructive")}>{t("settings.ai.connFail")}</span>{/if}
             </div>
             {#if connState === "fail" && connError}
                 <div class="rg-conn-error">{connError}</div>
             {/if}
             {#if connResult}
                 <div class="rg-conn-result">
-                    <span class="rg-conn-result__label">AI 回复：</span>
+                    <span class="rg-conn-result__label">{t("settings.ai.aiReply")}</span>
                     <div class="rg-conn-result__content">{connResult}</div>
                 </div>
             {/if}
         </div>
 
-        <!-- ── 全局设置 ── -->
         <div class="rg-section-sep"></div>
-        <div class="rg-section-head"><span class="rg-section-title">全局设置</span></div>
+        <div class="rg-section-head"><span class="rg-section-title">{t("settings.ai.globalSettings")}</span></div>
         <div class={field.group}>
             <div class="rg-row">
-                <label class={field.label}>超时（秒）</label>
+                <label class={field.label}>{t("settings.ai.timeout")}</label>
                 <input class={input} type="number" value={Math.round(config.ai.timeout / 1000)} on:input={(e) => patchAi({ timeout: vn(e) * 1000 })} />
             </div>
             <label class="rg-check-item">
                 <input class={switchCls} type="checkbox" checked={config.ai.jsonSchemaEnabled} on:change={(e) => patchAi({ jsonSchemaEnabled: checked(e) })} />
-                <span>JSON Schema 严格模式</span>
-                <span class={field.description}>开启→json_schema 严格约束；关闭→json_object 宽松模式（兼容性更好）</span>
+                <span>{t("settings.ai.jsonSchema")}</span>
+                <span class={field.description}>{t("settings.ai.jsonSchemaDesc")}</span>
             </label>
         </div>
     </div>

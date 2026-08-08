@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import { card, field, select, cn } from "./components";
+    import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
 
     export let config: RecallGenConfig;
@@ -35,16 +36,16 @@
     }
 
     const ROLES = [
-        { key: "generator" as const, label: "出题者", icon: "✍️", desc: "根据笔记内容生成复习题目" },
-        { key: "reviewer" as const, label: "审题者", icon: "🔍", desc: "审核题目严谨性与正确性，不通过的题退回出题者重新生成" },
-        { key: "grader" as const, label: "判题者", icon: "⚖️", desc: "评分主观题/编程题，并负责薄弱点分析与 AI 答疑" },
+        { key: "generator" as const, label: t("settings.roles.generator"), icon: "✍️", desc: t("settings.roles.generatorDesc") },
+        { key: "reviewer" as const, label: t("settings.roles.reviewer"), icon: "🔍", desc: t("settings.roles.reviewerDesc") },
+        { key: "grader" as const, label: t("settings.roles.grader"), icon: "⚖️", desc: t("settings.roles.graderDesc") },
     ];
 </script>
 
 <div class={card.root}>
     <div class={card.header}>
-        <h3 class={card.title}>AI 身份</h3>
-        <p class={card.description}>为出题、审题、判题三个环节分别指定端点与模型</p>
+        <h3 class={card.title}>{t("settings.roles.title")}</h3>
+        <p class={card.description}>{t("settings.roles.desc")}</p>
     </div>
     <div class={cn(card.content, field.group)}>
         {#each ROLES as r}
@@ -57,7 +58,7 @@
                     </div>
                 </div>
                 <div class="rg-role-row">
-                    <label class={field.label}>端点</label>
+                    <label class={field.label}>{t("settings.roles.endpoint")}</label>
                     <select class={select} value={endpointIdOf(r.key)} on:change={(e) => onRoleEndpoint(r.key, e)}>
                         {#each config.ai.endpoints as ep}
                             <option value={ep.id}>{ep.name}</option>
@@ -65,7 +66,7 @@
                     </select>
                 </div>
                 <div class="rg-role-row">
-                    <label class={field.label}>模型</label>
+                    <label class={field.label}>{t("settings.roles.model")}</label>
                     <select class={select} value={config.ai.roles[r.key]} on:change={(e) => onRoleModel(r.key, e)}>
                         {#each modelsOf(endpointIdOf(r.key)) as m}
                             <option value={m.id}>{m.name}</option>
@@ -77,8 +78,7 @@
 
         <div class="rg-role-hint">
             <span class={field.description}>
-                💡 出题者和审题者建议使用不同模型以获得更好效果。判题者也可用同一模型。
-                审题循环最多重试 3 轮，未通过的题目会退回出题者重新生成。
+                {t("settings.roles.hint")}
             </span>
         </div>
     </div>

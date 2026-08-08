@@ -5,6 +5,7 @@
     import ResultPanel from "./ResultPanel.svelte";
     import { showMessage, Dialog } from "siyuan";
     import { button, badge, card, alert, alertTitle, alertDescription, cn } from "./components";
+    import { t } from "../i18n";
     import type { QuizService, QuizTabData, DateGenConfig } from "../quiz/service";
     import type { GradingResult, PanelState, Question, QuizSession, UserAnswer } from "@/types/quiz";
 
@@ -34,30 +35,26 @@
 
     /** 解析错误类型与建议 */
     function parseError(msg: string): { title: string; detail: string; hint: string } {
-        // HTTP 状态错误
         const httpMatch = msg.match(/HTTP (\d+)/);
         if (httpMatch) {
             const code = parseInt(httpMatch[1]);
             if (code === 400)
-                return { title: "请求被拒绝（400）", detail: msg, hint: "可能是 response_format 不被网关支持，请在设置中关闭 JSON Schema 严格模式" };
+                return { title: t("err.400.title"), detail: msg, hint: t("err.400.hint") };
             if (code === 401 || code === 403)
-                return { title: "认证失败（" + code + "）", detail: msg, hint: "请检查 API Key 和 Base URL 是否正确" };
+                return { title: t("err.401.title", String(code)), detail: msg, hint: t("err.401.hint") };
             if (code === 429)
-                return { title: "请求频率超限（429）", detail: msg, hint: "API 调用过于频繁，请稍后重试或更换 Key" };
+                return { title: t("err.429.title"), detail: msg, hint: t("err.429.hint") };
             if (code >= 500)
-                return { title: "AI 服务端错误（" + code + "）", detail: msg, hint: "AI 服务暂不可用，请稍后重试" };
-            return { title: "网络错误（" + code + "）", detail: msg, hint: "请检查 Base URL 和网络连接" };
+                return { title: t("err.5xx.title", String(code)), detail: msg, hint: t("err.5xx.hint") };
+            return { title: t("err.network.title", String(code)), detail: msg, hint: t("err.network.hint") };
         }
-        // 配置错误
-        if (msg.includes("未配置") || msg.includes("未设置"))
-            return { title: "配置不完整", detail: msg, hint: "请在设置中完成 AI 服务配置后再试" };
-        // 超时
+        if (msg.includes("未配置") || msg.includes("未设置") || msg.includes("not configured"))
+            return { title: t("err.config.title"), detail: msg, hint: t("err.config.hint") };
         if (msg.includes("timeout") || msg.includes("超时"))
-            return { title: "请求超时", detail: msg, hint: "AI 生成耗时过长，请在设置中增大超时时间" };
-        // JSON 解析
-        if (msg.includes("JSON") || msg.includes("解析"))
-            return { title: "AI 响应解析失败", detail: msg, hint: "模型返回格式异常，建议开启 JSON Schema 或更换模型" };
-        return { title: "发生错误", detail: msg, hint: "请检查配置后重试" };
+            return { title: t("err.timeout.title"), detail: msg, hint: t("err.timeout.hint") };
+        if (msg.includes("JSON") || msg.includes("解析") || msg.includes("parse"))
+            return { title: t("err.json.title"), detail: msg, hint: t("err.json.hint") };
+        return { title: t("err.generic.title"), detail: msg, hint: t("err.generic.hint") };
     }
     $: errorInfo = error ? parseError(error) : null;
 
@@ -95,7 +92,7 @@
             analysis = rec.analysis ?? "";
             panelState = "result";
         } else {
-            error = "无效的 Tab 数据";
+            error = t("quiz.invalidTab");
             panelState = "answering";
         }
     });
@@ -115,25 +112,24 @@
         }
     }
 
-    /** 检查 AI 配置是否有效 */
     function checkAiConfig(): boolean {
         const ai = config.ai;
         if (!ai.models || ai.models.length === 0) {
-            error = "未配置任何 AI 模型，请先在设置中添加端点和模型";
+            error = t("quiz.aiNoModel");
             return false;
         }
         const genModel = ai.models.find((m) => m.id === ai.roles.generator);
         if (!genModel) {
-            error = "出题者模型未配置，请在 AI 身份中指定";
+            error = t("quiz.aiNoGenModel");
             return false;
         }
         const ep = ai.endpoints.find((e) => e.id === genModel.endpointId);
         if (!ep) {
-            error = "出题者模型引用的端点不存在，请检查配置";
+            error = t("quiz.aiNoEndpoint");
             return false;
         }
         if (ep.provider !== "ollama" && !ep.apiKey) {
-            error = "API Key 未配置，请先在设置中填写";
+            error = t("quiz.aiNoApiKey");
             return false;
         }
         return true;
@@ -150,7 +146,7 @@
         }
         panelState = "loading_generating";
         progressValue = null;
-        progressLabel = "正在加载笔记内容…";
+        progressLabel = t("quiz.loadingNotes");
         try {
             const { content, title } = await service.loadDateRangeContent(
                 dateCfg,
@@ -179,7 +175,7 @@
         }
         panelState = "loading_generating";
         progressValue = null;
-        progressLabel = "AI 正在生成题目…";
+        progressLabel = t("quiz.generating");
         try {
             const qs = await service.generate(tabData.content ?? "", (phase, round, detail) => {
                 progressLabel = detail;
@@ -188,7 +184,7 @@
             });
             if (cancelled) return;
             if (qs.length === 0) {
-                error = "AI 未生成任何题目，请检查内容或重试";
+                error = t("quiz.noQuestions");
                 errorPhase = "generate";
                 panelState = "answering";
                 return;
@@ -210,7 +206,7 @@
 
     async function resume() {
         const prev = await service.loadProgress(tabData.quizId ?? "");
-        if (!prev) { error = "未找到可恢复的进度"; panelState = "answering"; return; }
+        if (!prev) { error = t("quiz.progressNotFound"); panelState = "answering"; return; }
         session = prev;
         panelState = "answering";
         if (countdownEnabled) { countdownLeft = countdownSec; startCountdown(); }
@@ -232,11 +228,11 @@
         if (!session) return;
         panelState = "loading_grading";
         progressValue = 0;
-        progressLabel = "正在判分…";
+        progressLabel = t("quiz.grading");
         try {
             results = await service.grade(session.questions, session.answers, (done, total) => {
                 progressValue = total ? (done / total) * 100 : null;
-                progressLabel = `判分中 ${done}/${total}`;
+                progressLabel = t("quiz.gradingProgress", String(done), String(total));
             });
             // 判分完成后立即保存成绩（含题目），不受后续分析影响
             const totalScore = results.reduce((s, r) => s + r.score, 0);
@@ -253,7 +249,7 @@
             });
             await service.clearProgress(session.id);
             // 薄弱点分析失败不影响成绩记录
-            progressLabel = "正在生成薄弱点分析…";
+            progressLabel = t("quiz.analyzing");
             progressValue = null;
             try {
                 analysis = await service.analyze(results, session.questions);
@@ -285,7 +281,7 @@
         if (!session || !results) return;
         try {
             await service.saveResultToDoc(session, analysis ?? "", results, wrongOnly);
-            showMessage(wrongOnly ? "已保存错题到文档" : "已保存到文档");
+            showMessage(wrongOnly ? t("quiz.savedWrongDoc") : t("quiz.savedDoc"));
         } catch (e) { error = (e as Error).message; }
     }
     async function retryGenerate() {
@@ -293,11 +289,11 @@
         await startGenerate();
     }
     async function confirmRegenerate() {
-        const ok = await confirmAction("重新生成", "确定要放弃当前题目并重新生成吗？");
+        const ok = await confirmAction(t("quiz.confirmRegenTitle"), t("quiz.confirmRegenMsg"));
         if (ok) await regenerate();
     }
     async function confirmSubmit() {
-        const ok = await confirmAction("交卷", "确定要提交答案吗？提交后不可修改。");
+        const ok = await confirmAction(t("quiz.confirmSubmitTitle"), t("quiz.confirmSubmitMsg"));
         if (ok) await submit();
     }
     async function regenerate() {
@@ -323,15 +319,15 @@
             btns[1].addEventListener("click", () => { resolve(true); dialog.destroy(); });
         });
     }
-    function typeLabel(t: string): string {
+    function typeLabel(ty: string): string {
         const m: Record<string, string> = {
-            single_choice: "单选", multiple_choice: "多选", fill_blank: "填空",
-            true_false: "判断", subjective: "简答", coding: "编程",
+            single_choice: t("type.single_choice_short"), multiple_choice: t("type.multiple_choice_short"), fill_blank: t("type.fill_blank_short"),
+            true_false: t("type.true_false_short"), subjective: t("type.subjective_short"), coding: t("type.coding_short"),
         };
-        return m[t] ?? t;
+        return m[ty] ?? ty;
     }
     function diffLabel(d: string): string {
-        const m: Record<string, string> = { easy: "初级", medium: "中级", hard: "高级" };
+        const m: Record<string, string> = { easy: t("diff.easy"), medium: t("diff.medium"), hard: t("diff.hard") };
         return m[d] ?? d;
     }
     function diffBadge(d: string): "secondary" | "warning" | "destructive" {
@@ -355,26 +351,26 @@
         <div class="rg-config">
             <div class={cn(card.root, "rg-config__card")}>
                 <div class={card.content}>
-                    <h3 class="rg-config__title">📅 日期范围配置</h3>
+                    <h3 class="rg-config__title">{t("quiz.dateConfigTitle")}</h3>
                     <p class="rg-config__desc">
-                        {tabData.dateRange === "today" ? "今日笔记模式：基点时间定义「今日」的起始。例如设为 04:00，则今日范围为 4:00 至现在。" : "近 N 天模式：基点时间为每日分界点。例如设为 04:00，则从 N 天前 4:00 到今日 4:00 之间的笔记。"}
+                        {tabData.dateRange === "today" ? t("quiz.dateConfigTodayDesc") : t("quiz.dateConfigBeforeDesc")}
                     </p>
                     {#if tabData.dateRange === "beforeToday"}
                         <div class="rg-config__row">
-                            <label>天数范围</label>
-                            <span class="rg-config__val">{dateCfg.days === 0 ? "基点之前全部" : `${dateCfg.days} 天`}</span>
+                            <label>{t("quiz.dateDaysLabel")}</label>
+                            <span class="rg-config__val">{dateCfg.days === 0 ? t("quiz.dateDaysAll") : t("quiz.dateDaysVal", String(dateCfg.days))}</span>
                         </div>
                         <input class="rg-slider" type="range" min="0" max="90" step="1" bind:value={dateCfg.days} />
-                        <p class="rg-config__hint">0 = 基点时间之前的所有笔记</p>
+                        <p class="rg-config__hint">{t("quiz.dateDaysHint")}</p>
                     {/if}
                     <div class="rg-config__row">
-                        <label>基点时间</label>
+                        <label>{t("quiz.dateBaseLabel")}</label>
                         <input class="rg-time-input" type="time" bind:value={dateBaseTime} on:change={onBaseTimeChange} />
                     </div>
-                    <p class="rg-config__hint">过了此时间点算作第二天。适合凌晨写笔记的用户。</p>
+                    <p class="rg-config__hint">{t("quiz.dateBaseHint")}</p>
                     <div class="rg-config__actions">
-                        <button class={button({ variant: "default" })} on:click={startDateGenerate}>生成复习题</button>
-                        <button class={button({ variant: "ghost", size: "sm" })} on:click={closeTab}>取消</button>
+                        <button class={button({ variant: "default" })} on:click={startDateGenerate}>{t("quiz.dateGenerate")}</button>
+                        <button class={button({ variant: "ghost", size: "sm" })} on:click={closeTab}>{t("common.cancel")}</button>
                     </div>
                     {#if error}
                         <div class="rg-config__error">⚠ {error}</div>
@@ -386,7 +382,7 @@
         <div class="rg-panel__loading">
             <ProgressBar value={progressValue} label={progressLabel} />
             {#if panelState === "loading_generating"}
-                <button class={button({ variant: "outline", size: "sm" })} on:click={() => { cancelled = true; closeTab(); }}>取消生成</button>
+                <button class={button({ variant: "outline", size: "sm" })} on:click={() => { cancelled = true; closeTab(); }}>{t("quiz.cancelGenerate")}</button>
             {/if}
         </div>
     {:else if panelState === "answering"}
@@ -397,20 +393,20 @@
                 <div class="rg-error__detail">{errorInfo.detail}</div>
                 <div class="rg-error__hint">💡 {errorInfo.hint}</div>
                 <div class="rg-error__actions">
-                    <button class={button({ variant: "default" })} on:click={retryGenerate}>重试</button>
+                    <button class={button({ variant: "default" })} on:click={retryGenerate}>{t("common.retry")}</button>
                 </div>
             </div>
         {:else if questions.length > 0}
             <header class="rg-panel__topbar">
                 <div class="rg-panel__topbar-left">
-                    <span class={badge("secondary")}>已答 {answeredCount} / {questions.length}</span>
+                    <span class={badge("secondary")}>{t("quiz.answered", String(answeredCount), String(questions.length))}</span>
                 </div>
                 <div class="rg-panel__topbar-right">
                     {#if countdownEnabled}
                         <span class={badge("warning")}>⏱ {Math.floor(countdownLeft / 60)}:{(countdownLeft % 60).toString().padStart(2, "0")}</span>
                     {/if}
-                    <button class={button({ variant: "outline", size: "sm" })} on:click={confirmRegenerate}>重新生成</button>
-                    <button class={button({ variant: "destructive" })} on:click={confirmSubmit}>交卷</button>
+                    <button class={button({ variant: "outline", size: "sm" })} on:click={confirmRegenerate}>{t("quiz.regenerate")}</button>
+                    <button class={button({ variant: "destructive" })} on:click={confirmSubmit}>{t("quiz.submit")}</button>
                 </div>
             </header>
             <div class="rg-panel__scroll">
@@ -418,10 +414,10 @@
                     {#each questions as q, i}
                         <div class="rg-panel__q-item">
                             <div class="rg-panel__q-header">
-                                <span class={badge("secondary")}>第 {i + 1} 题</span>
+                                <span class={badge("secondary")}>{t("quiz.questionNum", String(i + 1))}</span>
                                 <span class={badge(diffBadge(q.difficulty))}>{diffLabel(q.difficulty)}</span>
                                 <span class={badge("outline")}>{typeLabel(q.type)}</span>
-                                {#if isAnswered(q)}<span class={badge("success")}>已答</span>{/if}
+                                {#if isAnswered(q)}<span class={badge("success")}>{t("quiz.answeredTag")}</span>{/if}
                             </div>
                             <QuestionView question={q} answer={session?.answers[q.id]} on:change={(e) => onAnswer(q.id, e.detail)} />
                         </div>
@@ -437,7 +433,7 @@
                 <div class="rg-error__detail">{errorInfo.detail}</div>
                 <div class="rg-error__hint">💡 {errorInfo.hint}</div>
                 <div class="rg-error__actions">
-                    <button class={button({ variant: "default" })} on:click={retryGrade}>重试判分</button>
+                    <button class={button({ variant: "default" })} on:click={retryGrade}>{t("err.retryGrade")}</button>
                 </div>
             </div>
         {:else if results && session}

@@ -103,9 +103,12 @@ export const DEFAULT_HEATMAP: HeatmapConfig = {
     ],
 };
 
+const DEFAULT_ENDPOINT_NAME_ZH = "默认端点";
+const DEFAULT_ENDPOINT_NAME_EN = "Default";
+
 const DEFAULT_ENDPOINT: AIEndpoint = {
     id: "ep-default",
-    name: "默认端点",
+    name: DEFAULT_ENDPOINT_NAME_ZH,
     provider: "openai",
     protocol: "chat",
     baseUrl: "https://api.openai.com/v1",
@@ -130,7 +133,15 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
     testPrompt: "请用一句话简要介绍你自己",
 };
 
-export const DEFAULT_PROMPTS: PromptConfig = {
+/** 语言相关的默认值 */
+export function defaultEndpointName(lang: "zh" | "en"): string {
+    return lang === "en" ? DEFAULT_ENDPOINT_NAME_EN : DEFAULT_ENDPOINT_NAME_ZH;
+}
+export function defaultTestPrompt(lang: "zh" | "en"): string {
+    return lang === "en" ? "Briefly introduce yourself in one sentence." : "请用一句话简要介绍你自己";
+}
+
+const DEFAULT_PROMPTS_ZH: PromptConfig = {
     generate: `你是一位资深的出题专家。根据用户提供的笔记内容，按照指定的题型、难度分布生成复习题目。
 要求：
 1. 题目必须紧扣笔记内容，不得编造笔记中未涉及的知识点。
@@ -159,6 +170,42 @@ export const DEFAULT_PROMPTS: PromptConfig = {
     analysis: `你是一位学习顾问。基于学生本次答题的错误题目和涉及的知识点，生成一段复习指导意见。
 指出薄弱知识点，给出针对性的复习建议和练习方向。以纯文本输出，不超过 300 字。`,
 };
+
+export const DEFAULT_PROMPTS: PromptConfig = DEFAULT_PROMPTS_ZH;
+
+export const DEFAULT_PROMPTS_EN: PromptConfig = {
+    generate: `You are an experienced exam question author. Based on the user's note content, generate review questions according to the specified question types and difficulty distribution.
+Requirements:
+1. Questions must closely follow the note content; do not fabricate knowledge points not covered in the notes.
+2. Each question must be self-contained: the question stem must include all information needed to solve it (code, data, definitions, etc.). Do not use references like "in the example above," "the aforementioned code," or "mentioned above." If a question involves specific code from the notes, the full code must be reproduced in the question stem.
+3. Each question's explanation should be concise, explaining the basis for the correct answer.
+4. Options should be distinguishable, avoiding ambiguity.
+5. Output strictly according to JSON Schema, with no extra text.
+6. Difficulty levels: Easy (basic concept recall and direct application), Medium (comprehensive understanding and multi-step reasoning), Hard (deep principles, edge cases, and comprehensive analysis).
+
+[Coding Questions] If the selected content contains code or involves programming, coding questions may be generated (write functions, fix code, predict output). Coding questions must include: problem description, optional starter code template, test cases (input/expected output), reference answer and explanation. The question stem must include complete code context, not reference code snippets from the notes.`,
+    review: `You are a rigorous question reviewer. Review whether questions are rigorous, correct, and unambiguous.
+Review dimensions:
+1. Whether the question stem is self-contained, not relying on external context or the original notes.
+2. Whether the answer is correct and unique (for choice questions).
+3. Whether options are distinguishable, avoiding ambiguity.
+4. Whether the explanation accurately explains the answer basis.
+5. Whether the difficulty matches the label (Easy/Medium/Hard).
+6. Whether coding questions have complete test cases.
+
+If a question fails review, explain the specific issue in the reason field.
+Provide review results for each question in JSON format: {"reviews":[{"index":0,"passed":true,"reason":""}]}`,
+    gradeSubjective: `You are a strict but fair grader. Based on the question, reference answer key points, and the student's response, provide a score from 0-100 with a brief comment.
+Grading dimensions: knowledge correctness, logical completeness, clarity of expression. Return in JSON format: {"score": 85, "comment": "comment"}
+
+[Coding Grading] When the question is a coding question, also comprehensively evaluate: code correctness (can it pass test cases), boundary handling, code efficiency and readability. If the student's code fails test cases, score based on logical correctness rather than giving a direct 0.`,
+    analysis: `You are a learning advisor. Based on the student's incorrect questions and related knowledge points from this quiz, generate a study guide.
+Identify weak knowledge points, provide targeted review suggestions and practice directions. Output as plain text, no more than 200 words.`,
+};
+
+export function getDefaultPrompts(lang: "zh" | "en"): PromptConfig {
+    return lang === "en" ? { ...DEFAULT_PROMPTS_EN } : { ...DEFAULT_PROMPTS_ZH };
+}
 
 export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     allowedTypes: ["single_choice", "multiple_choice", "fill_blank", "true_false", "subjective", "coding"],
@@ -225,7 +272,7 @@ export function migrateAIConfig(old: Partial<AIConfig> | undefined | null): AICo
 
     const endpoint: AIEndpoint = {
         id: "ep-default",
-        name: "默认端点",
+        name: DEFAULT_ENDPOINT_NAME_ZH,
         provider: provider ?? "openai",
         protocol: protocol ?? "chat",
         baseUrl: baseUrl ?? "https://api.openai.com/v1",

@@ -2,6 +2,7 @@
     import { createEventDispatcher, onMount, onDestroy } from "svelte";
     import { button, input, textarea, card, cn } from "./components";
     import { renderMarkdownLatex as renderLatex } from "../ui/latex";
+    import { t } from "../i18n";
     import type { QuizService, ChatTurn } from "../quiz/service";
     import type { GradingResult, Question } from "@/types/quiz";
 
@@ -42,7 +43,7 @@
             const reply = await service.chat(question, result, analysis, history.slice(0, -1), msg);
             history = [...history, { role: "assistant", content: reply }];
         } catch (e) {
-            history = [...history, { role: "assistant", content: `（出错了：${(e as Error).message}）` }];
+            history = [...history, { role: "assistant", content: `（${t("common.errorPrefix")}${(e as Error).message}）` }];
         } finally {
             loading = false;
             await tick();
@@ -64,37 +65,37 @@
 
 <div class="rg-chat">
     <div class="rg-chat__head">
-        <span class="rg-chat__title">AI 答疑对话</span>
-        <button class={button({ variant: "ghost", size: "sm" })} on:click={() => dispatch("close")}>收起</button>
+        <span class="rg-chat__title">{t("chat.title")}</span>
+        <button class={button({ variant: "ghost", size: "sm" })} on:click={() => dispatch("close")}>{t("chat.close")}</button>
     </div>
     <div class="rg-chat__msgs" bind:this={scrollEl}>
         {#if history.length === 0}
-            <p class="rg-chat__empty">可以向 AI 追问本次答题中的任何问题，例如"第 3 题为什么选 B？"、"XX 概念怎么理解？"</p>
+            <p class="rg-chat__empty">{t("chat.empty")}</p>
         {/if}
         {#each history as turn, i}
             <div class="rg-chat__msg" class:rg-chat__msg--user={turn.role === "user"} class:rg-chat__msg--ai={turn.role === "assistant"}>
-                <span class="rg-chat__role">{turn.role === "user" ? "我" : "AI"}</span>
+                <span class="rg-chat__role">{turn.role === "user" ? t("common.me") : t("common.ai")}</span>
                 <span class="rg-chat__text">{@html renderLatex(turn.content)}</span>
             </div>
         {/each}
         {#if loading}
             <div class="rg-chat__msg rg-chat__msg--ai">
-                <span class="rg-chat__role">AI</span>
-                <span class="rg-chat__typing">思考中…</span>
+                <span class="rg-chat__role">{t("common.ai")}</span>
+                <span class="rg-chat__typing">{t("common.thinking")}</span>
             </div>
         {/if}
     </div>
     <div class="rg-chat__input">
         <textarea
             class={textarea}
-            placeholder="输入问题，Enter 发送，Shift+Enter 换行"
+            placeholder={t("chat.placeholder")}
             value={inputText}
             on:input={onInputGrow}
             on:keydown={onKey}
             disabled={loading}
         ></textarea>
         <button class={button({ variant: "default", size: "sm" })} on:click={send} disabled={loading || !inputText.trim()}>
-            发送
+            {t("common.send")}
         </button>
     </div>
 </div>

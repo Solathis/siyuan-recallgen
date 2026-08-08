@@ -2,6 +2,7 @@
     import { createEventDispatcher } from "svelte";
     import { button, separator, cn } from "./components";
     import { renderMarkdownLatex as renderLatex } from "../ui/latex";
+    import { t } from "../i18n";
     import type { QuizService, ChatTurn } from "../quiz/service";
     import type { GradingResult, Question } from "@/types/quiz";
 
@@ -25,10 +26,10 @@
     let chatScrollEl: HTMLElement | null = null;
 
     const TYPE_LABEL: Record<string, string> = {
-        single_choice: "单选题", multiple_choice: "多选题", fill_blank: "填空题",
-        true_false: "判断题", subjective: "主观题", coding: "编程题",
+        single_choice: t("type.single_choice"), multiple_choice: t("type.multiple_choice"), fill_blank: t("type.fill_blank"),
+        true_false: t("type.true_false"), subjective: t("type.subjective"), coding: t("type.coding"),
     };
-    const DIFF_LABEL: Record<string, string> = { easy: "初级", medium: "中级", hard: "高级" };
+    const DIFF_LABEL: Record<string, string> = { easy: t("diff.easy"), medium: t("diff.medium"), hard: t("diff.hard") };
 
     $: total = results.reduce((s, r) => s + r.score, 0);
     $: max = results.reduce((s, r) => s + r.maxScore, 0);
@@ -57,21 +58,21 @@
         switch (q.type) {
             case "single_choice": return String.fromCharCode(65 + qany.answer);
             case "multiple_choice": return qany.answer.map((i: number) => String.fromCharCode(65 + i)).sort().join("、");
-            case "true_false": return qany.answer ? "正确" : "错误";
+            case "true_false": return qany.answer ? t("common.true") : t("common.false");
             case "fill_blank": return qany.answer.map((o: string[]) => o.join(" / ")).join("；");
             case "subjective": return qany.reference_answer;
-            case "coding": return "见参考答案";
+            case "coding": return t("common.seeAnswer");
         }
         return "";
     }
     function userText(r: GradingResult): string {
         const ua = r.userAnswer;
-        if (!ua) return "（未作答）";
+        if (!ua) return `（${t("common.unanswered")}）`;
         const v = ua.value as any;
         switch (ua.type) {
             case "single_choice": return String.fromCharCode(65 + v);
             case "multiple_choice": return v.map((i: number) => String.fromCharCode(65 + i)).sort().join("、");
-            case "true_false": return v ? "正确" : "错误";
+            case "true_false": return v ? t("common.true") : t("common.false");
             case "fill_blank": return v.join("；");
             case "subjective": case "coding": return v;
         }
@@ -102,7 +103,7 @@
             const reply = await service.chatGlobal(questions, results, analysis ?? "", chatHistory.slice(0, -1), msg);
             chatHistory = [...chatHistory, { role: "assistant", content: reply }];
         } catch (e) {
-            chatHistory = [...chatHistory, { role: "assistant", content: `（出错了：${(e as Error).message}）` }];
+            chatHistory = [...chatHistory, { role: "assistant", content: `（${t("common.errorPrefix")}${(e as Error).message}）` }];
         } finally {
             chatLoading = false;
             await tick();
@@ -124,8 +125,8 @@
 <div class="rg-result">
     <!-- 标题区域 -->
     <div class="rg-header">
-        <h2 class="rg-header__title">结果查看与学习</h2>
-        <p class="rg-header__sub">查看结果、解析与 AI 答疑</p>
+        <h2 class="rg-header__title">{t("result.title")}</h2>
+        <p class="rg-header__sub">{t("result.subtitle")}</p>
     </div>
 
     <!-- 3 个统计卡片 -->
@@ -134,7 +135,7 @@
             <div class="rg-stat-card__icon rg-stat-card__icon--score">✓</div>
             <div>
                 <div class="rg-stat-card__num" style="color:{scoreColor(pct)}">{pct.toFixed(0)}</div>
-                <div class="rg-stat-card__label">得分</div>
+                <div class="rg-stat-card__label">{t("result.score")}</div>
                 <div class="rg-stat-card__sub">{total.toFixed(0)}/{max}</div>
             </div>
         </div>
@@ -142,25 +143,25 @@
             <div class="rg-stat-card__icon rg-stat-card__icon--acc">%</div>
             <div>
                 <div class="rg-stat-card__num" style="color:{scoreColor(accuracy)}">{accuracy.toFixed(0)}%</div>
-                <div class="rg-stat-card__label">正确率</div>
-                <div class="rg-stat-card__sub">{correctCount}/{results.length} 题</div>
+                <div class="rg-stat-card__label">{t("result.accuracy")}</div>
+                <div class="rg-stat-card__sub">{t("result.qCount", String(correctCount) + "/" + String(results.length))}</div>
             </div>
         </div>
         <div class="rg-stat-card">
             <div class="rg-stat-card__icon rg-stat-card__icon--time">⏱</div>
             <div>
                 <div class="rg-stat-card__num">{fmtDuration(duration)}</div>
-                <div class="rg-stat-card__label">用时</div>
-                <div class="rg-stat-card__sub">{wrongCount} 错 · {unanswered} 未答</div>
+                <div class="rg-stat-card__label">{t("result.time")}</div>
+                <div class="rg-stat-card__sub">{t("result.wrongCount", String(wrongCount), String(unanswered))}</div>
             </div>
         </div>
     </div>
 
     <!-- 导航标签 -->
     <div class="rg-tabs">
-        <button class="rg-tabs__btn" class:active={activeTab === "questions"} on:click={() => activeTab = "questions"}>题目列表</button>
-        <button class="rg-tabs__btn" class:active={activeTab === "analysis"} on:click={() => activeTab = "analysis"}>薄弱点分析</button>
-        <button class="rg-tabs__btn" class:active={activeTab === "advice"} on:click={() => activeTab = "advice"}>学习建议</button>
+        <button class="rg-tabs__btn" class:active={activeTab === "questions"} on:click={() => activeTab = "questions"}>{t("result.tabQuestions")}</button>
+        <button class="rg-tabs__btn" class:active={activeTab === "analysis"} on:click={() => activeTab = "analysis"}>{t("result.tabAnalysis")}</button>
+        <button class="rg-tabs__btn" class:active={activeTab === "advice"} on:click={() => activeTab = "advice"}>{t("result.tabAdvice")}</button>
     </div>
 
     <!-- 题目列表 Tab -->
@@ -169,19 +170,19 @@
         <div class="rg-qstats">
             <span class="rg-qstats__item">
                 <span class="rg-qstats__dot rg-qstats__dot--all"></span>
-                全部({results.length})
+                {t("result.all", String(results.length))}
             </span>
             <span class="rg-qstats__item">
                 <span class="rg-qstats__dot rg-qstats__dot--correct"></span>
-                正确({correctCount})
+                {t("result.correct", String(correctCount))}
             </span>
             <span class="rg-qstats__item">
                 <span class="rg-qstats__dot rg-qstats__dot--wrong"></span>
-                错误({wrongCount})
+                {t("result.wrong", String(wrongCount))}
             </span>
             <span class="rg-qstats__item">
                 <span class="rg-qstats__dot rg-qstats__dot--unanswered"></span>
-                未答({unanswered})
+                {t("result.unanswered", String(unanswered))}
             </span>
         </div>
 
@@ -219,19 +220,19 @@
                         {/each}
                     </div>
                 {/if}
-                <p><b>你的答案：</b>{@html renderLatex(userText(activeResult))}</p>
+                <p><b>{t("result.yourAnswer")}</b>{@html renderLatex(userText(activeResult))}</p>
                 {#if activeQuestion.type !== "subjective" && activeQuestion.type !== "coding"}
-                    <p><b>正确答案：</b>{@html renderLatex(correctText(activeQuestion))}</p>
+                    <p><b>{t("result.correctAnswer")}</b>{@html renderLatex(correctText(activeQuestion))}</p>
                 {/if}
                 {#if activeQuestion.explanation}
                     <div class="rg-qdetail__analysis">
-                        <p class="rg-qdetail__analysis-title">解析</p>
+                        <p class="rg-qdetail__analysis-title">{t("result.explanation")}</p>
                         <div class="rg-qdetail__analysis-content">{@html renderLatex(activeQuestion.explanation)}</div>
                     </div>
                 {/if}
                 {#if activeResult.comment}
                     <div class="rg-qdetail__analysis">
-                        <p class="rg-qdetail__analysis-title">评语</p>
+                        <p class="rg-qdetail__analysis-title">{t("result.comment")}</p>
                         <div class="rg-qdetail__analysis-content">{@html renderLatex(activeResult.comment)}</div>
                     </div>
                 {/if}
@@ -242,7 +243,7 @@
             {#if analysis}
                 {@html renderLatex(analysis)}
             {:else}
-                <p class="rg-empty">暂无薄弱点分析</p>
+                <p class="rg-empty">{t("result.noAnalysis")}</p>
             {/if}
         </div>
     {:else if activeTab === "advice"}
@@ -250,7 +251,7 @@
             {#if analysis}
                 {@html renderLatex(analysis)}
             {:else}
-                <p class="rg-empty">暂无学习建议</p>
+                <p class="rg-empty">{t("result.noAdvice")}</p>
             {/if}
         </div>
     {/if}
@@ -258,37 +259,37 @@
     <!-- AI 答疑 -->
     <div class="rg-chat">
         <div class="rg-chat__header">
-            <span>💬 AI 答疑</span>
-            <span class="rg-chat__hint">针对本次答题追问</span>
+            <span>{t("chat.globalTitle")}</span>
+            <span class="rg-chat__hint">{t("chat.globalHint")}</span>
         </div>
         <div class="rg-chat__msgs" bind:this={chatScrollEl}>
             {#if chatHistory.length === 0}
-                <p class="rg-chat__empty">可以向 AI 追问本次答题的任何问题</p>
+                <p class="rg-chat__empty">{t("chat.globalEmpty")}</p>
             {/if}
             {#each chatHistory as turn}
                 <div class="rg-chat__msg" class:is-user={turn.role === "user"} class:is-ai={turn.role === "assistant"}>
-                    <span class="rg-chat__role">{turn.role === "user" ? "我" : "AI"}</span>
+                    <span class="rg-chat__role">{turn.role === "user" ? t("common.me") : t("common.ai")}</span>
                     <span class="rg-chat__text">{@html renderLatex(turn.content)}</span>
                 </div>
             {/each}
             {#if chatLoading}
                 <div class="rg-chat__msg is-ai">
-                    <span class="rg-chat__role">AI</span>
-                    <span class="rg-chat__typing">思考中…</span>
+                    <span class="rg-chat__role">{t("common.ai")}</span>
+                    <span class="rg-chat__typing">{t("common.thinking")}</span>
                 </div>
             {/if}
         </div>
         <div class="rg-chat__input-row">
-            <textarea class="rg-chat__input" placeholder="请输入你的问题..." value={chatInput} on:input={onChatInput} on:keydown={onChatKey} disabled={chatLoading}></textarea>
+            <textarea class="rg-chat__input" placeholder={t("chat.globalPlaceholder")} value={chatInput} on:input={onChatInput} on:keydown={onChatKey} disabled={chatLoading}></textarea>
             <button class="rg-chat__send" on:click={sendChat} disabled={chatLoading || !chatInput.trim()}>➤</button>
         </div>
     </div>
 
     <!-- 底部操作 -->
     <div class="rg-result__foot">
-        <button class={button({ variant: "ghost", size: "sm" })} on:click={() => dispatch("discard")}>放弃保存</button>
-        <button class={button({ variant: "outline", size: "sm" })} on:click={() => dispatch("saveWrong")}>仅保存错题</button>
-        <button class={button({ variant: "default", size: "sm" })} on:click={() => dispatch("save")}>保存到文档</button>
+        <button class={button({ variant: "ghost", size: "sm" })} on:click={() => dispatch("discard")}>{t("result.discard")}</button>
+        <button class={button({ variant: "outline", size: "sm" })} on:click={() => dispatch("saveWrong")}>{t("result.saveWrong")}</button>
+        <button class={button({ variant: "default", size: "sm" })} on:click={() => dispatch("save")}>{t("result.save")}</button>
     </div>
 </div>
 

@@ -1,20 +1,14 @@
 import { appendBlock, createDocWithMd, getBlockByID, getHPathByID } from "@/api";
+import { t } from "../i18n";
 import type { GeneralConfig } from "@/types/config";
 import type { Question } from "@/types/quiz";
 
-const TYPE_LABEL: Record<Question["type"], string> = {
-    single_choice: "单选题",
-    multiple_choice: "多选题",
-    fill_blank: "填空题",
-    true_false: "判断题",
-    subjective: "主观题",
-    coding: "编程题",
-};
-const DIFF_LABEL: Record<Question["difficulty"], string> = {
-    easy: "初级",
-    medium: "中级",
-    hard: "高级",
-};
+function typeLabel(type: Question["type"]): string {
+    return t(`type.${type}`);
+}
+function diffLabel(diff: Question["difficulty"]): string {
+    return t(`diff.${diff}`);
+}
 
 function fmtDate(d = new Date()): string {
     const p = (n: number) => String(n).padStart(2, "0");
@@ -23,7 +17,7 @@ function fmtDate(d = new Date()): string {
 
 function titleOf(sourceTitle: string): string {
     const safe = sourceTitle.replace(/[\/\\:*?"<>|]/g, "_").slice(0, 40);
-    return `复习题_${fmtDate()}_${safe}`;
+    return `${t("doc.titlePrefix")}_${fmtDate()}_${safe}`;
 }
 
 /**
@@ -33,7 +27,7 @@ function titleOf(sourceTitle: string): string {
 export function buildQuestionsMarkdown(questions: Question[]): string {
     const lines: string[] = [];
     for (const q of questions) {
-        const head = `### ${TYPE_LABEL[q.type]} · ${DIFF_LABEL[q.difficulty]}`;
+        const head = `### ${typeLabel(q.type)} · ${diffLabel(q.difficulty)}`;
         lines.push(`${head}\n{: custom-recallgen-id="${q.id}"}`);
         lines.push(q.question);
         lines.push("");
@@ -52,9 +46,9 @@ export function buildQuestionsMarkdown(questions: Question[]): string {
         }
         lines.push(`<details><summary>查看答案与解析</summary>`);
         lines.push("");
-        lines.push("**答案：** " + answerText(q));
+        lines.push(t("doc.answerLabel") + answerText(q));
         if (q.explanation) lines.push("");
-        lines.push("**解析：** " + q.explanation);
+        lines.push(t("doc.explanationLabel") + q.explanation);
         lines.push("");
         lines.push(`</details>`);
         lines.push("");
@@ -69,13 +63,13 @@ function answerText(q: Question): string {
         case "multiple_choice":
             return q.answer.map((i) => String.fromCharCode(65 + i)).sort().join("、");
         case "true_false":
-            return q.answer ? "正确" : "错误";
+            return q.answer ? t("common.true") : t("common.false");
         case "fill_blank":
-            return q.answer.map((opts, i) => `第${i + 1}空: ${opts.join(" / ")}`).join("；");
+            return q.answer.map((opts, i) => `${t("doc.blankLabel", String(i + 1))}: ${opts.join(" / ")}`).join("；");
         case "subjective":
             return q.reference_answer;
         case "coding":
-            return "见参考代码\n\n```" + q.language + "\n" + q.answer + "\n```";
+            return t("doc.seeCode") + "\n\n```" + q.language + "\n" + q.answer + "\n```";
     }
 }
 
@@ -119,6 +113,6 @@ export async function appendQuestions(
 
 /** 将薄弱点分析追加到文档末尾 */
 export async function appendAnalysis(docId: string, analysis: string): Promise<void> {
-    const md = `\n---\n\n## 薄弱点分析与复习指导\n\n${analysis}\n`;
+    const md = `\n---\n\n${t("doc.analysisTitle")}\n\n${analysis}\n`;
     await appendBlock("markdown", md, docId);
 }

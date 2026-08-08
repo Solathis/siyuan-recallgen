@@ -1,6 +1,7 @@
 import type { Plugin } from "siyuan";
 import { getAllEditor, confirm, showMessage, Menu } from "siyuan";
 import { getBlockKramdown, exportMdContent, getHPathByID, lsNotebooks, sql, listDocTree } from "@/api";
+import { t } from "../i18n";
 import type { QuizTabData } from "./service";
 
 const MIN_LEN = 50;
@@ -27,12 +28,12 @@ export class QuizSelector {
         this.plugin.eventBus.on("open-menu-doctree", this.boundDocTree);
         this.plugin.addCommand({
             langKey: "generateQuiz",
-            langText: this.plugin.i18n.generateQuiz ?? "💡 生成复习题",
+            langText: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
             callback: () => void this.onCommand(),
         });
         this.plugin.addCommand({
             langKey: "generateNotebookQuiz",
-            langText: this.plugin.i18n.generateNotebookQuiz ?? "📚 从笔记本生成复习题",
+            langText: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
             callback: () => void this.onNotebookCommand(),
         });
     }
@@ -49,7 +50,7 @@ export class QuizSelector {
         if (!detail?.menu) return;
         detail.menu.addItem({
             icon: "iconSparkles",
-            label: this.plugin.i18n.generateQuiz ?? "生成复习题",
+            label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
             click: () => void this.fromBlocks(detail),
         });
     }
@@ -61,23 +62,23 @@ export class QuizSelector {
         const rootId: string = detail?.data?.rootID || detail?.data?.id || detail?.protyle?.block?.rootID;
         detail.menu.addItem({
             icon: "iconSparkles",
-            label: this.plugin.i18n.generateQuiz ?? "生成复习题",
+            label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
             click: () => { if (rootId) void this.fromDoc(rootId); },
         });
         detail.menu.addItem({
             icon: "iconFiles",
-            label: this.plugin.i18n.generateNotebookQuiz ?? "从笔记本生成复习题",
+            label: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
             click: () => void this.onNotebookCommand(),
         });
         detail.menu.addItem({
             icon: "iconCalendar",
-            label: "从今日笔记生成",
-            click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-today", sourceTitle: "今日笔记", dateRange: "today" }),
+            label: t("selector.fromToday"),
+            click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-today", sourceTitle: t("selector.todayNotes"), dateRange: "today" }),
         });
         detail.menu.addItem({
             icon: "iconHistory",
-            label: "从近 N 天笔记生成",
-            click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-before", sourceTitle: "近 N 天笔记", dateRange: "beforeToday" }),
+            label: t("selector.fromRecent"),
+            click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-before", sourceTitle: t("selector.recentNotes"), dateRange: "beforeToday" }),
         });
     }
 
@@ -94,18 +95,18 @@ export class QuizSelector {
             if (!docId) return;
             detail.menu.addItem({
                 icon: "iconSparkles",
-                label: this.plugin.i18n.generateQuiz ?? "生成复习题",
+                label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
                 click: () => void this.fromDoc(docId),
             });
             detail.menu.addItem({
                 icon: "iconCalendar",
-                label: "从今日笔记生成",
-                click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-today", sourceTitle: "今日笔记", dateRange: "today" }),
+                label: t("selector.fromToday"),
+                click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-today", sourceTitle: t("selector.todayNotes"), dateRange: "today" }),
             });
             detail.menu.addItem({
                 icon: "iconHistory",
-                label: "从近 N 天笔记生成",
-                click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-before", sourceTitle: "近 N 天笔记", dateRange: "beforeToday" }),
+                label: t("selector.fromRecent"),
+                click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-before", sourceTitle: t("selector.recentNotes"), dateRange: "beforeToday" }),
             });
         } else if (detail.type === "notebook") {
             const el = elements[0];
@@ -116,21 +117,21 @@ export class QuizSelector {
             if (!nbId) return;
             const nbName = el.querySelector(".b3-list-item__text")?.textContent?.trim()
                 || el.querySelector("[title]")?.getAttribute("title")
-                || "笔记本";
+                || t("selector.notebook");
             detail.menu.addItem({
                 icon: "iconFiles",
-                label: this.plugin.i18n.generateNotebookQuiz ?? "从笔记本生成复习题",
+                label: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
                 click: () => void this.fromNotebook(nbId, nbName),
             });
             detail.menu.addItem({
                 icon: "iconCalendar",
-                label: "从今日笔记生成",
-                click: () => this.open({ mode: "dateGenerate", sourceDocId: `nb-${nbId}-today`, sourceTitle: `${nbName}·今日笔记`, dateRange: "today", notebookId: nbId }),
+                label: t("selector.fromToday"),
+                click: () => this.open({ mode: "dateGenerate", sourceDocId: `nb-${nbId}-today`, sourceTitle: t("selector.todayNotebookPrefix", nbName), dateRange: "today", notebookId: nbId }),
             });
             detail.menu.addItem({
                 icon: "iconHistory",
-                label: "从近 N 天笔记生成",
-                click: () => this.open({ mode: "dateGenerate", sourceDocId: `nb-${nbId}-before`, sourceTitle: `${nbName}·近 N 天笔记`, dateRange: "beforeToday", notebookId: nbId }),
+                label: t("selector.fromRecent"),
+                click: () => this.open({ mode: "dateGenerate", sourceDocId: `nb-${nbId}-before`, sourceTitle: t("selector.recentNotebookPrefix", nbName), dateRange: "beforeToday", notebookId: nbId }),
             });
         }
     }
@@ -139,7 +140,7 @@ export class QuizSelector {
     private async onCommand() {
         const editors = getAllEditor();
         if (!editors || editors.length === 0) {
-            showMessage(this.plugin.i18n.openDocFirst ?? "请先打开文档");
+            showMessage(this.plugin.i18n.openDocFirst ?? t("openDocFirst"));
             return;
         }
         const rootId = editors[0].protyle.block.rootID;
@@ -151,7 +152,7 @@ export class QuizSelector {
         const res = await lsNotebooks().catch(() => null);
         const notebooks = res?.notebooks?.filter((n: Notebook) => !n.closed) ?? [];
         if (notebooks.length === 0) {
-            showMessage("没有打开的笔记本");
+            showMessage(t("selector.noNotebook"));
             return;
         }
         if (notebooks.length === 1) {
@@ -194,18 +195,18 @@ export class QuizSelector {
     }
 
     private async fromNotebook(notebookId: string, notebookName: string) {
-        showMessage(`正在加载笔记本「${notebookName}」的内容…`);
+        showMessage(t("selector.loadingNotebook", notebookName));
         const docIds = await collectDocIds(notebookId);
         if (docIds.length === 0) {
-            showMessage("笔记本中没有文档");
+            showMessage(t("selector.noDocs"));
             return;
         }
         const content = await collectContent(docIds);
         if (!content.trim()) {
-            showMessage("笔记本中的文档内容为空");
+            showMessage(t("selector.emptyContent"));
             return;
         }
-        await this.launch(content, notebookId, `笔记本·${notebookName}`);
+        await this.launch(content, notebookId, t("selector.notebookPrefix", notebookName));
     }
 
     private async launch(content: string, rootId: string, title: string) {
@@ -224,8 +225,8 @@ export class QuizSelector {
     private confirmShort(len: number): Promise<void> {
         return new Promise((resolve) => {
             confirm(
-                "⚠️",
-                `笔记内容过短（${len} 字），可能无法生成有效题目，是否继续？`,
+                t("selector.confirmShortTitle"),
+                t("selector.confirmShortMsg", String(len)),
                 () => resolve(),
                 () => resolve(),
             );
@@ -260,11 +261,11 @@ async function collectContent(docIds: string[]): Promise<string> {
 }
 
 async function safeTitle(rootId?: string): Promise<string> {
-    if (!rootId) return "未命名";
+    if (!rootId) return t("selector.unnamed");
     try {
-        const t = await getHPathByID(rootId);
-        return t || "未命名";
+        const t2 = await getHPathByID(rootId);
+        return t2 || t("selector.unnamed");
     } catch {
-        return "未命名";
+        return t("selector.unnamed");
     }
 }
