@@ -11,7 +11,7 @@ import vitePluginYamlI18n from "./yaml-plugin";
 const env = process.env;
 const isSrcmap = env.VITE_SOURCEMAP === "inline";
 const isDev = env.NODE_ENV === "development";
-const outputDir = isDev ? "dev" : "F:/SiYuanBook/data/plugins/siyuan-recallgen";
+const outputDir = isDev ? "dev" : (env.OUTPUT_DIR || "F:/SiYuanBook/data/plugins/siyuan-recallgen");
 
 console.log("isDev=>", isDev);
 console.log("isSrcmap=>", isSrcmap);

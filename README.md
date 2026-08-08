@@ -1,5 +1,7 @@
 # RecallGen · Cicada
 
+> **Languages**: [简体中文](README.zh-CN.md) | **English**
+
 > An AI-powered quiz generation and spaced review plugin for SiYuan Note — select note content to generate multi-type quizzes, answer in a built-in panel, auto-grade, and track progress with a contribution-graph heatmap.
 
 ## 📖 Overview
