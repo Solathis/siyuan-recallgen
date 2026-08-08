@@ -23,6 +23,7 @@
 
     let _extraScope = config.general.extraScopePct;
     let _panelWidth = config.general.panelWidth;
+    let _beforeDays = config.general.beforeTodayDays;
 
     $: diffOk = config.general.difficulty.easy + config.general.difficulty.medium + config.general.difficulty.hard === config.general.difficulty.total;
     $: totalValid = config.general.difficulty.total >= 1 && config.general.difficulty.total <= 50;
@@ -94,6 +95,11 @@
             <span class={field.label}>答题面板宽度（{_panelWidth}px）</span>
             <span class={field.description}>答题页内容区域的最大宽度，避免过宽或过窄</span>
             <input class={slider} type="range" min="600" max="1600" step="50" bind:value={_panelWidth} on:change={() => patchGeneral({ panelWidth: _panelWidth })} />
+        </div>
+        <div class={field.field}>
+            <span class={field.label}>近 N 天笔记范围（{_beforeDays} 天）</span>
+            <span class={field.description}>「从近 N 天笔记生成」功能查找的天数范围，0 = 今天之前的所有笔记</span>
+            <input class={slider} type="range" min="0" max="90" step="1" bind:value={_beforeDays} on:change={() => patchGeneral({ beforeTodayDays: _beforeDays })} />
         </div>
         <label class="rg-check-item">
             <input class={switchCls} type="checkbox" checked={config.general.countdownEnabled} on:change={(e) => patchGeneral({ countdownEnabled: checked(e) })} />

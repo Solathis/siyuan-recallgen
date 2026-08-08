@@ -6,8 +6,9 @@ import type { QuizTabData } from "./service";
 const MIN_LEN = 50;
 
 export type OpenQuizFn = (tabData: QuizTabData) => void;
+export type GetConfigFn = () => { beforeTodayDays: number };
 
-/** 日期范围："today"=今日 | "beforeToday"=今天之前 */
+/** 日期范围："today"=今日 | "beforeToday"=近 N 天 */
 type DateRange = "today" | "beforeToday";
 
 /** 格式化 Date 为 SiYuan created 字段格式 YYYYMMDDHHmmss */
@@ -17,7 +18,7 @@ function fmtTS(d: Date): string {
 }
 
 /** 构造日期查询 SQL 条件 */
-function dateClause(range: DateRange): string {
+function dateClause(range: DateRange, beforeTodayDays: number): string {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const todayStart = fmtTS(now);
@@ -26,24 +27,25 @@ function dateClause(range: DateRange): string {
         end.setHours(23, 59, 59);
         return `created >= '${todayStart}' AND created <= '${fmtTS(end)}'`;
     }
-    // beforeToday: 今天之前的所有笔记
-    return `created < '${todayStart}'`;
-}
-
-/** 收集指定笔记本内某日期范围的文档 ID */
-async function collectDocIdsByDate(notebookId: string, range: DateRange): Promise<string[]> {
-    const clause = dateClause(range);
+    // beforeToday: 近 N 天的笔记，0 = 今天之前的所有笔记
+    if (beforeTodayDays <= 0) return `created < '${todayStart}'`;
+    const past = new Date(now);
+    past.setDate(past.getDate() - beforeTodayDays);
+    return `created >= '${fmtTS(past)}' AND created < '${todayStart}'`;
+}/** 收集指定笔记本内某日期范围的文档 ID */
+async function collectDocIdsByDate(notebookId: string, range: DateRange, beforeTodayDays: number): Promise<string[]> {
+    const clause = dateClause(range, beforeTodayDays);
     const rows = await sql(`SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' AND ${clause} ORDER BY hpath ASC LIMIT 100`);
     return rows?.map((r: any) => r.id as string) ?? [];
 }
 
 /** 收集所有打开笔记本内某日期范围的文档 ID */
-async function collectAllDocIdsByDate(range: DateRange): Promise<{ id: string; name: string }[]> {
+async function collectAllDocIdsByDate(range: DateRange, beforeTodayDays: number): Promise<{ id: string; name: string }[]> {
     const res = await lsNotebooks().catch(() => null);
     const notebooks = res?.notebooks?.filter((n: Notebook) => !n.closed) ?? [];
     const out: { id: string; name: string }[] = [];
     for (const nb of notebooks) {
-        const ids = await collectDocIdsByDate(nb.id, range);
+        const ids = await collectDocIdsByDate(nb.id, range, beforeTodayDays);
         for (const id of ids) out.push({ id, name: nb.name });
     }
     return out;
@@ -61,6 +63,7 @@ export class QuizSelector {
     constructor(
         private readonly plugin: Plugin,
         private readonly open: OpenQuizFn,
+        private readonly getConfig: GetConfigFn,
     ) {}
 
     register(): void {
@@ -96,7 +99,7 @@ export class QuizSelector {
         });
     }
 
-    /** 文档标题图标菜单：生成复习题 + 从笔记本生成 + 今日/今天之前笔记 */
+    /** 文档标题图标菜单：生成复习题 + 从笔记本生成 + 今日/近 N 天笔记 */
     private onTitleIcon(e: CustomEvent) {
         const detail = (e as any).detail;
         if (!detail?.menu) return;
@@ -118,7 +121,7 @@ export class QuizSelector {
         });
         detail.menu.addItem({
             icon: "iconHistory",
-            label: "从今天之前笔记生成",
+            label: "从近 N 天笔记生成",
             click: () => void this.fromDateRange("beforeToday"),
         });
     }
@@ -161,7 +164,7 @@ export class QuizSelector {
             });
             detail.menu.addItem({
                 icon: "iconHistory",
-                label: "从今天之前笔记生成",
+                label: "从近 N 天笔记生成",
                 click: () => void this.fromNotebookByDate(nbId, nbName, "beforeToday"),
             });
         }
@@ -241,11 +244,12 @@ export class QuizSelector {
         await this.launch(content, notebookId, `笔记本·${notebookName}`);
     }
 
-    /** 从所有笔记本中收集今日/今天之前笔记并生成 */
+    /** 从所有笔记本中收集今日/近 N 天笔记并生成 */
     private async fromDateRange(range: DateRange) {
-        const label = range === "today" ? "今日" : "今天之前";
+        const days = this.getConfig().beforeTodayDays;
+        const label = range === "today" ? "今日" : days <= 0 ? "今天之前" : `近 ${days} 天`;
         showMessage(`正在加载${label}笔记…`);
-        const docs = await collectAllDocIdsByDate(range);
+        const docs = await collectAllDocIdsByDate(range, this.getConfig().beforeTodayDays);
         if (docs.length === 0) {
             showMessage(`${label}没有笔记，已停止生成`);
             return;
@@ -258,11 +262,12 @@ export class QuizSelector {
         await this.launch(content, `date-${range}`, `${label}笔记（${docs.length} 篇）`);
     }
 
-    /** 从指定笔记本中收集今日/今天之前笔记并生成 */
+    /** 从指定笔记本中收集今日/近 N 天笔记并生成 */
     private async fromNotebookByDate(notebookId: string, notebookName: string, range: DateRange) {
-        const label = range === "today" ? "今日" : "今天之前";
+        const days = this.getConfig().beforeTodayDays;
+        const label = range === "today" ? "今日" : days <= 0 ? "今天之前" : `近 ${days} 天`;
         showMessage(`正在加载「${notebookName}」${label}笔记…`);
-        const docIds = await collectDocIdsByDate(notebookId, range);
+        const docIds = await collectDocIdsByDate(notebookId, range, this.getConfig().beforeTodayDays);
         if (docIds.length === 0) {
             showMessage(`「${notebookName}」${label}没有笔记，已停止生成`);
             return;

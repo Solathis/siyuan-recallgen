@@ -79,6 +79,8 @@ export interface GeneralConfig {
     extraScopePct: number;
     /** 答题面板宽度（px） */
     panelWidth: number;
+    /** 「近 N 天笔记」的天数 */
+    beforeTodayDays: number;
 }
 
 /** 完整配置 */
@@ -171,6 +173,7 @@ export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     notebookId: "",
     extraScopePct: 20,
     panelWidth: 1100,
+    beforeTodayDays: 7,
 };
 
 export function getDefaultConfig(): RecallGenConfig {

@@ -68,7 +68,7 @@ export default class RecallGenPlugin extends Plugin {
         this.setting = new Setting({});
         this.openSetting = () => this.openSettingsDialog();
 
-        this.selector = new QuizSelector(this, (tabData) => this.openQuizTab(tabData));
+        this.selector = new QuizSelector(this, (tabData) => this.openQuizTab(tabData), () => this.config.general);
         this.selector.register();
     }
 
