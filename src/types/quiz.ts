@@ -138,6 +138,14 @@ export interface ScoreRecord {
     maxScore: number;
     questionCount: number;
     detail: GradingResult[];
+    /** 保存题目用于历史回看 */
+    questions?: Question[];
+    /** 薄弱点分析文本 */
+    analysis?: string;
+    /** 来源文档/笔记本 ID */
+    sourceDocId?: string;
+    /** 来源标题 */
+    sourceTitle?: string;
 }
 
 /** 热力图分数区间颜色映射 */

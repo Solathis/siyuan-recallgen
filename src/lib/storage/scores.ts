@@ -24,6 +24,15 @@ export class ScoreStore extends AsyncStore {
         await this.write(next);
     }
 
+    /** 更新指定记录的部分字段 */
+    async update(id: string, patch: Partial<ScoreRecord>): Promise<void> {
+        const all = await this.list();
+        const idx = all.findIndex((r) => r.id === id);
+        if (idx < 0) return;
+        all[idx] = { ...all[idx], ...patch };
+        await this.write([...all]);
+    }
+
     async listByDateRange(start: number, end: number): Promise<ScoreRecord[]> {
         const all = await this.list();
         return all.filter((r) => r.timestamp >= start && r.timestamp <= end);

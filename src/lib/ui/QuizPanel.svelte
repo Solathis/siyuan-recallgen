@@ -84,6 +84,16 @@
             } else {
                 panelState = "configuring";
             }
+        } else if (tabData.mode === "review" && tabData.reviewRecord) {
+            const rec = tabData.reviewRecord;
+            session = {
+                id: rec.quizId, sourceDocId: rec.sourceDocId ?? "",
+                sourceTitle: rec.title, questions: rec.questions ?? [],
+                createdAt: rec.timestamp, answers: {},
+            };
+            results = rec.detail;
+            analysis = rec.analysis ?? "";
+            panelState = "result";
         } else {
             error = "无效的 Tab 数据";
             panelState = "answering";
@@ -228,16 +238,23 @@
                 progressValue = total ? (done / total) * 100 : null;
                 progressLabel = `判分中 ${done}/${total}`;
             });
-            // 判分完成后立即保存成绩，不受后续分析影响
+            // 判分完成后立即保存成绩（含题目），不受后续分析影响
             const totalScore = results.reduce((s, r) => s + r.score, 0);
             const maxScore = results.reduce((s, r) => s + r.maxScore, 0);
-            await service.saveScore({ id: genId(), quizId: session.id, title: session.sourceTitle, timestamp: Date.now(), totalScore, maxScore, questionCount: session.questions.length, detail: results });
+            const scoreId = genId();
+            await service.saveScore({
+                id: scoreId, quizId: session.id, title: session.sourceTitle,
+                timestamp: Date.now(), totalScore, maxScore, questionCount: session.questions.length,
+                detail: results, questions: session.questions, analysis: "",
+                sourceDocId: session.sourceDocId, sourceTitle: session.sourceTitle,
+            });
             await service.clearProgress(session.id);
             // 薄弱点分析失败不影响成绩记录
             progressLabel = "正在生成薄弱点分析…";
             progressValue = null;
             try {
                 analysis = await service.analyze(results, session.questions);
+                await service.updateScore(scoreId, { analysis });
             } catch (e) {
                 analysis = `薄弱点分析失败：${(e as Error).message}`;
             }

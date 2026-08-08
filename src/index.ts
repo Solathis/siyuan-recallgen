@@ -3,6 +3,7 @@ import type { Custom } from "siyuan";
 import "./index.scss";
 
 import QuizPanel from "@/lib/ui/QuizPanel.svelte";
+import HistoryPanel from "@/lib/ui/HistoryPanel.svelte";
 import SettingPanel from "@/lib/ui/SettingPanel.svelte";
 import { ConfigStore, ScoreStore, ProgressStore } from "@/lib/storage";
 import { QuizSelector } from "@/lib/quiz/selector";
@@ -20,6 +21,7 @@ import { getDefaultConfig } from "@/types/config";
 const ICON = `<symbol id="iconRecallGen" viewBox="0 0 1024 1024"><path d="M689.810286 290.194286c-7.899429-11.666286-14.994286-21.321143-11.300572-37.266286 13.824-59.099429-2.048-110.921143-43.300571-154.587429a33.974857 33.974857 0 0 1-10.093714-28.269714 31.524571 31.524571 0 1 0-49.078858-27.428571c-10.678857 8.192-24.685714 10.605714-37.522285 6.582857a139.446857 139.446857 0 0 0-52.516572 0.658286c-13.750857 2.596571-27.172571 5.997714-40.301714-6.436572a28.16 28.16 0 0 0-35.730286-0.950857 24.502857 24.502857 0 0 0-8.813714 31.378286c5.741714 13.641143-2.56 19.382857-9.654857 27.318857A165.376 165.376 0 0 0 350.025143 248.685714a35.876571 35.876571 0 0 1-7.899429 31.707429C256.950857 389.595429 224.658286 516.242286 219.428571 652.982857c2.596571 75.885714 10.678857 151.771429 54.747429 218.587429 23.698286 35.84 43.446857 44.617143 81.846857 28.598857 21.028571-8.777143 27.501714-1.170286 38.253714 14.116571 29.696 42.532571 66.742857 73.874286 123.136 73.142857 55.332571-0.731429 90.806857-32.256 119.954286-73.691428 9.691429-13.641143 15.798857-19.419429 34.377143-12.836572 39.497143 14.006857 55.296 6.4 78.994286-29.001142a230.034286 230.034286 0 0 0 32.621714-69.010286c48.091429-185.344 13.348571-355.766857-93.549714-512.731429z m-167.314286-185.782857c59.318857 2.816 104.521143 53.833143 101.046857 116.772571-72.301714-47.177143-144.969143-48.420571-218.770286-2.779429 1.645714-70.436571 51.675429-117.284571 117.723429-114.029714z m76.873143 763.209142c-18.505143 34.304-44.726857 61.074286-84.48 66.304-27.721143 3.730286-74.020571-38.765714-86.272-72.045714a25.234286 25.234286 0 0 1 3.876571-26.989714 656.822857 656.822857 0 0 0 79.250286-144.347429c25.746286 57.344 50.541714 108.251429 86.418286 152.502857 5.924571 6.948571 6.4 17.078857 1.206857 24.576z"/></symbol>`;
 
 const QUIZ_TAB = "quiz";
+const HISTORY_TAB = "history";
 
 export default class RecallGenPlugin extends Plugin {
     isMobile = false;
@@ -30,6 +32,7 @@ export default class RecallGenPlugin extends Plugin {
     private selector: QuizSelector | null = null;
     private quizComp: QuizPanel | null = null;
     private settingComp: SettingPanel | null = null;
+    private historyComp: HistoryPanel | null = null;
 
     async onload() {
         const frontEnd = getFrontend();
@@ -65,18 +68,50 @@ export default class RecallGenPlugin extends Plugin {
                 self.quizComp = null;
             },
         });
+        this.addTab({
+            type: HISTORY_TAB,
+            init: function () {
+                const c = this as unknown as Custom;
+                const div = document.createElement("div");
+                div.style.height = "100%";
+                div.style.overflow = "auto";
+                (c.element as HTMLElement).appendChild(div);
+                self.historyComp = new HistoryPanel({
+                    target: div,
+                    props: {
+                        service: self.buildService(),
+                        onOpenReview: (rec) => self.openQuizTab({
+                            mode: "review", sourceDocId: rec.sourceDocId ?? "",
+                            sourceTitle: rec.title, reviewRecord: rec,
+                        }),
+                    },
+                });
+            },
+            destroy: () => {
+                self.historyComp?.$destroy();
+                self.historyComp = null;
+            },
+        });
         // 仅创建 Setting 实例以在插件列表显示齿轮图标，不使用 addItem 避免被 fn__flex-center/fn__size200 限制宽度
         this.setting = new Setting({});
         this.openSetting = () => this.openSettingsDialog();
 
         this.selector = new QuizSelector(this, (tabData) => this.openQuizTab(tabData));
         this.selector.register();
+
+        this.addTopBar({
+            icon: "iconRecallGen",
+            title: "复习记录",
+            position: "right",
+            callback: () => this.openHistoryTab(),
+        });
     }
 
     async onunload() {
         this.selector?.unregister();
         this.quizComp?.$destroy();
         this.settingComp?.$destroy();
+        this.historyComp?.$destroy();
         showMessage(this.i18n.byePlugin ?? "Bye, RecallGen");
     }
 
@@ -132,6 +167,8 @@ export default class RecallGenPlugin extends Plugin {
             findProgressBySourceDocId: (sourceDocId) => this.progressStore.findBySourceDocId(sourceDocId),
             clearProgress: (id) => this.progressStore.clear(id),
             saveScore: (record) => this.scoreStore.add(record),
+            updateScore: (id, patch) => this.scoreStore.update(id, patch),
+            listScores: () => this.scoreStore.list(),
             testConnection: () => aiTestConnection(this.config.ai),
             clearScores: () => this.scoreStore.clear(),
             clearAllProgress: () => this.progressStore.clearAll(),
@@ -146,6 +183,17 @@ export default class RecallGenPlugin extends Plugin {
                 icon: "iconRecallGen",
                 title: tabData.sourceTitle ? `复习题 · ${tabData.sourceTitle}` : "复习题",
                 data: tabData,
+            },
+        });
+    }
+
+    openHistoryTab() {
+        openTab({
+            app: (this as unknown as { app: import("siyuan").App }).app,
+            custom: {
+                id: this.name + HISTORY_TAB,
+                icon: "iconRecallGen",
+                title: "复习记录",
             },
         });
     }

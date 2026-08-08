@@ -34,6 +34,8 @@ export interface QuizService {
     findProgressBySourceDocId(sourceDocId: string): Promise<QuizSession | null>;
     clearProgress(id: string): Promise<void>;
     saveScore(record: ScoreRecord): Promise<void>;
+    updateScore(id: string, patch: Partial<ScoreRecord>): Promise<void>;
+    listScores(): Promise<ScoreRecord[]>;
     testConnection: () => Promise<string>;
     clearScores(): Promise<void>;
     clearAllProgress(): Promise<void>;
@@ -48,13 +50,15 @@ export interface DateGenConfig {
 
 /** Tab 初始数据 */
 export interface QuizTabData {
-    mode: "generate" | "resume" | "dateGenerate";
+    mode: "generate" | "resume" | "dateGenerate" | "review";
     content?: string;
     quizId?: string;
     sourceDocId: string;
     sourceTitle: string;
     dateRange?: "today" | "beforeToday";
     notebookId?: string;
+    /** review 模式的完整记录 */
+    reviewRecord?: ScoreRecord;
 }
 
 /** 对话轮次 */
