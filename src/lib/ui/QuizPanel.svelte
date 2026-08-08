@@ -5,7 +5,7 @@
     import ResultPanel from "./ResultPanel.svelte";
     import { showMessage, Dialog } from "siyuan";
     import { button, badge, card, alert, alertTitle, alertDescription, cn } from "./components";
-    import type { QuizService, QuizTabData } from "../quiz/service";
+    import type { QuizService, QuizTabData, DateGenConfig } from "../quiz/service";
     import type { GradingResult, PanelState, Question, QuizSession, UserAnswer } from "@/types/quiz";
 
     export let service: QuizService;
@@ -13,6 +13,7 @@
     export let closeTab: () => void = () => {};
 
     let panelState: PanelState = "loading_generating";
+    let dateCfg: DateGenConfig = { days: 7, baseHour: 0, baseMinute: 0 };
     let session: QuizSession | null = null;
     let error: string | null = null;
     let errorPhase: "generate" | "grade" | "other" = "other";
@@ -73,6 +74,16 @@
             } else {
                 await startGenerate();
             }
+        } else if (tabData.mode === "dateGenerate") {
+            // 先检查是否有已保存的进度
+            const existing = await service.findProgressBySourceDocId(tabData.sourceDocId);
+            if (existing && existing.questions.length > 0) {
+                session = existing;
+                panelState = "answering";
+                if (countdownEnabled) { countdownLeft = countdownSec; startCountdown(); }
+            } else {
+                panelState = "configuring";
+            }
         } else {
             error = "无效的 Tab 数据";
             panelState = "answering";
@@ -116,6 +127,36 @@
             return false;
         }
         return true;
+    }
+
+    /** 从日期范围配置加载笔记后生成 */
+    async function startDateGenerate() {
+        error = null;
+        cancelled = false;
+        if (!checkAiConfig()) {
+            panelState = "answering";
+            errorPhase = "generate";
+            return;
+        }
+        panelState = "loading_generating";
+        progressValue = null;
+        progressLabel = "正在加载笔记内容…";
+        try {
+            const { content, title } = await service.loadDateRangeContent(
+                dateCfg,
+                tabData.dateRange ?? "beforeToday",
+                tabData.notebookId,
+            );
+            if (cancelled) return;
+            tabData.content = content;
+            tabData.sourceTitle = title;
+            await startGenerate();
+        } catch (e) {
+            if (cancelled) return;
+            error = (e as Error).message;
+            errorPhase = "generate";
+            panelState = "configuring";
+        }
     }
 
     async function startGenerate() {
@@ -277,11 +318,50 @@
         if (d === "medium") return "warning";
         return "destructive";
     }
+
+    /** dateBaseTime 计算与同步 */
+    $: dateBaseTime = `${String(dateCfg.baseHour).padStart(2, "0")}:${String(dateCfg.baseMinute).padStart(2, "0")}`;
+    function onBaseTimeChange(e: Event) {
+        const v = (e.target as HTMLInputElement).value;
+        const [h, m] = v.split(":").map((x) => parseInt(x, 10));
+        dateCfg = { ...dateCfg, baseHour: h ?? 0, baseMinute: m ?? 0 };
+    }
 </script>
 
 <div class="rg-panel" style="--rg-panel-width: {config.general.panelWidth}px">
     <div class="rg-panel__inner">
-    {#if panelState === "loading_generating" || panelState === "loading_grading"}
+    {#if panelState === "configuring"}
+        <div class="rg-config">
+            <div class={cn(card.root, "rg-config__card")}>
+                <div class={card.content}>
+                    <h3 class="rg-config__title">📅 日期范围配置</h3>
+                    <p class="rg-config__desc">
+                        {tabData.dateRange === "today" ? "今日笔记模式：基点时间定义「今日」的起始。例如设为 04:00，则今日范围为 4:00 至现在。" : "近 N 天模式：基点时间为每日分界点。例如设为 04:00，则从 N 天前 4:00 到今日 4:00 之间的笔记。"}
+                    </p>
+                    {#if tabData.dateRange === "beforeToday"}
+                        <div class="rg-config__row">
+                            <label>天数范围</label>
+                            <span class="rg-config__val">{dateCfg.days === 0 ? "基点之前全部" : `${dateCfg.days} 天`}</span>
+                        </div>
+                        <input class="rg-slider" type="range" min="0" max="90" step="1" bind:value={dateCfg.days} />
+                        <p class="rg-config__hint">0 = 基点时间之前的所有笔记</p>
+                    {/if}
+                    <div class="rg-config__row">
+                        <label>基点时间</label>
+                        <input class="rg-time-input" type="time" bind:value={dateBaseTime} on:change={onBaseTimeChange} />
+                    </div>
+                    <p class="rg-config__hint">过了此时间点算作第二天。适合凌晨写笔记的用户。</p>
+                    <div class="rg-config__actions">
+                        <button class={button({ variant: "default" })} on:click={startDateGenerate}>生成复习题</button>
+                        <button class={button({ variant: "ghost", size: "sm" })} on:click={closeTab}>取消</button>
+                    </div>
+                    {#if error}
+                        <div class="rg-config__error">⚠ {error}</div>
+                    {/if}
+                </div>
+            </div>
+        </div>
+    {:else if panelState === "loading_generating" || panelState === "loading_grading"}
         <div class="rg-panel__loading">
             <ProgressBar value={progressValue} label={progressLabel} />
             {#if panelState === "loading_generating"}
@@ -382,4 +462,16 @@
     .rg-error__detail { font-size: 13px; color: var(--b3-theme-on-surface-light); word-break: break-all; max-height: 120px; overflow-y: auto; font-family: var(--b3-font-family-code, monospace); background: var(--b3-theme-surface); padding: 8px 12px; border-radius: 6px; width: 100%; box-sizing: border-box; }
     .rg-error__hint { font-size: 13px; color: var(--b3-theme-on-surface-light); }
     .rg-error__actions { display: flex; gap: 8px; margin-top: 4px; }
+    .rg-config { display: flex; justify-content: center; padding: 48px 24px; }
+    .rg-config__card { max-width: 520px; width: 100%; }
+    .rg-config__title { font-size: 18px; font-weight: 600; margin: 0 0 8px; }
+    .rg-config__desc { font-size: 13px; color: var(--b3-theme-on-surface-light); line-height: 1.6; margin: 0 0 16px; }
+    .rg-config__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 4px; }
+    .rg-config__row label { font-size: 14px; font-weight: 500; }
+    .rg-config__val { font-size: 14px; color: var(--b3-theme-primary); font-weight: 600; }
+    .rg-config__hint { font-size: 12px; color: var(--b3-theme-on-surface-light); margin: 4px 0 12px; }
+    .rg-slider { width: 100%; }
+    .rg-time-input { font-size: 14px; padding: 4px 8px; border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); background: var(--b3-theme-background); color: var(--b3-theme-on-background); }
+    .rg-config__actions { display: flex; gap: 8px; margin-top: 16px; }
+    .rg-config__error { font-size: 13px; color: var(--b3-card-error, #d23f31); margin-top: 12px; padding: 8px 12px; background: color-mix(in srgb, var(--b3-card-error, #d23f31) 8%, transparent); border-radius: var(--b3-border-radius); }
 </style>

@@ -12,6 +12,8 @@ import type { GenProgressCallback } from "../quiz/generator";
 export interface QuizService {
     getConfig(): RecallGenConfig;
     generate(content: string, onProgress?: GenProgressCallback): Promise<Question[]>;
+    /** 加载日期范围内的笔记内容 */
+    loadDateRangeContent(cfg: DateGenConfig, range: "today" | "beforeToday", notebookId?: string): Promise<{ content: string; title: string }>;
     grade(
         questions: Question[],
         answers: Record<string, UserAnswer>,
@@ -37,13 +39,22 @@ export interface QuizService {
     clearAllProgress(): Promise<void>;
 }
 
+/** 日期生成配置 */
+export interface DateGenConfig {
+    days: number;
+    baseHour: number;
+    baseMinute: number;
+}
+
 /** Tab 初始数据 */
 export interface QuizTabData {
-    mode: "generate" | "resume";
+    mode: "generate" | "resume" | "dateGenerate";
     content?: string;
     quizId?: string;
     sourceDocId: string;
     sourceTitle: string;
+    dateRange?: "today" | "beforeToday";
+    notebookId?: string;
 }
 
 /** 对话轮次 */

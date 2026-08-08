@@ -2,6 +2,7 @@
     import { createEventDispatcher } from "svelte";
     import { card, badge, button, progress as p, alert, alertTitle, alertDescription, separator, cn } from "./components";
     import ChatPanel from "./ChatPanel.svelte";
+    import { renderLatex } from "../ui/latex";
     import type { QuizService } from "../quiz/service";
     import type { GradingResult, Question } from "@/types/quiz";
 
@@ -82,24 +83,24 @@
                     <span class={badge(r.score >= 60 ? "success" : "destructive")}>{TYPE_LABEL[q.type] ?? q.type}</span>
                     <span class={badge("outline")}>{DIFF_LABEL[q.difficulty] ?? q.difficulty}</span>
                     <span class="rg-qcard__score">{r.score.toFixed(0)}/{r.maxScore}</span>
-                    <span class="rg-qcard__q">{q.question}</span>
+                    <span class="rg-qcard__q">{@html renderLatex(q.question)}</span>
                 </summary>
                 <div class="rg-qcard__body">
                     {#if q.type === "single_choice" || q.type === "multiple_choice"}
                         <div class="rg-qcard__options">
                             {#each q.options as opt, j}
                                 <div class="rg-qcard__opt" class:is-correct={isCorrectOption(q, j)}>
-                                    <b>{String.fromCharCode(65 + j)}.</b> {opt}
+                                    <b>{String.fromCharCode(65 + j)}.</b> {@html renderLatex(opt)}
                                 </div>
                             {/each}
                         </div>
                     {/if}
-                    <p><b>你的答案：</b>{userText(r)}</p>
+                    <p><b>你的答案：</b>{@html renderLatex(userText(r))}</p>
                     {#if q.type !== "subjective" && q.type !== "coding"}
-                        <p><b>正确答案：</b>{correctText(q)}</p>
+                        <p><b>正确答案：</b>{@html renderLatex(correctText(q))}</p>
                     {/if}
                     {#if q.explanation}
-                        <p class="rg-explain"><b>解析：</b>{q.explanation}</p>
+                        <p class="rg-explain"><b>解析：</b>{@html renderLatex(q.explanation)}</p>
                     {/if}
                     {#if r.comment}
                         <p class="rg-comment"><b>评语：</b>{r.comment}</p>
@@ -122,7 +123,7 @@
     {#if analysis}
         <div class={alert("default")}>
             <p class={alertTitle}>薄弱点分析与复习指导</p>
-            <p class={alertDescription}>{analysis}</p>
+            <p class={alertDescription}>{@html renderLatex(analysis)}</p>
         </div>
     {/if}
 

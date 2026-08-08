@@ -1,5 +1,5 @@
 import type { AIConfig, GeneralConfig, PromptConfig } from "@/types/config";
-import type { DifficultyDistribution, GradingResult, Question, QuestionType } from "@/types/quiz";
+import type { DifficultyDistribution, GradingResult, Question, QuestionType, UserAnswer } from "@/types/quiz";
 
 // 重新导出 AIConfig 类型供 generator/grader 使用
 export type { AIConfig };
@@ -70,6 +70,32 @@ export function buildGradeSubjectiveMessages(
     ];
 }
 
+/** 格式化学生答案 */
+function formatAnswer(_q: Question, ua: UserAnswer): string {
+    switch (ua.type) {
+        case "single_choice": return String.fromCharCode(65 + ua.value);
+        case "multiple_choice": return ua.value.map((i) => String.fromCharCode(65 + i)).sort().join("、");
+        case "true_false": return ua.value ? "正确" : "错误";
+        case "fill_blank": return ua.value.join("；");
+        case "subjective":
+        case "coding": return ua.value;
+    }
+    return "";
+}
+
+/** 格式化正确答案 */
+function formatCorrect(q: Question): string {
+    switch (q.type) {
+        case "single_choice": return String.fromCharCode(65 + q.answer);
+        case "multiple_choice": return q.answer.map((i) => String.fromCharCode(65 + i)).sort().join("、");
+        case "true_false": return q.answer ? "正确" : "错误";
+        case "fill_blank": return q.answer.map((o) => o.join(" / ")).join("；");
+        case "subjective":
+        case "coding": return q.reference_answer;
+    }
+    return "";
+}
+
 /** 薄弱点分析消息 */
 export function buildAnalysisMessages(
     prompts: PromptConfig,
@@ -85,7 +111,24 @@ export function buildAnalysisMessages(
     }
     const items = wrong.map((r) => {
         const q = questions.find((x) => x.id === r.questionId);
-        return `- 题目：${q?.question ?? ""}\n  得分：${r.score}/100\n  评语：${r.comment ?? ""}`;
+        if (!q) return "";
+        const parts = [
+            `- 题目：${q.question}`,
+            `  题型：${q.type}`,
+            `  得分：${r.score}/${r.maxScore}`,
+            `  评语：${r.comment ?? ""}`,
+        ];
+        // 学生答案
+        const ua = r.userAnswer;
+        if (ua) {
+            parts.push(`  学生答案：${formatAnswer(q, ua)}`);
+        } else {
+            parts.push(`  学生答案：（未作答）`);
+        }
+        // 正确答案（非主观/编程题）
+        parts.push(`  正确答案：${formatCorrect(q)}`);
+        if (q.explanation) parts.push(`  解析：${q.explanation}`);
+        return parts.join("\n");
     });
     return [
         { role: "system", content: prompts.analysis },

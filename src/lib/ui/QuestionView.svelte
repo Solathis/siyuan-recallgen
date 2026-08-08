@@ -2,6 +2,7 @@
     import { onMount, onDestroy, createEventDispatcher } from "svelte";
     import { CodeEditor } from "../editor/codemirror";
     import { card, field, input, textarea, badge, cn } from "./components";
+    import { renderLatex } from "../ui/latex";
     import type { Question, UserAnswer } from "@/types/quiz";
 
     export let question: Question;
@@ -50,14 +51,14 @@
 
 <div class={cn(card.root, "rg-q")}>
     <div class={card.content}>
-        <p class="rg-q__title">{question.question}</p>
+        <p class="rg-q__title">{@html renderLatex(question.question)}</p>
 
         {#if question.type === "single_choice"}
             <div class="rg-q__options">
                 {#each question.options as opt, i}
                     <label class="rg-q__opt" class:checked={answer?.type === "single_choice" && answer.value === i}>
                         <input type="radio" name={question.id} checked={answer?.type === "single_choice" && answer.value === i} on:change={() => setSingle(i)} />
-                        <span>{opt}</span>
+                        <span>{@html renderLatex(opt)}</span>
                     </label>
                 {/each}
             </div>
@@ -66,7 +67,7 @@
                 {#each question.options as opt, i}
                     <label class="rg-q__opt" class:checked={answer?.type === "multiple_choice" && answer.value.includes(i)}>
                         <input type="checkbox" checked={answer?.type === "multiple_choice" && answer.value.includes(i)} on:change={() => toggleMulti(i)} />
-                        <span>{opt}</span>
+                        <span>{@html renderLatex(opt)}</span>
                     </label>
                 {/each}
             </div>

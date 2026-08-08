@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher, onMount, onDestroy } from "svelte";
     import { button, input, textarea, card, cn } from "./components";
+    import { renderLatex } from "../ui/latex";
     import type { QuizService, ChatTurn } from "../quiz/service";
     import type { GradingResult, Question } from "@/types/quiz";
 
@@ -73,7 +74,7 @@
         {#each history as turn, i}
             <div class="rg-chat__msg" class:rg-chat__msg--user={turn.role === "user"} class:rg-chat__msg--ai={turn.role === "assistant"}>
                 <span class="rg-chat__role">{turn.role === "user" ? "我" : "AI"}</span>
-                <span class="rg-chat__text">{turn.content}</span>
+                <span class="rg-chat__text">{@html renderLatex(turn.content)}</span>
             </div>
         {/each}
         {#if loading}
@@ -108,7 +109,7 @@
     .rg-chat__msg--user { background: var(--b3-theme-primary-light); align-self: flex-end; max-width: 85%; }
     .rg-chat__msg--ai { background: var(--b3-theme-background-light); align-self: flex-start; max-width: 90%; }
     .rg-chat__role { font-size: 11px; color: var(--b3-theme-on-surface-light); font-weight: 600; }
-    .rg-chat__text { white-space: pre-wrap; word-break: break-word; }
+    .rg-chat__text { word-break: break-word; }
     .rg-chat__typing { color: var(--b3-theme-on-surface-light); font-style: italic; }
     .rg-chat__input { display: flex; gap: 8px; align-items: flex-end; }
     .rg-chat__input textarea { flex: 1; min-height: 40px; resize: none; }

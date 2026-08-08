@@ -156,6 +156,7 @@ export interface HeatmapConfig {
 
 /** 答题面板状态机 */
 export type PanelState =
+    | "configuring"
     | "loading_generating"
     | "answering"
     | "loading_grading"

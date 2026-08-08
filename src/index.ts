@@ -12,6 +12,7 @@ import { buildAnalysisMessages, buildChatMessages } from "@/lib/ai/prompts";
 import { callLLM, resolveAI, testConnection as aiTestConnection, type ChatMessage } from "@/lib/ai/client";
 import { saveAsNewDoc, appendAnalysis } from "@/lib/quiz/docWriter";
 import type { QuizService, QuizTabData } from "@/lib/quiz/service";
+import { loadDateRangeNotes } from "@/lib/quiz/dateRange";
 import type { RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, QuizSession } from "@/types/quiz";
 import { getDefaultConfig } from "@/types/config";
@@ -68,7 +69,7 @@ export default class RecallGenPlugin extends Plugin {
         this.setting = new Setting({});
         this.openSetting = () => this.openSettingsDialog();
 
-        this.selector = new QuizSelector(this, (tabData) => this.openQuizTab(tabData), () => this.config.general);
+        this.selector = new QuizSelector(this, (tabData) => this.openQuizTab(tabData));
         this.selector.register();
     }
 
@@ -121,6 +122,7 @@ export default class RecallGenPlugin extends Plugin {
         return {
             getConfig: () => this.config,
             generate: (content: string, onProgress?: GenProgressCallback) => generateQuestions(this.config, content, onProgress),
+            loadDateRangeContent: (cfg, range, notebookId) => loadDateRangeNotes(cfg, range, notebookId),
             grade: (qs, ans, onProgress) => gradeAll(this.config, qs, ans, onProgress),
             analyze: (results, questions) => this.analyze(results, questions),
             chat: (question, result, analysis, history, userMessage) => this.chat(question, result, analysis, history, userMessage),
