@@ -7,7 +7,8 @@ import QuizPanel from "@/lib/ui/QuizPanel.svelte";
 import HistoryPanel from "@/lib/ui/HistoryPanel.svelte";
 import SettingPanel from "@/lib/ui/SettingPanel.svelte";
 import { lsNotebooks } from "@/api";
-import { ConfigStore, ScoreStore, ProgressStore } from "@/lib/storage";
+import { BankStore, ConfigStore, ScoreStore, ProgressStore } from "@/lib/storage";
+import { applyResult, createBankItem, pickDueItems, questionFingerprint } from "@/lib/quiz/bank";
 import { QuizSelector } from "@/lib/quiz/selector";
 import { generateQuestions, type GenProgressCallback } from "@/lib/quiz/generator";
 import { gradeAll } from "@/lib/quiz/grader";
@@ -32,6 +33,7 @@ export default class RecallGenPlugin extends Plugin {
     private configStore!: ConfigStore;
     private scoreStore!: ScoreStore;
     private progressStore!: ProgressStore;
+    private bankStore!: BankStore;
     private selector: QuizSelector | null = null;
     /** 配置变化订阅者（答题面板等），保存配置后统一通知 */
     private readonly configListeners = new Set<(config: RecallGenConfig) => void>();
@@ -48,6 +50,7 @@ export default class RecallGenPlugin extends Plugin {
         this.configStore = new ConfigStore(this);
         this.scoreStore = new ScoreStore(this);
         this.progressStore = new ProgressStore(this);
+        this.bankStore = new BankStore(this);
         const loaded = await this.configStore.load();
         this.config = loaded ?? this.config;
 
@@ -58,6 +61,14 @@ export default class RecallGenPlugin extends Plugin {
                 if (migrated > 0) console.info(`[RecallGen] 已迁移 ${migrated} 条成绩记录到新存储结构`);
             })
             .catch((e) => console.warn("[RecallGen] 成绩存储迁移失败", e));
+
+        // 按保留策略裁剪题库：只删除「长期未考且已掌握」的题目
+        void this.bankStore
+            .prune()
+            .then((removed) => {
+                if (removed > 0) console.info(`[RecallGen] 题库已清理 ${removed} 道已掌握且长期未考的题目`);
+            })
+            .catch((e) => console.warn("[RecallGen] 题库清理失败", e));
 
         // 清理长期未交卷的废弃进度，避免进度文件无限增长
         void this.progressStore
@@ -144,6 +155,7 @@ export default class RecallGenPlugin extends Plugin {
         await this.removeData("recallgen-progress.json").catch(() => {});
         // 成绩已拆为索引 + 按月分片，交给 ScoreStore 统一枚举删除
         await this.scoreStore.purgeAll().catch(() => undefined);
+        await this.bankStore.purgeAll().catch(() => undefined);
     }
 
     /** 打开历史成绩回看：按需加载明细后再开 Tab */
@@ -195,6 +207,9 @@ export default class RecallGenPlugin extends Plugin {
                     onClearProgress: async () => {
                         await self.progressStore.clearAll();
                     },
+                    onClearBank: async () => {
+                        await self.bankStore.clear();
+                    },
                     onSave: async (next: RecallGenConfig) => {
                         self.config = next;
                         for (const listener of self.configListeners) listener(next);
@@ -238,6 +253,25 @@ export default class RecallGenPlugin extends Plugin {
             listScores: () => this.scoreStore.listIndex(),
             loadScoreDetail: (id) => this.scoreStore.loadDetail(id),
             removeScore: (id) => this.scoreStore.remove(id),
+            dueBankQuestions: async (limit = 0) => {
+                const items = await this.bankStore.list();
+                return pickDueItems(items, Date.now(), limit).map((item) => item.question);
+            },
+            bankSummary: () => this.bankStore.summary(),
+            recordBankOutcomes: async (questions, source, results) => {
+                const scoreById = new Map(results.map((r) => [r.questionId, r.score]));
+                const existing = await this.bankStore.findMany(questions.map((q) => questionFingerprint(q)));
+                const toWrite = questions.map((question) => {
+                    const fingerprint = questionFingerprint(question);
+                    const percent = scoreById.get(question.id) ?? 0;
+                    const item = existing.get(fingerprint) ?? createBankItem(question, source);
+                    return applyResult(item, percent);
+                });
+                const reused = toWrite.filter((item) => item.timesSeen > 1).length;
+                await this.bankStore.upsertMany(toWrite);
+                return { added: toWrite.length - reused, reused };
+            },
+            clearBank: () => this.bankStore.clear(),
             listNotebooks: async () => {
                 const res = await lsNotebooks().catch(() => null);
                 return (res?.notebooks ?? []).filter((n) => !n.closed).map((n) => ({ id: n.id, name: n.name }));

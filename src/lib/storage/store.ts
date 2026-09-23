@@ -42,7 +42,8 @@ export class AsyncStore {
     private deferredWaiters: Array<{ resolve: () => void; reject: (e: unknown) => void }> = [];
 
     constructor(
-        private readonly plugin: StoragePlugin,
+        /** protected：子类可能需要直接调用 removeData 等未封装进基类的方法 */
+        protected readonly plugin: StoragePlugin,
         private readonly name: string
     ) {}
 

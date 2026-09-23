@@ -121,6 +121,8 @@
             } else {
                 panelState = "configuring";
             }
+        } else if (tabData.mode === "reviewDue") {
+            await startDueReview();
         } else if (tabData.mode === "review" && tabData.review) {
             const { entry, detail } = tabData.review;
             session = {
@@ -137,6 +139,50 @@
             panelState = "result";
         } else {
             error = { title: t("err.generic.title"), hint: t("err.generic.hint"), detail: t("quiz.invalidTab") };
+            panelState = "answering";
+        }
+    }
+
+    /**
+     * 复习到期题目。
+     * 与生成流程不同，这里不调用 AI 出题，直接取题库中按 FSRS 排到期的题目；
+     * 判分仍需 AI（主观题/编程题），因此同样要求 AI 配置完整。
+     */
+    async function startDueReview() {
+        error = null;
+        cancelled = false;
+        if (!checkAiConfig()) {
+            panelState = "answering";
+            return;
+        }
+        panelState = "loading_generating";
+        progressValue = null;
+        progressLabel = t("bank.loadingDue");
+        try {
+            const due = await service.dueBankQuestions();
+            if (cancelled) return;
+            if (due.length === 0) {
+                error = {
+                    title: t("bank.noDueTitle"),
+                    hint: t("bank.noDueHint"),
+                    detail: t("bank.noDueDetail"),
+                };
+                panelState = "answering";
+                return;
+            }
+            session = {
+                id: genId(),
+                sourceDocId: tabData.sourceDocId,
+                sourceTitle: t("bank.sessionTitle", String(due.length)),
+                questions: due,
+                createdAt: Date.now(),
+                answers: {},
+            };
+            panelState = "answering";
+            if (countdownEnabled) startCountdown();
+        } catch (e) {
+            if (cancelled) return;
+            error = describeError(e);
             panelState = "answering";
         }
     }
@@ -312,6 +358,17 @@
                 duration,
             });
             await service.clearProgress(session.id);
+
+            // 把作答结果写回题库以推进 FSRS 排程；失败不影响成绩与结果展示
+            try {
+                await service.recordBankOutcomes(
+                    session.questions,
+                    { sourceDocId: session.sourceDocId, sourceTitle: session.sourceTitle },
+                    results
+                );
+            } catch (e) {
+                console.error("[RecallGen] 题库排程更新失败", e);
+            }
 
             progressLabel = t("quiz.analyzing");
             progressValue = null;

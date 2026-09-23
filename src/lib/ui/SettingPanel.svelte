@@ -17,6 +17,7 @@
         onClearScores = async () => {},
         onClearProgress = async () => {},
         onSave = () => {},
+        onClearBank = async () => {},
         service,
     }: {
         config: RecallGenConfig;
@@ -25,6 +26,7 @@
         onTestConnection?: () => Promise<string>;
         onClearScores?: () => Promise<void>;
         onClearProgress?: () => Promise<void>;
+        onClearBank?: () => Promise<void>;
         /** 配置保存回调。Svelte 5 的 mount() 不再暴露 $on，因此改用回调属性 */
         onSave?: (config: RecallGenConfig) => void;
     } = $props();
@@ -48,6 +50,12 @@
         return config;
     }
     let localConfig = $state(initialConfig());
+
+    /** 题库概览，用于数据管理分区展示与二次确认提示 */
+    let bank = $state<{ total: number; due: number }>({ total: 0, due: 0 });
+    $effect(() => {
+        void service?.bankSummary().then((summary) => (bank = { total: summary.total, due: summary.due }));
+    });
 
     function handleSave(next: RecallGenConfig) {
         localConfig = next;
@@ -92,7 +100,14 @@
             {:else if active === "heatmap"}
                 <SettingsHeatmap config={localConfig} {scores} onsave={handleSave} />
             {:else if active === "data"}
-                <SettingsData {onClearScores} {onClearProgress} scoreCount={scores.length} />
+                <SettingsData
+                    {onClearScores}
+                    {onClearProgress}
+                    {onClearBank}
+                    scoreCount={scores.length}
+                    bankSize={bank.total}
+                    bankDue={bank.due}
+                />
             {/if}
         </div>
     </div>

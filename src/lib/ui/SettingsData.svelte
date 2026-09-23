@@ -8,17 +8,23 @@
     let {
         onClearScores = async () => {},
         onClearProgress = async () => {},
+        onClearBank = async () => {},
         scoreCount = 0,
+        bankSize = 0,
+        bankDue = 0,
     }: {
         onClearScores?: () => Promise<void>;
         onClearProgress?: () => Promise<void>;
+        onClearBank?: () => Promise<void>;
         scoreCount?: number;
+        bankSize?: number;
+        bankDue?: number;
     } = $props();
 
     /** 正在执行的清理动作，用于禁用按钮 */
-    let busy = $state<"scores" | "progress" | null>(null);
+    let busy = $state<"scores" | "progress" | "bank" | null>(null);
 
-    async function run(kind: "scores" | "progress", action: () => Promise<void>) {
+    async function run(kind: "scores" | "progress" | "bank", action: () => Promise<void>) {
         busy = kind;
         try {
             await action();
@@ -95,6 +101,38 @@
                     <AlertDialog.Footer>
                         <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
                         <AlertDialog.Action variant="destructive" onclick={() => void run("progress", onClearProgress)}>
+                            {t("settings.data.confirmClear")}
+                        </AlertDialog.Action>
+                    </AlertDialog.Footer>
+                </AlertDialog.Content>
+            </AlertDialog.Root>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-col">
+                <span class="text-sm font-medium">{t("settings.data.bank")}</span>
+                <span class="text-muted-foreground text-xs">
+                    {t("settings.data.bankDesc", String(bankSize), String(bankDue))}
+                </span>
+            </div>
+            <AlertDialog.Root>
+                <AlertDialog.Trigger>
+                    {#snippet child({ props })}
+                        <Button {...props} variant="outline" disabled={busy !== null || bankSize === 0}>
+                            {t("settings.data.clearBank")}
+                        </Button>
+                    {/snippet}
+                </AlertDialog.Trigger>
+                <AlertDialog.Content>
+                    <AlertDialog.Header>
+                        <AlertDialog.Title>{t("settings.data.clearBankConfirmTitle")}</AlertDialog.Title>
+                        <AlertDialog.Description>
+                            {t("settings.data.clearBankConfirmDesc", String(bankSize))}
+                        </AlertDialog.Description>
+                    </AlertDialog.Header>
+                    <AlertDialog.Footer>
+                        <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                        <AlertDialog.Action variant="destructive" onclick={() => void run("bank", onClearBank)}>
                             {t("settings.data.confirmClear")}
                         </AlertDialog.Action>
                     </AlertDialog.Footer>
