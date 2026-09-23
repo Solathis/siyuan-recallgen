@@ -22,7 +22,9 @@ export async function gradeAll(
     config: RecallGenConfig,
     questions: Question[],
     answers: Record<string, UserAnswer>,
-    onProgress?: (done: number, total: number) => void
+    onProgress?: (done: number, total: number) => void,
+    /** 每题的作答耗时（秒），可选；缺失时该题不填 seconds */
+    secondsByQuestion?: Record<string, number>
 ): Promise<GradingResult[]> {
     const results: GradingResult[] = [];
     const pool = new PromiseLimitPool<GradingResult>(MAX_CONCURRENT);
@@ -32,7 +34,7 @@ export async function gradeAll(
     for (const q of questions) {
         const ua = answers[q.id];
         if (isObjective(q.type)) {
-            results.push(gradeObjective(q, ua));
+            results.push(withSeconds(gradeObjective(q, ua), secondsByQuestion));
             done++;
             onProgress?.(done, total);
         } else {
@@ -47,7 +49,7 @@ export async function gradeAll(
                     comment: t("grade.failed", (e as Error).message),
                     userAnswer: ua,
                 }));
-                results.push(r);
+                results.push(withSeconds(r, secondsByQuestion));
                 done++;
                 onProgress?.(done, total);
                 return r;
@@ -60,11 +62,27 @@ export async function gradeAll(
     return questions.map((q) => byId.get(q.id)).filter((r): r is GradingResult => r !== undefined);
 }
 
+/** 附加单题耗时（仅在测得有效值时写入） */
+function withSeconds(result: GradingResult, seconds?: Record<string, number>): GradingResult {
+    const value = seconds?.[result.questionId];
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return result;
+    return { ...result, seconds: Math.round(value) };
+}
+
 export function isObjective(type: Question["type"]): boolean {
     return type === "single_choice" || type === "multiple_choice" || type === "fill_blank" || type === "true_false";
 }
 
-/** 客观题本地判分 */
+/** 判定「算作通过」的分数线，与界面上的统计口径保持一致 */
+export const PASS_SCORE = 60;
+
+/**
+ * 客观题本地判分。
+ *
+ * 单选与判断题全对才得分；多选与填空题按命中比例给部分分——
+ * 多选题选对 3 个中的 2 个得 0 分对用户是不公平的。
+ * `correct` 表示「完全正确」，部分正确由 score 表达。
+ */
 export function gradeObjective(q: Question, ua: UserAnswer | undefined): GradingResult {
     const base: GradingResult = {
         questionId: q.id,
@@ -78,23 +96,48 @@ export function gradeObjective(q: Question, ua: UserAnswer | undefined): Grading
     if (!ua) {
         return base;
     }
-    const ok = checkObjective(q, ua);
-    return { ...base, correct: ok, score: ok ? 100 : 0 };
+    const score = scoreObjective(q, ua);
+    return { ...base, correct: score === 100, score };
 }
 
-export function checkObjective(q: Question, ua: UserAnswer): boolean {
+/** 客观题得分（0-100），支持部分得分 */
+export function scoreObjective(q: Question, ua: UserAnswer): number {
     switch (q.type) {
         case "single_choice":
-            return ua.type === "single_choice" && ua.value === q.answer;
-        case "multiple_choice":
-            return ua.type === "multiple_choice" && setEqual(ua.value, q.answer);
+            return ua.type === "single_choice" && ua.value === q.answer ? 100 : 0;
         case "true_false":
-            return ua.type === "true_false" && ua.value === q.answer;
+            return ua.type === "true_false" && ua.value === q.answer ? 100 : 0;
+        case "multiple_choice":
+            return ua.type === "multiple_choice" ? scoreMultipleChoice(q.answer, ua.value) : 0;
         case "fill_blank":
-            return ua.type === "fill_blank" && checkFillBlank(q.answer, ua.value);
+            return ua.type === "fill_blank" ? scoreFillBlank(q.answer, ua.value) : 0;
         default:
-            return false;
+            return 0;
     }
+}
+
+/**
+ * 多选题得分：命中数减去错选数，再除以正确项数，下限 0。
+ * 这样「多选/全选」骗不到分，漏选也能拿到与命中比例相符的部分分。
+ */
+export function scoreMultipleChoice(correct: number[], selected: number[]): number {
+    if (correct.length === 0) return 0;
+    const correctSet = new Set(correct);
+    const hits = selected.filter((i) => correctSet.has(i)).length;
+    const wrong = selected.length - hits;
+    const ratio = (hits - wrong) / correct.length;
+    return Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+}
+
+/** 填空题得分：按「答对的空数 / 总空数」给分，空串不算答对 */
+export function scoreFillBlank(accepted: string[][], user: string[]): number {
+    if (accepted.length === 0) return 0;
+    let hits = 0;
+    for (let i = 0; i < accepted.length; i++) {
+        const u = (user[i] ?? "").trim().toLowerCase();
+        if (u && accepted[i].some((o) => o.trim().toLowerCase() === u)) hits++;
+    }
+    return Math.round((hits / accepted.length) * 100);
 }
 
 export function setEqual(a: number[], b: number[]): boolean {
@@ -104,13 +147,10 @@ export function setEqual(a: number[], b: number[]): boolean {
     return sa.every((v, i) => v === sb[i]);
 }
 
-/** 填空题：每空答案 trim 后大小写不敏感匹配任一可接受值 */
-export function checkFillBlank(accepted: string[][], user: string[]): boolean {
-    if (user.length !== accepted.length) return false;
-    return accepted.every((opts, i) => {
-        const u = (user[i] ?? "").trim().toLowerCase();
-        return opts.some((o) => o.trim().toLowerCase() === u);
-    });
+/** 填空题某一空是否答对（大小写与空白不敏感） */
+export function blankMatches(accepted: string[], value: string | undefined): boolean {
+    const u = (value ?? "").trim().toLowerCase();
+    return !!u && accepted.some((o) => o.trim().toLowerCase() === u);
 }
 
 /** 主观/编程题 AI 判分 */

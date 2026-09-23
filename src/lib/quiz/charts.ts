@@ -80,6 +80,10 @@ export function summarize(entries: ScoreIndexEntry[], now = Date.now()): StatsSu
     const totalQuestionsWithDuration = entries
         .filter((e) => (e.duration ?? 0) > 0)
         .reduce((s, e) => s + e.questionCount, 0);
+    // 优先用实测的单题耗时：它不含中途离开、思考停顿等空白时间
+    const measured = entries
+        .map((e) => e.avgQuestionSeconds)
+        .filter((value): value is number => typeof value === "number" && value > 0);
 
     const days = [...new Set(entries.map((e) => dayKey(e.timestamp)))].sort();
     const { current, longest } = streaks(days, now);
@@ -92,7 +96,12 @@ export function summarize(entries: ScoreIndexEntry[], now = Date.now()): StatsSu
         activeDays: days.length,
         currentStreak: current,
         longestStreak: longest,
-        secondsPerQuestion: totalQuestionsWithDuration > 0 ? totalDuration / totalQuestionsWithDuration : null,
+        secondsPerQuestion:
+            measured.length > 0
+                ? measured.reduce((a, b) => a + b, 0) / measured.length
+                : totalQuestionsWithDuration > 0
+                  ? totalDuration / totalQuestionsWithDuration
+                  : null,
     };
 }
 

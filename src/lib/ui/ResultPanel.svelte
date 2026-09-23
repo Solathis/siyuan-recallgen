@@ -19,6 +19,7 @@
         duration = 0,
         onsave = () => {},
         onsavewrong = () => {},
+        onretrywrong = () => {},
         ondiscard = () => {},
     }: {
         service: QuizService;
@@ -28,6 +29,8 @@
         duration?: number;
         onsave?: () => void;
         onsavewrong?: () => void;
+        /** 只重做未达标的题目 */
+        onretrywrong?: () => void;
         ondiscard?: () => void;
     } = $props();
 
@@ -310,6 +313,11 @@
             {/if}
 
             <div class="flex flex-wrap justify-end gap-2">
+                {#if wrongCount > 0}
+                    <Button variant="secondary" size="sm" onclick={() => onretrywrong()}
+                        >{t("result.retryWrong")}</Button
+                    >
+                {/if}
                 <Button variant="ghost" size="sm" onclick={() => ondiscard()}>{t("result.discard")}</Button>
                 <Button variant="outline" size="sm" onclick={() => onsavewrong()}>{t("result.saveWrong")}</Button>
                 <Button size="sm" onclick={() => onsave()}>{t("result.save")}</Button>

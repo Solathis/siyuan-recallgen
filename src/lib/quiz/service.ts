@@ -29,7 +29,9 @@ export interface QuizService {
     grade(
         questions: Question[],
         answers: Record<string, UserAnswer>,
-        onProgress: (done: number, total: number) => void
+        onProgress: (done: number, total: number) => void,
+        /** 每题的作答耗时（秒），会写入对应的判分结果 */
+        secondsByQuestion?: Record<string, number>
     ): Promise<GradingResult[]>;
     analyze(results: GradingResult[], questions: Question[]): Promise<string>;
     /** AI 对话：针对单道题目回答用户追问 */
