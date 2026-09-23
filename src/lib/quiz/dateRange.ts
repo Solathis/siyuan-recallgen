@@ -5,14 +5,13 @@ import type { DateGenConfig } from "@/lib/quiz/service";
 export type DateRange = "today" | "beforeToday";
 
 /** 格式化 Date 为 SiYuan created 字段格式 YYYYMMDDHHmmss */
-function fmtTS(d: Date): string {
+export function fmtTS(d: Date): string {
     const p = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-/** 根据基点时间获取"今日"的起止时间戳 */
-function dayBoundary(cfg: DateGenConfig): { start: Date; end: Date } {
-    const now = new Date();
+/** 根据基点时间获取"今日"的起止时间戳。now 可注入以便测试。 */
+export function dayBoundary(cfg: DateGenConfig, now: Date = new Date()): { start: Date; end: Date } {
     const start = new Date(now);
     start.setHours(cfg.baseHour, cfg.baseMinute, 0, 0);
     // 如果基点时间尚未到（现在是凌晨2点，基点是4点），"今日"从昨天4点开始
@@ -22,11 +21,11 @@ function dayBoundary(cfg: DateGenConfig): { start: Date; end: Date } {
     return { start, end };
 }
 
-/** 构造日期查询 SQL 条件 */
-function dateClause(cfg: DateGenConfig, range: DateRange): string {
-    const { start } = dayBoundary(cfg);
+/** 构造日期查询 SQL 条件。now 可注入以便测试。 */
+export function dateClause(cfg: DateGenConfig, range: DateRange, now: Date = new Date()): string {
+    const { start } = dayBoundary(cfg, now);
     if (range === "today") {
-        return `created >= '${fmtTS(start)}' AND created <= '${fmtTS(now())}'`;
+        return `created >= '${fmtTS(start)}' AND created <= '${fmtTS(now)}'`;
     }
     // beforeToday: 近 N 天，基点之前
     if (cfg.days <= 0) {
@@ -36,11 +35,6 @@ function dateClause(cfg: DateGenConfig, range: DateRange): string {
     const past = new Date(start);
     past.setDate(past.getDate() - cfg.days);
     return `created >= '${fmtTS(past)}' AND created < '${fmtTS(start)}'`;
-}
-
-/** 当前时间 */
-function now(): Date {
-    return new Date();
 }
 
 /** 收集指定笔记本内某日期范围的文档 ID */

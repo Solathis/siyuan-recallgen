@@ -58,7 +58,7 @@ export async function gradeAll(
     return results.sort((a, b) => a.questionId.localeCompare(b.questionId, undefined, { numeric: true }));
 }
 
-function isObjective(type: Question["type"]): boolean {
+export function isObjective(type: Question["type"]): boolean {
     return type === "single_choice" || type === "multiple_choice" || type === "fill_blank" || type === "true_false";
 }
 
@@ -80,7 +80,7 @@ export function gradeObjective(q: Question, ua: UserAnswer | undefined): Grading
     return { ...base, correct: ok, score: ok ? 100 : 0 };
 }
 
-function checkObjective(q: Question, ua: UserAnswer): boolean {
+export function checkObjective(q: Question, ua: UserAnswer): boolean {
     switch (q.type) {
         case "single_choice":
             return ua.type === "single_choice" && ua.value === q.answer;
@@ -95,7 +95,7 @@ function checkObjective(q: Question, ua: UserAnswer): boolean {
     }
 }
 
-function setEqual(a: number[], b: number[]): boolean {
+export function setEqual(a: number[], b: number[]): boolean {
     if (a.length !== b.length) return false;
     const sa = [...a].sort((x, y) => x - y);
     const sb = [...b].sort((x, y) => x - y);
@@ -103,7 +103,7 @@ function setEqual(a: number[], b: number[]): boolean {
 }
 
 /** 填空题：每空答案 trim 后大小写不敏感匹配任一可接受值 */
-function checkFillBlank(accepted: string[][], user: string[]): boolean {
+export function checkFillBlank(accepted: string[][], user: string[]): boolean {
     if (user.length !== accepted.length) return false;
     return accepted.every((opts, i) => {
         const u = (user[i] ?? "").trim().toLowerCase();
@@ -155,7 +155,7 @@ function pickGradingOpts(jsonSchemaEnabled: boolean): {
     return { responseFormat: buildJsonObjectResponseFormat() };
 }
 
-function clampScore(v: unknown): number {
+export function clampScore(v: unknown): number {
     const n = typeof v === "number" ? v : Number(v);
     if (Number.isNaN(n)) {
         throw new AIError("AI 判分缺少 score");

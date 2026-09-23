@@ -69,6 +69,6 @@
     "vite": "^5.2.9",
     "vite-plugin-static-copy": "^1.0.2",
     "vite-plugin-zip-pack": "^1.0.5",
-    "vitest": "^5.0.1"
+    "vitest": "^3.2.7"
   }
 }
