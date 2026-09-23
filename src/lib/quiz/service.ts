@@ -1,5 +1,5 @@
 import type { RecallGenConfig } from "@/types/config";
-import type { BankSummary } from "./bank";
+import type { BankItem, BankSummary } from "./bank";
 import type {
     GradingResult,
     Question,
@@ -68,6 +68,12 @@ export interface QuizService {
     /** 按需加载单次成绩的明细（题目、判分明细、分析） */
     loadScoreDetail(id: string): Promise<ScoreDetail | null>;
     removeScore(id: string): Promise<void>;
+    /** 导出全部成绩（索引 + 明细）用于完整备份 */
+    exportAllScores(): Promise<{ entries: ScoreIndexEntry[]; details: Record<string, ScoreDetail> }>;
+    /** 导入成绩备份；返回新增与跳过的条数 */
+    importScores(
+        items: { entry: ScoreIndexEntry; detail: ScoreDetail | null }[]
+    ): Promise<{ added: number; skipped: number }>;
     /** 已打开的笔记本列表，用于设置面板选择存储位置 */
     listNotebooks(): Promise<{ id: string; name: string }[]>;
 
@@ -79,6 +85,10 @@ export interface QuizService {
     dueBankQuestions(limit?: number, sourceDocId?: string): Promise<Question[]>;
     /** 题库规模概览 */
     bankSummary(): Promise<BankSummary>;
+    /** 题库全部条目，用于题库浏览界面 */
+    listBank(): Promise<BankItem[]>;
+    /** 从题库中删除单条题目 */
+    removeBankItem(id: string): Promise<void>;
     /**
      * 交卷后把作答结果写回题库：新题目入库，已有题目推进排程并累计统计。
      * 返回新增与复用（已存在）的题数。

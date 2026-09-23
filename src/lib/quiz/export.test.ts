@@ -1,14 +1,24 @@
 import { describe, expect, it } from "vitest";
-import type { ScoreIndexEntry } from "@/types/quiz";
+import type { GradingResult, Question, ScoreIndexEntry } from "@/types/quiz";
 import {
+    BACKUP_VERSION,
     buildCsvExport,
     buildExport,
     buildJsonExport,
     buildMarkdownExport,
+    buildScoreBackup,
+    parseScoreBackup,
+    planBackupImport,
     csvCell,
     markdownCell,
     summarizeByType,
 } from "./export";
+
+const question = (id: string): Question =>
+    ({ id, type: "true_false", difficulty: "easy", question: "题干", answer: true }) as Question;
+
+const result = (questionId: string, type: Question["type"], score: number): GradingResult =>
+    ({ questionId, type, method: "local", correct: score >= 60, score, maxScore: 100 }) as GradingResult;
 
 const entry = (over: Partial<ScoreIndexEntry> = {}): ScoreIndexEntry => ({
     id: "s-1",
@@ -148,5 +158,111 @@ describe("buildExport", () => {
 
     it("markdown 格式可使用自定义标题", () => {
         expect(buildExport([entry()], "markdown", "标题")).toContain("# 标题");
+    });
+});
+
+describe("buildScoreBackup / parseScoreBackup", () => {
+    it("备份带格式标识与版本号", () => {
+        const file = parseScoreBackup(buildScoreBackup([entry()], {}));
+        expect(file.app).toBe("recallgen");
+        expect(file.kind).toBe("scores");
+        expect(file.version).toBe(BACKUP_VERSION);
+    });
+
+    it("备份保留明细，因此可再次导入", () => {
+        const detail = {
+            id: "s-1",
+            detail: [result("q-1", "true_false", 100)],
+            analysis: "分析",
+            questions: [question("q-1")],
+        };
+        const file = parseScoreBackup(buildScoreBackup([entry()], { "s-1": detail }));
+        expect(file.details["s-1"].analysis).toBe("分析");
+        expect(file.details["s-1"].questions).toHaveLength(1);
+    });
+
+    it("拒绝非 JSON、非本插件文件与过高版本", () => {
+        expect(() => parseScoreBackup("{不是 json")).toThrow(/合法 JSON/);
+        expect(() => parseScoreBackup('{"app":"other"}')).toThrow(/不是 RecallGen/);
+        expect(() => parseScoreBackup(`{"app":"recallgen","kind":"scores","version":${BACKUP_VERSION + 1}}`)).toThrow(
+            /高于当前支持/
+        );
+    });
+
+    it("缺少 entries 时拒绝", () => {
+        expect(() => parseScoreBackup('{"app":"recallgen","kind":"scores"}')).toThrow(/缺少 entries/);
+    });
+
+    it("缺少必要字段的条目被丢弃", () => {
+        const text = JSON.stringify({
+            app: "recallgen",
+            kind: "scores",
+            version: 1,
+            entries: [{ id: "ok", timestamp: 123 }, { id: "" }, { timestamp: 1 }, { id: "no-ts" }],
+        });
+        expect(parseScoreBackup(text).entries.map((e) => e.id)).toEqual(["ok"]);
+    });
+});
+
+describe("planBackupImport", () => {
+    it("全部为新记录时都进入导入计划", () => {
+        const backup = parseScoreBackup(buildScoreBackup([entry({ id: "s-1" }), entry({ id: "s-2" })], {}));
+        const plan = planBackupImport(backup, []);
+        expect(plan.items).toHaveLength(2);
+        expect(plan.skipped).toBe(0);
+    });
+
+    it("已存在的记录被跳过且不覆盖本机数据", () => {
+        const backup = parseScoreBackup(buildScoreBackup([entry({ id: "s-1" }), entry({ id: "s-2" })], {}));
+        const plan = planBackupImport(backup, ["s-1"]);
+        expect(plan.items.map((i) => i.entry.id)).toEqual(["s-2"]);
+        expect(plan.skipped).toBe(1);
+        expect(plan.warnings.some((w) => w.includes("已存在"))).toBe(true);
+    });
+
+    it("备份内部重复的 id 只取首次", () => {
+        const backup = parseScoreBackup(buildScoreBackup([entry({ id: "s-1" }), entry({ id: "s-1" })], {}));
+        const plan = planBackupImport(backup, []);
+        expect(plan.items).toHaveLength(1);
+        expect(plan.skipped).toBe(1);
+    });
+
+    it("有明细时以明细重新派生索引，保证聚合一致", () => {
+        const stale = entry({ id: "s-1", byType: {}, passedCount: 0, unanswered: 99 });
+        const backup = parseScoreBackup(
+            buildScoreBackup([stale], {
+                // 明细里带作答，重建后的「未作答」应为 0，而不是备份里那个错误的 99
+                "s-1": {
+                    id: "s-1",
+                    detail: [{ ...result("q-1", "true_false", 100), userAnswer: { type: "true_false", value: true } }],
+                    questions: [question("q-1")],
+                },
+            })
+        );
+        const plan = planBackupImport(backup, []);
+        const rebuilt = plan.items[0].entry;
+        expect(rebuilt.byType.true_false?.count).toBe(1);
+        expect(rebuilt.passedCount).toBe(1);
+        expect(rebuilt.unanswered).toBe(0);
+    });
+
+    it("没有明细的记录也会导入，但提示无法回看", () => {
+        const backup = parseScoreBackup(buildScoreBackup([entry({ id: "s-1" })], {}));
+        const plan = planBackupImport(backup, []);
+        expect(plan.items).toHaveLength(1);
+        expect(plan.items[0].detail).toBeNull();
+        expect(plan.warnings.some((w) => w.includes("没有明细"))).toBe(true);
+    });
+
+    it("明细结构不合法时按「无明细」处理", () => {
+        const text = JSON.stringify({
+            app: "recallgen",
+            kind: "scores",
+            version: 1,
+            entries: [entry({ id: "s-1" })],
+            details: { "s-1": { id: "s-1", detail: "不是数组" } },
+        });
+        const plan = planBackupImport(parseScoreBackup(text), []);
+        expect(plan.items[0].detail).toBeNull();
     });
 });

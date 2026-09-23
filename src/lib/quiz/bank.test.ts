@@ -3,6 +3,7 @@ import { Rating, State } from "ts-fsrs";
 import type { Question } from "@/types/quiz";
 import {
     applyResult,
+    dueState,
     createBankItem,
     fromCardState,
     gradeToRating,
@@ -296,5 +297,33 @@ describe("summarizeBank", () => {
 describe("FSRS 状态常量可用性", () => {
     it("新卡片处于 New 状态", () => {
         expect(newCardState(NOW).state).toBe(State.New);
+    });
+});
+
+describe("dueState", () => {
+    const card = (due: number) => ({ ...newCardState(NOW), due });
+
+    it("到期时间已过为 overdue", () => {
+        expect(dueState(card(NOW - 1), NOW)).toBe("overdue");
+        expect(dueState(card(NOW), NOW)).toBe("overdue");
+    });
+
+    it("今天稍后到期为 today", () => {
+        const later = new Date(NOW);
+        later.setHours(23, 0, 0, 0);
+        expect(dueState(card(later.getTime()), NOW)).toBe("today");
+    });
+
+    it("明天到期在 7 天内为 soon", () => {
+        expect(dueState(card(NOW + DAY), NOW)).toBe("soon");
+    });
+
+    it("边界以「当前时刻起 7 天」为准", () => {
+        expect(dueState(card(NOW + 7 * DAY), NOW)).toBe("soon");
+        expect(dueState(card(NOW + 7 * DAY + 1), NOW)).toBe("later");
+    });
+
+    it("超过 7 天为 later", () => {
+        expect(dueState(card(NOW + 30 * DAY), NOW)).toBe("later");
     });
 });

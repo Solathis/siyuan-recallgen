@@ -2,7 +2,7 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
-    import type { ScoreIndexEntry } from "@/types/quiz";
+    import type { ScoreDetail, ScoreIndexEntry } from "@/types/quiz";
     import SettingsAI from "./SettingsAI.svelte";
     import SettingsAIRoles from "./SettingsAIRoles.svelte";
     import SettingsData from "./SettingsData.svelte";
@@ -19,6 +19,8 @@
         onSave = () => {},
         onClearBank = async () => {},
         onImportConfig = () => {},
+        onExportScores = async () => ({ entries: [], details: {} }),
+        onImportScores = async () => ({ added: 0, skipped: 0 }),
         service,
     }: {
         config: RecallGenConfig;
@@ -29,6 +31,10 @@
         onClearProgress?: () => Promise<void>;
         onClearBank?: () => Promise<void>;
         onImportConfig?: (next: RecallGenConfig, result: import("../quiz/config-io").ImportResult) => void;
+        onExportScores?: () => Promise<{ entries: ScoreIndexEntry[]; details: Record<string, ScoreDetail> }>;
+        onImportScores?: (
+            items: { entry: ScoreIndexEntry; detail: ScoreDetail | null }[]
+        ) => Promise<{ added: number; skipped: number }>;
         /** 配置保存回调。Svelte 5 的 mount() 不再暴露 $on，因此改用回调属性 */
         onSave?: (config: RecallGenConfig) => void;
     } = $props();
@@ -108,6 +114,9 @@
                     {onClearBank}
                     config={localConfig}
                     {onImportConfig}
+                    {onExportScores}
+                    {onImportScores}
+                    existingScoreIds={scores.map((score) => score.id)}
                     scoreCount={scores.length}
                     bankSize={bank.total}
                     bankDue={bank.due}
