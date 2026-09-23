@@ -52,7 +52,8 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 ### Answer Panel
 
 - **Dedicated Tab**: Custom `addTab` with responsive layout for desktop and mobile; configurable panel width (600–1600px)
-- **Single-Page All-Questions View**: All questions scroll in one page with a progress bar marking answered/unanswered status
+- **Single-Page All-Questions View**: All questions scroll in one page; a numbered nav bar marks answered/unanswered and jumps to a question, with previous/next buttons and a position indicator
+- **Keyboard Shortcuts**: ← / → (or PageUp / PageDown) change question, Ctrl/Cmd + Enter submits; they do not fire inside inputs or the code editor
 - **Coding Editor**: CodeMirror 6 with syntax highlighting, line numbers, auto-completion, and light/dark theme following SiYuan
 - **Subjective Markdown Editor**: Edit/preview toggle with real-time Markdown + LaTeX rendering
 - **Countdown**: Optional answer countdown timer; auto-submits when time expires
