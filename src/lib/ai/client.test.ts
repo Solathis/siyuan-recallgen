@@ -246,7 +246,7 @@ describe("callLLM - 重试策略", () => {
         const promise = callLLM(rc(), [{ role: "user", content: "hi" }]);
         promise.catch(() => undefined);
         await vi.advanceTimersByTimeAsync(3000 + 6000);
-        await expect(promise).rejects.toThrow(/forwardProxy 失败/);
+        await expect(promise).rejects.toThrow(/内核网络代理失败/);
         expect(calls).toHaveLength(3);
     });
 });

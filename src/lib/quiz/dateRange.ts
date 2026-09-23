@@ -1,4 +1,5 @@
 import { sql, lsNotebooks, quoteSqlLiteral } from "@/api";
+import { t } from "@/lib/i18n";
 import type { DateGenConfig } from "@/lib/quiz/service";
 import { exportDocsMarkdown } from "./content";
 
@@ -65,7 +66,12 @@ export async function loadDateRangeNotes(
     range: DateRange,
     notebookId?: string
 ): Promise<{ content: string; title: string }> {
-    const label = range === "today" ? "今日" : cfg.days <= 0 ? "基点之前" : `近 ${cfg.days} 天`;
+    const label =
+        range === "today"
+            ? t("date.today")
+            : cfg.days <= 0
+              ? t("date.beforeBase")
+              : t("date.recentDays", String(cfg.days));
 
     let docIds: string[];
     if (notebookId) {
@@ -75,15 +81,17 @@ export async function loadDateRangeNotes(
     }
 
     if (docIds.length === 0) {
-        throw new Error(`${label}没有笔记，请调整日期范围或基点时间后重试`);
+        throw new Error(t("date.noNotes", label));
     }
 
     const result = await exportDocsMarkdown(docIds);
     if (!result.content.trim()) {
-        throw new Error(`${label}笔记内容为空，请检查文档是否有实际内容`);
+        throw new Error(t("date.emptyNotes", label));
     }
 
-    const title = notebookId ? `笔记本·${label}笔记（${docIds.length} 篇）` : `${label}笔记（${docIds.length} 篇）`;
+    const title = notebookId
+        ? t("date.notebookTitle", label, String(docIds.length))
+        : t("date.title", label, String(docIds.length));
 
     return { content: result.content, title };
 }

@@ -1,4 +1,5 @@
 import { fetchSyncPost } from "siyuan";
+import { t } from "@/lib/i18n";
 import type { AIConfig, AIProvider, AIProtocol } from "@/types/config";
 
 /**
@@ -62,9 +63,11 @@ export interface ResolvedAIConfig {
  */
 export function resolveAI(config: AIConfig, modelId: string): ResolvedAIConfig {
     const model = config.models.find((m) => m.id === modelId);
-    if (!model) throw new AIError(`未找到模型: ${modelId}`, undefined, "config");
+    if (!model) throw new AIError(t("ai.modelNotFound", modelId), undefined, "config");
     const endpoint = config.endpoints.find((e) => e.id === model.endpointId);
-    if (!endpoint) throw new AIError(`模型 ${model.name} 引用的端点不存在: ${model.endpointId}`, undefined, "config");
+    if (!endpoint) {
+        throw new AIError(t("ai.endpointNotFound", model.name, model.endpointId), undefined, "config");
+    }
     return {
         provider: endpoint.provider,
         protocol: endpoint.protocol,
@@ -154,7 +157,7 @@ async function forward(
     let timer: ReturnType<typeof setTimeout> | undefined;
     const watchdog = new Promise<never>((_, reject) => {
         timer = setTimeout(
-            () => reject(new AIError(`请求超时（${timeout / 1000}秒）`, undefined, "timeout")),
+            () => reject(new AIError(t("ai.timeout", String(timeout / 1000)), undefined, "timeout")),
             timeout + 5000
         );
     });
@@ -168,7 +171,7 @@ async function forward(
     }
 
     if (resp.code !== 0) {
-        throw new AIError(`forwardProxy 失败: ${resp.msg}`, undefined, "network");
+        throw new AIError(t("ai.proxyFailed", resp.msg), undefined, "network");
     }
     return resp.data as ForwardResponse;
 }
@@ -234,9 +237,9 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
-    if (parsed === null) throw new AIError("AI 响应非 JSON", undefined, "parse");
+    if (parsed === null) throw new AIError(t("ai.responseNotJson"), undefined, "parse");
     const content = extractChatContent(parsed);
-    if (!content) throw new AIError("AI 响应缺少 content", undefined, "parse");
+    if (!content) throw new AIError(t("ai.responseNoContent"), undefined, "parse");
     return { content, raw: parsed };
 }
 
@@ -272,9 +275,9 @@ async function callResponses(rc: ResolvedAIConfig, messages: ChatMessage[], opts
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
-    if (parsed === null) throw new AIError("AI 响应非 JSON", undefined, "parse");
+    if (parsed === null) throw new AIError(t("ai.responseNotJson"), undefined, "parse");
     const content = extractResponsesContent(parsed);
-    if (!content) throw new AIError("AI 响应缺少 content", undefined, "parse");
+    if (!content) throw new AIError(t("ai.responseNoContent"), undefined, "parse");
     return { content, raw: parsed };
 }
 
@@ -311,9 +314,9 @@ async function callMessages(rc: ResolvedAIConfig, messages: ChatMessage[], opts:
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
-    if (parsed === null) throw new AIError("AI 响应非 JSON", undefined, "parse");
+    if (parsed === null) throw new AIError(t("ai.responseNotJson"), undefined, "parse");
     const content = extractMessagesContent(parsed);
-    if (!content) throw new AIError("AI 响应缺少 content", undefined, "parse");
+    if (!content) throw new AIError(t("ai.responseNoContent"), undefined, "parse");
     return { content, raw: parsed };
 }
 
@@ -365,7 +368,7 @@ export async function callLLM(
 /** 测试连接：用指定模型发一条消息验证配置可用。返回 AI 回复内容。失败时抛出错误。 */
 export async function testConnection(config: AIConfig, modelId?: string): Promise<string> {
     const rc = resolveAI(config, modelId ?? config.testModelId);
-    const prompt = config.testPrompt?.trim() || "请用一句话简要介绍你自己";
+    const prompt = config.testPrompt?.trim() || t("ai.testPromptDefault");
     const result = await callLLM(rc, [{ role: "user", content: prompt }], {
         maxTokens: 128,
         temperature: 0,

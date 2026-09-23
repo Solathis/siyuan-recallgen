@@ -21,12 +21,13 @@ export function setFallback(dict: Dict): void {
 
 /**
  * 翻译键值。优先 current，其次 fallback，最后返回 key 本身。
- * 支持 {0} {1} 占位符替换。
+ * 支持 {0} {1} 占位符替换；同一占位符出现多次时全部替换。
  */
 export function t(key: string, ...args: (string | number)[]): string {
-    let s = current[key] ?? fallback[key] ?? key;
-    for (let i = 0; i < args.length; i++) {
-        s = s.replace(`{${i}}`, String(args[i]));
-    }
-    return s;
+    const template = current[key] ?? fallback[key] ?? key;
+    if (args.length === 0) return template;
+    return template.replace(/\{(\d+)\}/g, (placeholder, index) => {
+        const i = Number(index);
+        return i < args.length ? String(args[i]) : placeholder;
+    });
 }

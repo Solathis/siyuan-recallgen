@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import PromiseLimitPool from "@/libs/promise-pool";
 import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
 import { buildGradeSubjectiveMessages } from "../ai/prompts";
@@ -43,7 +44,7 @@ export async function gradeAll(
                     correct: null,
                     score: 0,
                     maxScore: 100,
-                    comment: `判分失败: ${(e as Error).message}`,
+                    comment: t("grade.failed", (e as Error).message),
                     userAnswer: ua,
                 }));
                 results.push(r);
@@ -125,7 +126,7 @@ async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | un
     });
     const parsed = parseJsonLoose(result.content) as { score?: unknown; comment?: unknown } | null;
     if (!parsed || typeof parsed !== "object") {
-        throw new AIError("AI 判分返回的不是 JSON 对象", undefined, "parse");
+        throw new AIError(t("grade.notObject"), undefined, "parse");
     }
     const score = clampScore(parsed.score);
     return {
@@ -152,7 +153,7 @@ function pickGradingOpts(jsonSchemaEnabled: boolean): {
 } {
     if (jsonSchemaEnabled) {
         return {
-            tools: buildTools("recallgen_grading", "判分", GRADING_SCHEMA as object),
+            tools: buildTools("recallgen_grading", t("grade.toolDescription"), GRADING_SCHEMA as object),
             toolChoice: buildToolChoice("recallgen_grading"),
         };
     }
@@ -167,7 +168,7 @@ function pickGradingOpts(jsonSchemaEnabled: boolean): {
 export function clampScore(v: unknown): number {
     const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : Number.NaN;
     if (!Number.isFinite(n)) {
-        throw new AIError("AI 判分缺少有效的 score", undefined, "parse");
+        throw new AIError(t("grade.noScore"), undefined, "parse");
     }
     return Math.max(0, Math.min(100, n));
 }

@@ -9,7 +9,6 @@
     "common.unanswered": "Unanswered",
     "common.loading": "Loading…",
     "common.cancel": "Cancel",
-    "common.send": "Send",
     "common.delete": "Delete",
     "common.retry": "Retry",
     "common.me": "Me",
@@ -36,10 +35,6 @@
     "diff.medium": "Medium",
     "diff.hard": "Hard",
 
-    "chat.title": "AI Q&A",
-    "chat.close": "Close",
-    "chat.empty": "Ask AI about any question in this quiz, e.g. \"Why is Q3 B?\" or \"How to understand concept X?\"",
-    "chat.placeholder": "Type your question, Enter to send, Shift+Enter for newline",
     "chat.globalTitle": "💬 AI Q&A",
     "chat.globalHint": "Ask about this quiz",
     "chat.globalEmpty": "Ask AI any question about this quiz",
@@ -272,5 +267,54 @@
     "doc.seeCode": "See reference code",
     "doc.blankLabel": "Blank {0}",
     "doc.analysisTitle": "## Weakness Analysis & Study Guide",
-    "doc.titlePrefix": "Quiz"
+    "doc.titlePrefix": "Quiz",
+
+    "ai.modelNotFound": "Model not found: {0}",
+    "ai.endpointNotFound": "Endpoint referenced by model {0} does not exist: {1}",
+    "ai.timeout": "Request timed out after {0}s",
+    "ai.proxyFailed": "Kernel network proxy failed: {0}",
+    "ai.responseNotJson": "AI response is not JSON",
+    "ai.responseNoContent": "AI response contains no content",
+    "ai.testPromptDefault": "Briefly introduce yourself in one sentence.",
+
+    "gen.reviewing": "Reviewing (round {0})…",
+    "gen.reviewPassed": "Round {0} review passed, {1} question(s) total",
+    "gen.reviewNoReason": "Not approved",
+    "gen.reviewMaxRounds": "Reached the maximum review rounds; {0} question(s) still failed",
+    "gen.regenerating": "Round {0}: regenerating {1} failed question(s)…",
+    "gen.regenerated": "Round {0}: replaced {1}/{2} question(s)",
+    "gen.dropped": "Generated {0} question(s), dropped {1} invalid one(s)",
+    "gen.missingQuestions": "AI response is missing the questions array (parsed type: {0})",
+    "gen.emptyQuestions": "AI returned an empty questions array",
+    "gen.allInvalid": "All {0} question(s) failed validation: {1}",
+
+    "validate.notObject": "Question is not an object",
+    "validate.typeDisabled": "Question type {0} is not enabled",
+    "validate.emptyQuestion": "Question text is empty",
+    "validate.singleChoice": "Single-choice options or answer index is invalid",
+    "validate.multipleChoice": "Multiple-choice options or answer indices are invalid",
+    "validate.blankMissing": "Fill-in-the-blank answers are missing",
+    "validate.notBoolean": "True/false answer is not a boolean",
+    "validate.subjectiveNoRef": "Subjective question is missing the reference answer",
+    "validate.codingNoRef": "Coding question is missing both a reference answer and test cases",
+    "validate.unknownType": "Unknown question type: {0}",
+
+    "grade.failed": "Grading failed: {0}",
+    "grade.notObject": "AI grading response is not a JSON object",
+    "grade.noScore": "AI grading response has no valid score",
+    "grade.toolDescription": "Grade",
+
+    "date.today": "today",
+    "date.beforeBase": "before the base time",
+    "date.recentDays": "the last {0} days",
+    "date.noNotes": "No notes found for {0}. Adjust the date range or base time and retry.",
+    "date.emptyNotes": "Notes for {0} are empty. Check whether the documents have content.",
+    "date.title": "Notes for {0} ({1} docs)",
+    "date.notebookTitle": "Notebook · notes for {0} ({1} docs)",
+
+    "quiz.analysisFailed": "Weakness analysis failed: {0}",
+
+    "schema.parseFailed": "JSON parse failed: {0} (first 200 chars: {1})",
+
+    "gen.unknownReason": "Unknown reason"
 }
