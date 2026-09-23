@@ -54,8 +54,9 @@ export async function gradeAll(
         }
     }
     await pool.awaitAll();
-    // 保持题序
-    return results.sort((a, b) => a.questionId.localeCompare(b.questionId, undefined, { numeric: true }));
+    // 按原题序返回，避免依赖 questionId 的字符串排序（id 格式一旦变化就会错位）
+    const byId = new Map(results.map((r) => [r.questionId, r]));
+    return questions.map((q) => byId.get(q.id)).filter((r): r is GradingResult => r !== undefined);
 }
 
 export function isObjective(type: Question["type"]): boolean {
@@ -122,7 +123,10 @@ async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | un
         temperature: 0,
         maxTokens: 512,
     });
-    const parsed = parseJsonLoose(result.content) as { score?: number; comment?: string };
+    const parsed = parseJsonLoose(result.content) as { score?: unknown; comment?: unknown } | null;
+    if (!parsed || typeof parsed !== "object") {
+        throw new AIError("AI 判分返回的不是 JSON 对象", undefined, "parse");
+    }
     const score = clampScore(parsed.score);
     return {
         questionId: q.id,
@@ -155,10 +159,15 @@ function pickGradingOpts(jsonSchemaEnabled: boolean): {
     return { responseFormat: buildJsonObjectResponseFormat() };
 }
 
+/**
+ * 收敛分数到 0-100。
+ * 只接受数字与可解析的数字字符串；null/undefined/空串/NaN 一律视为缺失并抛错，
+ * 避免 Number(null) === 0 把「模型没给分」静默记成 0 分。
+ */
 export function clampScore(v: unknown): number {
-    const n = typeof v === "number" ? v : Number(v);
-    if (Number.isNaN(n)) {
-        throw new AIError("AI 判分缺少 score");
+    const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : Number.NaN;
+    if (!Number.isFinite(n)) {
+        throw new AIError("AI 判分缺少有效的 score", undefined, "parse");
     }
     return Math.max(0, Math.min(100, n));
 }
