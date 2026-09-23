@@ -49,6 +49,7 @@
     "@codemirror/state": "^6.7.1",
     "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.43.8",
+    "dompurify": "^3.4.15",
     "jsonrepair": "^3.15.0",
     "katex": "^0.18.1",
     "marked": "^18.0.9"
@@ -58,6 +59,7 @@
     "@types/node": "^20.3.0",
     "cross-env": "^7.0.3",
     "fast-glob": "^3.2.12",
+    "jsdom": "^30.1.1",
     "prettier": "^3.9.8",
     "prettier-plugin-svelte": "^3.5.2",
     "rollup-plugin-livereload": "^2.0.5",

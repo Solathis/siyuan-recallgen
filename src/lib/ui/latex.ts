@@ -1,124 +1,101 @@
 import katex from "katex";
 import { marked } from "marked";
+import DOMPurify, { type Config } from "dompurify";
 
-// 动态注入 KaTeX CSS（CDN），避免打包字体导致 CSS 超大
-const KATEX_CSS_CDN = "https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.css";
-let cssInjected = false;
-function ensureCss() {
-    if (cssInjected || document.querySelector("link[data-katex-css]")) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = KATEX_CSS_CDN;
-    link.setAttribute("data-katex-css", "");
-    document.head.appendChild(link);
-    cssInjected = true;
+/**
+ * Markdown + LaTeX 渲染。
+ *
+ * 题干、解析与答疑都来自 AI，主观题内容来自用户输入，全是不可信数据。
+ * marked 默认保留原始 HTML（`<img onerror>`、`<script>` 等会原样输出），
+ * 因此它的输出必须先经 DOMPurify 净化，之后才能交给 `{@html}`。
+ *
+ * 处理顺序刻意设计为「先净化、后回填 KaTeX」：
+ * 净化时数学公式还只是占位符，净化器不会误伤 KaTeX 生成的 MathML 与内联样式。
+ */
+
+/** 数学表达式占位符包裹字符（Unicode 私有区，正文不会自然出现） */
+const PH_START = "\uE000";
+const PH_END = "\uE001";
+
+/** 自增序号，配合每次调用的序号保证占位符不会被正文文本意外命中 */
+let phSeq = 0;
+
+/** 净化策略：在 DOMPurify 默认策略之上禁止可注入样式与提交行为的标签/属性 */
+const PURIFY_CONFIG: Config = {
+    FORBID_TAGS: [
+        "style",
+        "script",
+        "iframe",
+        "frame",
+        "object",
+        "embed",
+        "form",
+        "input",
+        "button",
+        "link",
+        "meta",
+        "base",
+    ],
+    FORBID_ATTR: ["style", "srcset", "formaction", "ping", "target"],
+    ALLOW_DATA_ATTR: false,
+};
+
+/** HTML 转义，用于 KaTeX 渲染失败时的降级输出 */
+function escapeHtml(text: string): string {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 }
-ensureCss();
 
-/** HTML 转义 */
-function escapeHtml(s: string): string {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-/** KaTeX 渲染为 HTML 字符串 */
+/** 单个数学表达式渲染为 HTML；失败时退化为等宽文本而非抛错 */
 function renderKatex(math: string, displayMode: boolean): string {
     try {
-        return katex.renderToString(math.trim(), {
-            displayMode,
-            throwOnError: false,
-            strict: false,
-        });
+        return katex.renderToString(math.trim(), { displayMode, throwOnError: false, strict: false });
     } catch {
         return `<code>${escapeHtml(math)}</code>`;
     }
 }
 
-/** 占位符格式，避免被 marked 解析 */
-const PH_PREFIX = "\x00KATEX\x00";
-const PH_SUFFIX = "\x00ENDKATEX\x00";
-let phCounter = 0;
-
-/**
- * 将文本转为安全 HTML，支持行内 $...$ 和行间 $$...$$ LaTeX 渲染。
- * 非数学部分 HTML 转义，保留换行。
- */
-export function renderLatex(text: string): string {
-    if (!text) return "";
-    let result = "";
-    let i = 0;
-    while (i < text.length) {
-        // 行间 $$...$$
-        if (text[i] === "$" && text[i + 1] === "$") {
-            const end = text.indexOf("$$", i + 2);
-            if (end >= 0) {
-                const math = text.slice(i + 2, end);
-                result += renderKatex(math, true);
-                i = end + 2;
-                continue;
-            }
-        }
-        // 行内 $...$
-        if (text[i] === "$") {
-            const end = text.indexOf("$", i + 1);
-            if (end > i && !text[i + 1].includes("\n")) {
-                const math = text.slice(i + 1, end);
-                if (!math.includes("\n") && math.trim().length > 0) {
-                    result += renderKatex(math, false);
-                    i = end + 1;
-                    continue;
-                }
-            }
-        }
-        // 普通字符
-        const chunk = text.slice(i);
-        const nextDollar = chunk.indexOf("$");
-        if (nextDollar >= 0) {
-            result += escapeHtml(chunk.slice(0, nextDollar));
-            i += nextDollar;
-        } else {
-            result += escapeHtml(chunk);
-            break;
-        }
-    }
-    return result.replace(/\n/g, "<br />");
+interface ExtractedMath {
+    /** 数学表达式已替换为占位符的文本 */
+    processed: string;
+    /** 按出现顺序排列的渲染结果 */
+    rendered: string[];
+    /** 本次调用的占位符序号 */
+    nonce: string;
 }
 
 /**
- * 渲染 Markdown + LaTeX：
- * 1. 提取 $...$ 和 $$...$$ 数学表达式，替换为占位符
- * 2. 用 marked 渲染剩余 Markdown
- * 3. 将占位符替换回 KaTeX HTML
+ * 提取 $...$ 与 $$...$$ 数学表达式并替换为占位符。
+ * 转义写法 `\$` 会被跳过，因此正文里的价格等不会被误判为公式。
  */
-export function renderMarkdownLatex(text: string): string {
-    if (!text) return "";
-    const placeholders: string[] = [];
-
-    // 提取数学表达式
+function extractMath(text: string): ExtractedMath {
+    const nonce = String(phSeq++);
+    const rendered: string[] = [];
     let processed = "";
     let i = 0;
+
     while (i < text.length) {
-        // 行间 $$...$$
-        if (text[i] === "$" && text[i + 1] === "$") {
-            const end = text.indexOf("$$", i + 2);
-            if (end >= 0) {
-                const math = text.slice(i + 2, end);
-                const ph = `${PH_PREFIX}${phCounter++}${PH_SUFFIX}`;
-                placeholders.push(renderKatex(math, true));
-                processed += ph;
-                i = end + 2;
-                continue;
-            }
+        if (text[i] === "\\") {
+            processed += text.slice(i, i + 2);
+            i += 2;
+            continue;
         }
-        // 行内 $...$
         if (text[i] === "$") {
-            const end = text.indexOf("$", i + 1);
+            const display = text[i + 1] === "$";
+            const delimiter = display ? "$$" : "$";
+            const end = text.indexOf(delimiter, i + delimiter.length);
             if (end > i) {
-                const math = text.slice(i + 1, end);
-                if (!math.includes("\n") && math.trim().length > 0) {
-                    const ph = `${PH_PREFIX}${phCounter++}${PH_SUFFIX}`;
-                    placeholders.push(renderKatex(math, false));
-                    processed += ph;
-                    i = end + 1;
+                const body = text.slice(i + delimiter.length, end);
+                // 行内公式不允许跨行，避免把相距很远的两个 $ 之间内容整段吃掉
+                const usable = body.trim().length > 0 && (display || !body.includes("\n"));
+                if (usable) {
+                    rendered.push(renderKatex(body, display));
+                    processed += `${PH_START}${nonce}-${rendered.length - 1}${PH_END}`;
+                    i = end + delimiter.length;
                     continue;
                 }
             }
@@ -127,15 +104,21 @@ export function renderMarkdownLatex(text: string): string {
         i++;
     }
 
-    // 配置 marked
-    marked.setOptions({ breaks: true, gfm: true });
-    let html = marked.parse(processed) as string;
+    return { processed, rendered, nonce };
+}
 
-    // 恢复 KaTeX 占位符
-    placeholders.forEach((katexHtml, idx) => {
-        const ph = `${PH_PREFIX}${idx}${PH_SUFFIX}`;
-        html = html.split(ph).join(katexHtml);
+/**
+ * 渲染 Markdown + LaTeX 为可安全交给 `{@html}` 的 HTML 字符串。
+ * 空输入返回空串。
+ */
+export function renderMarkdownLatex(text: string): string {
+    if (!text) return "";
+    const { processed, rendered, nonce } = extractMath(text);
+    const rawHtml = marked.parse(processed, { breaks: true, gfm: true, async: false }) as string;
+    let html = DOMPurify.sanitize(rawHtml, PURIFY_CONFIG);
+    // 回填 KaTeX：内容由本地 KaTeX 生成，不参与净化，避免 MathML 被裁剪
+    rendered.forEach((katexHtml, index) => {
+        html = html.split(`${PH_START}${nonce}-${index}${PH_END}`).join(katexHtml);
     });
-
     return html;
 }
