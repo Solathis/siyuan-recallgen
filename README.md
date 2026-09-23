@@ -84,6 +84,8 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
   - **Records**: group by date/source, thumbnail/list/table views, search by title and source, filter by score band, export as JSON/CSV/Markdown, delete a single record with confirmation, and click a record to replay the full result
   - **Statistics**: switch the range (last 7/30/90 days or all time) and see a score-trend line, accuracy by question type, score-band distribution, accuracy by difficulty donut, plus summary metrics (quiz and question counts, average/best score, current and longest streak, time per question) and a weakest-areas ranking
 
+- **Spaced repetition**: after submitting, questions enter the bank keyed by stem fingerprint and FSRS schedules their next review; review what is due from the command palette or title menu
+
 ### Settings Panel
 
 Left sidebar navigation + right content area, 6 independent sections:
@@ -314,6 +316,26 @@ Score record → recallgen-scores.json
 - **AI Output Language**: Configurable (Chinese/English) — controls the language of generated questions, grading comments, and analysis
 - **UI Language**: Currently Chinese-only; i18n infrastructure is in place for future localization
 
+## 🧠 Spaced Repetition & Question Bank
+
+After submitting, every question enters the question bank keyed by a stem fingerprint, and its next review time is scheduled by the [FSRS](https://github.com/open-spaced-repetition/free-spaced-repetition-scheduler) algorithm (via the mature `ts-fsrs` implementation):
+
+| Score | FSRS rating | Effect |
+|-------|-------------|--------|
+| 90+ | Easy | Longest interval |
+| 75-89 | Good | Normal progression |
+| 60-74 | Hard | Slower interval growth |
+| Below 60 | Again | Comes back soon |
+
+- **Entry point**: command palette or document title menu → "Review due questions". This flow does not call the AI to generate questions; it takes due items straight from the bank. Grading subjective/coding answers still needs AI
+- **Deduplication**: the stem is normalized (case, whitespace and CJK/Latin punctuation removed) before hashing, so "1+1=?" and "1 + 1 = ？" are recognised as the same question
+- **Progress is preserved**: generating again from the same note only updates the stem and source of existing questions; the review schedule and answer history are kept
+- **Mastery**: half accuracy, half stability, used for the bank overview and pruning policy
+- **Automatic pruning**: on load, questions that have not been reviewed for 180 days and have reached 85 mastery are removed so the bank cannot grow without bound
+- **Data management**: Settings → Data shows the bank size (total and due) and allows clearing it with confirmation
+
+> Note: a knowledge-point weakness ranking requires questions to carry tags. The current weakest-area ranking uses the question-type and difficulty dimensions.
+
 ### Statistics
 
 The **Statistics** view of the history panel provides the following charts. All data comes from the aggregates already stored in the score index, so no question or grading detail is loaded.
@@ -361,7 +383,7 @@ The history list and charts read only the index (no questions or grading detail)
 
 ### Not implemented yet (planned)
 
-- **Spaced repetition**: no FSRS/SM-2 scheduling or reusable question bank yet; every generation produces new questions
+- **Knowledge-point weakness ranking**: needs questions to carry tags; the current ranking uses type and difficulty
 - **Virtual scrolling in history**: a long history renders all rows at once
 
 ## 📄 License
