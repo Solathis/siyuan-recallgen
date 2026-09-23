@@ -80,13 +80,9 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 - **Aggregation**: Daily max score or daily average score (configurable)
 - **Color Ranges**: Default GitHub green palette, customizable with color pickers
 - **Auto-Recording**: On submit the score index and the current month's detail shard are written immediately, independent of subsequent analysis. The history list loads only the lightweight index; detail is fetched on demand when reviewing
-- **History Tab**: open from the top-right icon
-  - Group by date or by source notebook; thumbnail / list / table views
-  - **Search** by title and source
-  - **Filter** by score band: all / 80+ / 60-79 / below 60
-  - **Export** the current filter result as JSON / CSV / Markdown
-  - **Delete a single record** with confirmation (removes both index entry and detail)
-  - Click a record to replay the full result view
+- **History Tab**: open from the top-right icon; it has a **Records** and a **Statistics** view
+  - **Records**: group by date/source, thumbnail/list/table views, search by title and source, filter by score band, export as JSON/CSV/Markdown, delete a single record with confirmation, and click a record to replay the full result
+  - **Statistics**: switch the range (last 7/30/90 days or all time) and see a score-trend line, accuracy by question type, score-band distribution, accuracy by difficulty donut, plus summary metrics (quiz and question counts, average/best score, current and longest streak, time per question) and a weakest-areas ranking
 
 ### Settings Panel
 
@@ -318,6 +314,22 @@ Score record → recallgen-scores.json
 - **AI Output Language**: Configurable (Chinese/English) — controls the language of generated questions, grading comments, and analysis
 - **UI Language**: Currently Chinese-only; i18n infrastructure is in place for future localization
 
+### Statistics
+
+The **Statistics** view of the history panel provides the following charts. All data comes from the aggregates already stored in the score index, so no question or grading detail is loaded.
+
+| Chart | Description |
+|-------|-------------|
+| Score trend | Score percentage of each quiz over time (time-axis line) |
+| Accuracy by type | Pass rate per question type, coloured by pass rate |
+| Score distribution | Number of quizzes in the 0-59 / 60-69 / 70-79 / 80-89 / 90-100 bands |
+| Accuracy by difficulty | Pass rate for easy / medium / hard (donut) |
+| Weakest areas | Weak question types and difficulty levels ranked by lowest pass rate; groups with fewer than 2 questions are excluded |
+
+Summary metrics: quiz and question counts, average and best score percentage, current and longest daily streak, average time per question, and active days.
+
+Chart colours are resolved from SiYuan's CSS variables, so they redraw automatically when the light/dark theme changes. Every chart carries an `aria-label` description, and a "recent records" text list provides an equivalent for screen readers.
+
 ## 🔄 Recent Refactor
 
 This round migrated the plugin from "Svelte 4 + hand-written CSS classes" to "Svelte 5 + Tailwind 4 + shadcn-svelte" and fixed a batch of correctness issues.
@@ -349,7 +361,6 @@ The history list and charts read only the index (no questions or grading detail)
 
 ### Not implemented yet (planned)
 
-- **Statistics charts**: score trend, per-type accuracy, weakest knowledge points, score distribution. Only the heatmap exists today
 - **Spaced repetition**: no FSRS/SM-2 scheduling or reusable question bank yet; every generation produces new questions
 - **Virtual scrolling in history**: a long history renders all rows at once
 
