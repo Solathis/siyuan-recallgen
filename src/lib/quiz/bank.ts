@@ -54,6 +54,61 @@ export interface BankCardState {
     last_review?: number;
 }
 
+/** 一次复习记录 */
+export interface BankAttempt {
+    /** 作答时间 */
+    at: number;
+    /** 得分率（0-100） */
+    percent: number;
+}
+
+/**
+ * 每题保留的复习历史条数上限。
+ * 只留最近若干次即可满足回看需求，同时避免题库体积随作答次数无限增长
+ * （题库分片是整体重写的，单条记录过大也会拖慢每次交卷的写入）。
+ */
+export const MAX_BANK_HISTORY = 20;
+
+/** 追加一次复习记录，超出上限时丢弃最旧的 */
+export function appendAttempt(history: BankAttempt[] | undefined, attempt: BankAttempt): BankAttempt[] {
+    const next = [...(history ?? []), attempt];
+    return next.length > MAX_BANK_HISTORY ? next.slice(next.length - MAX_BANK_HISTORY) : next;
+}
+
+/** 最近 n 次作答的平均得分率；没有记录时返回 null */
+export function recentAverage(item: BankItem, window = 5): number | null {
+    const history = item.history ?? [];
+    if (history.length === 0) return null;
+    const slice = history.slice(-window);
+    return slice.reduce((sum, a) => sum + a.percent, 0) / slice.length;
+}
+
+/**
+ * 兼容早期版本：补齐缺失字段并剔除结构不合法的历史项。
+ * 题库分片里存的是旧结构时，读取路径统一走这里，界面就不必到处判空。
+ */
+export function normalizeBankItem(raw: BankItem, now = Date.now()): BankItem {
+    const rawHistory = Array.isArray(raw.history) ? raw.history : [];
+    const history = rawHistory
+        .filter(
+            (a): a is BankAttempt => !!a && typeof a === "object" && Number.isFinite(a.at) && Number.isFinite(a.percent)
+        )
+        .map((a) => ({ at: a.at, percent: clampPercent(a.percent) }));
+    return {
+        ...raw,
+        createdAt: Number.isFinite(raw.createdAt) ? raw.createdAt : now,
+        updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : (raw.createdAt ?? now),
+        timesSeen: Number.isFinite(raw.timesSeen) ? raw.timesSeen : history.length,
+        timesPassed: Number.isFinite(raw.timesPassed) ? raw.timesPassed : 0,
+        history: history.slice(-MAX_BANK_HISTORY),
+    };
+}
+
+/** 得分率收敛到 0-100 */
+function clampPercent(value: number): number {
+    return Math.max(0, Math.min(100, value));
+}
+
 /** 题库条目 */
 export interface BankItem {
     /** 题干指纹 */
@@ -70,6 +125,8 @@ export interface BankItem {
     timesPassed: number;
     /** 最近一次得分率（0-100） */
     lastPercent?: number;
+    /** 复习历史（最近 MAX_BANK_HISTORY 次），旧数据可能缺省 */
+    history?: BankAttempt[];
 }
 
 const scheduler = fsrs();
@@ -157,6 +214,20 @@ export function dueState(card: BankCardState, now = Date.now()): DueState {
     return "later";
 }
 
+/** 卡片所处的 FSRS 阶段，用于界面展示 */
+export function cardPhase(card: BankCardState): "new" | "learning" | "review" | "relearning" {
+    switch (card.state) {
+        case State.New:
+            return "new";
+        case State.Learning:
+            return "learning";
+        case State.Relearning:
+            return "relearning";
+        default:
+            return "review";
+    }
+}
+
 /** 掌握度评分（0-100）：由稳定性与正确率共同决定，用于界面展示 */
 export function masteryScore(item: BankItem): number {
     const accuracy = item.timesSeen > 0 ? (item.timesPassed / item.timesSeen) * 100 : 0;
@@ -180,6 +251,7 @@ export function applyResult(item: BankItem, percent: number, now = Date.now()): 
         timesSeen: item.timesSeen + 1,
         timesPassed: item.timesPassed + (percent >= PASS_SCORE ? 1 : 0),
         lastPercent: percent,
+        history: appendAttempt(item.history, { at: now, percent: clampPercent(percent) }),
     };
 }
 
@@ -199,6 +271,7 @@ export function createBankItem(
         card: newCardState(now),
         timesSeen: 0,
         timesPassed: 0,
+        history: [],
     };
 }
 
