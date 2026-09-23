@@ -13,7 +13,7 @@ RecallGen is a SiYuan Note plugin that transforms your notes into reviewable qui
 ### Quiz Generation
 
 - **6 Question Types**: Single choice, multiple choice, fill-in-the-blank, true/false, subjective (essay/discussion), and coding
-- **Difficulty Distribution**: 1–50 questions with customizable easy/medium/hard ratio and real-time validation
+- **Difficulty Distribution**: 1–50 questions with customizable easy/medium/hard ratio and real-time validation; counts above the per-request limit are generated in batches, then deduplicated by stem and renumbered
 - **Extra-Scope Ratio**: 0–50% slider allowing AI to generate questions on related knowledge points beyond the note content
 - **Self-Contained Questions**: Question stems include all information needed to answer (code, data, definitions) — no dependency on external note context
 - **Markdown + LaTeX Rendering**: Question text and options support full Markdown syntax and `$...$` / `$$...$$` math formula rendering (KaTeX + marked)
@@ -59,6 +59,9 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 - **Countdown**: Optional answer countdown timer; auto-submits when time expires
 - **Auto-Save Progress**: Debounced (800ms) save to SiYuan `saveData`; resumable after closing
 - **Cancel & Resume**: Cancel during generation; force-save progress on tab close during answering
+- **Flagging**: mark questions you are unsure about; flags are saved with the progress
+- **Run Tests**: coding questions can run their test cases against the current code, with per-case results (JavaScript only)
+- **Per-question timing**: each question's time is measured and surfaced in results and statistics
 - **Confirmation Dialogs**: Regenerate and submit actions require secondary confirmation
 - **Date-Range Generation**: "Today's notes" and "Recent N days" generation with configurable base time (e.g., 4 AM as the day boundary for late-night note-takers)
 
@@ -81,7 +84,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 - **Aggregation**: Daily max score or daily average score (configurable)
 - **Color Ranges**: Default GitHub green palette, customizable with color pickers
 - **Auto-Recording**: On submit the score index and the current month's detail shard are written immediately, independent of subsequent analysis. The history list loads only the lightweight index; detail is fetched on demand when reviewing
-- **History Tab**: open from the top-right icon; it has a **Records** and a **Statistics** view
+- **History Tab**: open from the top-right icon; it has a **Records** and a **Statistics** view (the statistics view opens with the activity heatmap)
   - **Records**: group by date/source, thumbnail/list/table views, search by title and source, filter by score band, export as JSON/CSV/Markdown, delete a single record with confirmation, and click a record to replay the full result. The list renders in batches of 60 with load-on-scroll, so a long history does not create a huge DOM at once
   - **Statistics**: switch the range (last 7/30/90 days or all time) and see a score-trend line, accuracy by question type, score-band distribution, accuracy by difficulty donut, plus summary metrics (quiz and question counts, average/best score, current and longest streak, time per question) and a weakest-areas ranking
 
@@ -96,7 +99,7 @@ Left sidebar navigation + right content area, 6 independent sections:
 3. **Quiz & Answer**: Question type toggles, difficulty distribution (total + per-difficulty + validation), extra-scope ratio, language (Chinese/English), countdown toggle and duration, panel width
 4. **Prompts**: Four prompt editors (generate/review/grade/analysis), reset to default supported
 5. **Heatmap**: Heatmap preview + aggregation mode + color range management
-6. **Data Management**: Clear score records, clear answer progress
+6. **Data Management**: Clear scores, quiz progress and the question bank; export/import configuration (optionally including API keys)
 
 ## 📦 Installation
 
@@ -320,6 +323,31 @@ Score record → recallgen-scores.json
 - **AI Output Language**: Configurable (Chinese/English) — controls the language of generated questions, grading comments, and analysis
 - **UI Language**: Currently Chinese-only; i18n infrastructure is in place for future localization
 
+## 📊 Grading & Scoring
+
+| Type | Scoring |
+|------|---------|
+| Single choice / True-false | 100 if correct, otherwise 0 |
+| Multiple choice | `(hits − wrong picks) ÷ number of correct options`, floored at 0; selecting everything earns nothing, partial selections earn partial credit |
+| Fill-in-the-blank | `correct blanks ÷ total blanks`; an empty string does not count |
+| Subjective / Coding | AI graded (0-100); coding questions can additionally run their test cases |
+
+- **The pass line is a single shared constant at 60**, used by the statistics, history colouring, wrong-answer filtering and weakness analysis
+- The result panel distinguishes **correct (full marks) / partial / wrong / unanswered**, so a 75-point multiple choice is not shown as fully correct
+- Questions are timed individually: time accumulates at each question switch or submit, capped at 5 minutes per segment so idle time is not counted. The statistics page prefers this measured value for "time per question"
+- You can **flag** questions you are unsure about while answering; flags are saved with the progress and restored later
+- The result panel can **retry wrong questions**: it builds a new session containing only the ones below the pass line, and both attempts are recorded separately
+
+## ▶️ Running Coding Tests
+
+Coding test cases can actually be executed:
+
+- At generation time the AI provides `entry_point` (the function to call) plus `args` and `expected` for each case
+- The coding area has a "Run tests" button that executes the current editor content and lists pass/fail per case, showing expected vs actual on failure
+- Execution happens in a **Web Worker** with a timeout: the main thread cannot interrupt an infinite loop (it would freeze SiYuan), while a worker can be terminated
+- Expected values are compared loosely — parsed as JSON first, otherwise as a string — so `42` vs `"42"` or `true` vs `"true"` are not false negatives
+- **JavaScript only**; other languages report unsupported clearly. This is not a security sandbox: isolation comes from the worker being terminable, and the code being run is your own local code
+
 ## 🧠 Spaced Repetition & Question Bank
 
 After submitting, every question enters the question bank keyed by a stem fingerprint, and its next review time is scheduled by the [FSRS](https://github.com/open-spaced-repetition/free-spaced-repetition-scheduler) algorithm (via the mature `ts-fsrs` implementation):
@@ -331,7 +359,7 @@ After submitting, every question enters the question bank keyed by a stem finger
 | 60-74 | Hard | Slower interval growth |
 | Below 60 | Again | Comes back soon |
 
-- **Entry point**: command palette or document title menu → "Review due questions". This flow does not call the AI to generate questions; it takes due items straight from the bank. Grading subjective/coding answers still needs AI
+- **Entry point**: command palette or document title menu → "Review due questions"; the document title menu and document tree also offer "Review due questions from this document" to limit it to that document's banked questions. This flow does not call the AI to generate questions; it takes due items straight from the bank. Grading subjective/coding answers still needs AI
 - **Deduplication**: the stem is normalized (case, whitespace and CJK/Latin punctuation removed) before hashing, so "1+1=?" and "1 + 1 = ？" are recognised as the same question
 - **Progress is preserved**: generating again from the same note only updates the stem and source of existing questions; the review schedule and answer history are kept
 - **Mastery**: half accuracy, half stability, used for the bank overview and pruning policy
