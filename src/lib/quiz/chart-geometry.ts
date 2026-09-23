@@ -184,3 +184,45 @@ export function timeTicks(timestamps: number[], count = 3): number[] {
     if (first === last) return [first];
     return Array.from({ length: count + 1 }, (_, i) => Math.round(first + ((last - first) / count) * i));
 }
+
+/**
+ * 从序列中均匀取出 k 个下标（含首末）。count <= k 时返回全部下标。
+ */
+export function uniformIndices(count: number, k: number): number[] {
+    if (count <= 0 || k <= 0) return [];
+    if (k === 1) return [0];
+    if (count <= k) return Array.from({ length: count }, (_, i) => i);
+    const step = (count - 1) / (k - 1);
+    return Array.from({ length: k }, (_, i) => Math.round(i * step));
+}
+
+/**
+ * 从序列中挑选需要绘制标记点的下标。
+ *
+ * 数据点很多时逐个画圆点既慢又糊成一片，因此只在点数超过上限时取样，
+ * 并始终保留首末点与峰谷点，保证趋势的起点、终点与极值不会被采样漏掉。
+ *
+ * 注意不能「取样后按下标排序再截断」——那样会把下标较大的末点丢掉。
+ * 这里是先给首末与峰谷留好位置，再用剩余名额做均匀取样的内部点。
+ */
+export function pickMarkerIndices(values: number[], max: number): number[] {
+    const count = values.length;
+    if (count === 0 || max <= 0) return [];
+    if (count <= max) return values.map((_, i) => i);
+    // 名额太少时不额外插极值，否则连首末都放不下
+    if (max <= 4) return uniformIndices(count, max);
+
+    let maxIndex = 0;
+    let minIndex = 0;
+    for (let i = 1; i < count; i++) {
+        if (values[i] > values[maxIndex]) maxIndex = i;
+        if (values[i] < values[minIndex]) minIndex = i;
+    }
+
+    const picked = new Set<number>([0, count - 1, maxIndex, minIndex]);
+    // 取内部点时去掉首末，避免与已占用的位置重复而浪费名额
+    const interior = uniformIndices(count, max - picked.size + 2).slice(1, -1);
+    for (const index of interior) picked.add(index);
+
+    return [...picked].sort((a, b) => a - b);
+}

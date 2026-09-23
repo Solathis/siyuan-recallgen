@@ -45,6 +45,8 @@ export class CodeEditor {
     private view: EditorView | null = null;
     private readonly themeCompartment = new Compartment();
     private observer: MutationObserver | null = null;
+    /** 语言包是异步加载的，期间可能已被销毁，用它避免创建出无人回收的编辑器 */
+    private destroyed = false;
 
     constructor(
         private readonly parent: HTMLElement,
@@ -55,6 +57,8 @@ export class CodeEditor {
 
     async mount(): Promise<void> {
         const languageExt = await this.loadLanguage(this.lang);
+        // 等待语言包期间若已销毁，直接放弃创建，否则会留下永不销毁的编辑器实例
+        if (this.destroyed) return;
         this.view = new EditorView({
             parent: this.parent,
             state: EditorState.create({
@@ -93,6 +97,7 @@ export class CodeEditor {
     }
 
     destroy(): void {
+        this.destroyed = true;
         this.observer?.disconnect();
         this.observer = null;
         this.view?.destroy();

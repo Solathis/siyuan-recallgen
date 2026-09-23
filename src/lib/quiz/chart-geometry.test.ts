@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { donutArcs, lineGeometry, linearScale, polar, ticks, timeTicks } from "./chart-geometry";
+import {
+    donutArcs,
+    lineGeometry,
+    linearScale,
+    pickMarkerIndices,
+    polar,
+    ticks,
+    timeTicks,
+    uniformIndices,
+} from "./chart-geometry";
 
 describe("linearScale", () => {
     it("端点映射到目标区间端点", () => {
@@ -206,5 +215,107 @@ describe("timeTicks", () => {
 
     it("返回整数时间戳", () => {
         for (const t of timeTicks([0, 10], 3)) expect(Number.isInteger(t)).toBe(true);
+    });
+});
+
+describe("pickMarkerIndices", () => {
+    it("空序列返回空", () => {
+        expect(pickMarkerIndices([], 10)).toEqual([]);
+    });
+
+    it("点数不超过上限时全部保留", () => {
+        expect(pickMarkerIndices([1, 2, 3], 10)).toEqual([0, 1, 2]);
+        expect(pickMarkerIndices([1, 2, 3], 3)).toEqual([0, 1, 2]);
+    });
+
+    it("超过上限时结果不超出上限", () => {
+        const values = Array.from({ length: 500 }, (_, i) => i % 100);
+        expect(pickMarkerIndices(values, 40).length).toBeLessThanOrEqual(40);
+    });
+
+    it("始终保留首点与末点", () => {
+        const values = Array.from({ length: 500 }, (_, i) => i % 100);
+        const picked = pickMarkerIndices(values, 20);
+        expect(picked[0]).toBe(0);
+        expect(picked).toContain(499);
+    });
+
+    it("保留峰值与谷值，采样不会漏掉峰谷", () => {
+        const values = Array.from({ length: 300 }, () => 50);
+        values[137] = 100; // 峰值
+        values[211] = 0; // 谷值
+        const picked = pickMarkerIndices(values, 20);
+        expect(picked).toContain(137);
+        expect(picked).toContain(211);
+    });
+
+    it("结果按原顺序返回", () => {
+        const values = Array.from({ length: 100 }, (_, i) => i);
+        const picked = pickMarkerIndices(values, 10);
+        expect([...picked].sort((a, b) => a - b)).toEqual(picked);
+    });
+
+    it("下标不重复", () => {
+        const values = Array.from({ length: 100 }, (_, i) => i);
+        const picked = pickMarkerIndices(values, 30);
+        expect(new Set(picked).size).toBe(picked.length);
+    });
+
+    it("max 为 0 或负数时返回空，避免除零", () => {
+        expect(pickMarkerIndices([1, 2, 3], 0)).toEqual([]);
+        expect(pickMarkerIndices([1, 2, 3], -1)).toEqual([]);
+    });
+
+    it("名额很少时优先保证首末点", () => {
+        const values = Array.from({ length: 500 }, (_, i) => i % 100);
+        expect(pickMarkerIndices(values, 2)).toEqual([0, 499]);
+        for (const max of [1, 2, 3, 4]) {
+            const picked = pickMarkerIndices(values, max);
+            expect(picked.length).toBeLessThanOrEqual(max);
+            expect(picked[0]).toBe(0);
+        }
+    });
+
+    it("名额足够时结果正好用满，且首末俱在", () => {
+        const values = Array.from({ length: 500 }, (_, i) => i % 100);
+        const picked = pickMarkerIndices(values, 30);
+        expect(picked.length).toBe(30);
+        expect(picked[0]).toBe(0);
+        expect(picked[picked.length - 1]).toBe(499);
+    });
+
+    it("下标都在有效范围内", () => {
+        const values = Array.from({ length: 1000 }, (_, i) => (i * 7) % 100);
+        for (const index of pickMarkerIndices(values, 50)) {
+            expect(index).toBeGreaterThanOrEqual(0);
+            expect(index).toBeLessThan(1000);
+        }
+    });
+});
+
+describe("uniformIndices", () => {
+    it("含首末且个数正确", () => {
+        expect(uniformIndices(10, 3)).toEqual([0, 5, 9]);
+    });
+
+    it("k 为 1 时只返回首个下标", () => {
+        expect(uniformIndices(10, 1)).toEqual([0]);
+    });
+
+    it("count 不大于 k 时返回全部下标", () => {
+        expect(uniformIndices(3, 10)).toEqual([0, 1, 2]);
+        expect(uniformIndices(3, 3)).toEqual([0, 1, 2]);
+    });
+
+    it("空序列或非正 k 返回空", () => {
+        expect(uniformIndices(0, 5)).toEqual([]);
+        expect(uniformIndices(5, 0)).toEqual([]);
+    });
+
+    it("下标严格递增且不越界", () => {
+        const picked = uniformIndices(37, 8);
+        expect(new Set(picked).size).toBe(picked.length);
+        expect(picked[0]).toBe(0);
+        expect(picked[picked.length - 1]).toBe(36);
     });
 });

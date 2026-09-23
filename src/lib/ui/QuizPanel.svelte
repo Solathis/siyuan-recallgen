@@ -6,6 +6,7 @@
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import { describeError, type ErrorDescription } from "../ai/errors";
+    import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
     import type { GradingResult, PanelState, QuizSession, UserAnswer } from "@/types/quiz";
@@ -95,11 +96,13 @@
     /* ── 生命周期 ────────────────────────────────────────────────── */
 
     onDestroy(() => {
+        window.removeEventListener("keydown", onKeydown);
         if (saveTimer) clearTimeout(saveTimer);
         stopCountdown();
     });
 
     onMount(() => {
+        window.addEventListener("keydown", onKeydown);
         void init();
     });
 
@@ -436,6 +439,53 @@
 
     const answeredText = $derived(`${answeredCount} / ${questions.length}`);
     const progressPct = $derived(questions.length > 0 ? (answeredCount / questions.length) * 100 : 0);
+
+    /* ── 题目导航 ────────────────────────────────────────────────── */
+
+    /** 滚动容器与当前定位到的题号（用于题号导航条与上一题/下一题） */
+    let listEl = $state<HTMLDivElement | null>(null);
+    let activeIndex = $state(0);
+
+    function goToQuestion(index: number) {
+        const clamped = Math.max(0, Math.min(questions.length - 1, index));
+        activeIndex = clamped;
+        const nodes = listEl?.querySelectorAll<HTMLElement>("[data-question-index]");
+        nodes?.[clamped]?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+
+    /** 焦点在输入控件里时不劫持按键，否则会打断输入 */
+    function isTypingTarget(target: EventTarget | null): boolean {
+        const element = target as HTMLElement | null;
+        if (!element) return false;
+        const tag = element.tagName;
+        return (
+            tag === "INPUT" ||
+            tag === "TEXTAREA" ||
+            tag === "SELECT" ||
+            element.isContentEditable ||
+            !!element.closest(".cm-editor")
+        );
+    }
+
+    /**
+     * 答题快捷键：左右方向键切换题目，Ctrl/Cmd+Enter 交卷。
+     * 输入框与代码编辑器内不生效，避免与正常输入冲突。
+     */
+    function onKeydown(event: KeyboardEvent) {
+        if (panelState !== "answering" || questions.length === 0) return;
+        if (isTypingTarget(event.target)) return;
+
+        if (event.key === "ArrowLeft" || event.key === "PageUp") {
+            event.preventDefault();
+            goToQuestion(activeIndex - 1);
+        } else if (event.key === "ArrowRight" || event.key === "PageDown") {
+            event.preventDefault();
+            goToQuestion(activeIndex + 1);
+        } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            askSubmit();
+        }
+    }
 </script>
 
 <div class="flex h-full flex-col" style="--rg-panel-width: {config.general.panelWidth}px">
@@ -538,6 +588,27 @@
                         {/if}
                     </div>
                     <div class="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={activeIndex <= 0}
+                            onclick={() => goToQuestion(activeIndex - 1)}
+                            aria-label={t("quiz.prevQuestion")}
+                        >
+                            ←
+                        </Button>
+                        <span class="text-muted-foreground text-xs" aria-live="polite">
+                            {activeIndex + 1}/{questions.length}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={activeIndex >= questions.length - 1}
+                            onclick={() => goToQuestion(activeIndex + 1)}
+                            aria-label={t("quiz.nextQuestion")}
+                        >
+                            →
+                        </Button>
                         <Button variant="outline" size="sm" onclick={askRegenerate}>{t("quiz.regenerate")}</Button>
                         <Button variant="destructive" size="sm" onclick={askSubmit}>{t("quiz.submit")}</Button>
                     </div>
@@ -547,10 +618,38 @@
                     <ProgressBar value={progressPct} label={t("quiz.progress", answeredText)} />
                 </div>
 
-                <div class="min-h-0 flex-1 overflow-y-auto">
+                <!-- 题号导航：长试卷时不必靠滚动找题；已答/未答一眼可见 -->
+                <div
+                    class="flex flex-wrap items-center gap-1.5 px-1 pt-2"
+                    role="group"
+                    aria-label={t("quiz.navLabel")}
+                    title={t("quiz.shortcutHint")}
+                >
+                    {#each questions as q, i (q.id)}
+                        <button
+                            type="button"
+                            class={cn(
+                                "size-7 rounded-md border text-xs font-semibold transition-colors",
+                                session?.answers[q.id]
+                                    ? "border-primary bg-primary/10 text-primary"
+                                    : "border-border text-muted-foreground hover:bg-accent",
+                                i === activeIndex && "ring-ring ring-2"
+                            )}
+                            aria-label={t(
+                                "result.jumpTo",
+                                String(i + 1),
+                                session?.answers[q.id] ? t("quiz.answeredTag") : t("result.status_unanswered")
+                            )}
+                            aria-current={i === activeIndex}
+                            onclick={() => goToQuestion(i)}>{i + 1}</button
+                        >
+                    {/each}
+                </div>
+
+                <div class="min-h-0 flex-1 overflow-y-auto" bind:this={listEl}>
                     <div class="flex flex-col gap-4 py-2">
                         {#each questions as q, i (q.id)}
-                            <div class="flex flex-col gap-2">
+                            <div class="flex flex-col gap-2" data-question-index={i}>
                                 <div class="flex flex-wrap items-center gap-2">
                                     <Badge variant="secondary">{t("quiz.questionNum", String(i + 1))}</Badge>
                                     <Badge

@@ -1,77 +1,153 @@
 import type { StoragePlugin } from "./store";
 import type { BankItem, BankSummary } from "@/lib/quiz/bank";
 import { masteryScore, summarizeBank } from "@/lib/quiz/bank";
+import { monthKey } from "@/lib/quiz/stats";
 import { AsyncStore } from "./store";
 
-const BANK_NAME = "recallgen-bank.json";
+const INDEX_NAME = "recallgen-bank-index.json";
+const SHARD_PREFIX = "recallgen-bank-";
 
 /** 默认保留策略：长期未考且已掌握的题目在裁剪时优先移除 */
 export const BANK_PRUNE_AFTER_MS = 180 * 24 * 60 * 60 * 1000;
 /** 掌握度达到该值即认为已掌握 */
 export const BANK_MASTERED_AT = 85;
 
-/**
- * 题库存储。
- *
- * 以题干指纹为键保存题目与 FSRS 排程状态，用于：
- * - 生成时复用已有题目，避免同一篇笔记反复生成几乎相同的题
- * - 「复习到期题目」按排程出题
- * - 记录每题的作答历史，用于难度自适应与掌握度展示
- *
- * 与成绩存储不同，题库条目本身就是题目，因此使用单个文件；
- * 但为避免无限增长，提供 prune() 按保留策略清理。
- */
-export class BankStore extends AsyncStore {
+/** 索引文件结构：只记录「分片月份 → 该月的题目指纹」，用于按需定位条目 */
+interface BankIndexFile {
+    version: number;
+    months: Record<string, string[]>;
+}
+
+const INDEX_VERSION = 1;
+
+/** 题库索引：只存月份与指纹，体积很小 */
+class BankIndexStore extends AsyncStore {
     constructor(plugin: StoragePlugin) {
-        super(plugin, BANK_NAME);
+        super(plugin, INDEX_NAME);
     }
 
-    private async readMap(): Promise<Record<string, BankItem>> {
+    async readAll(): Promise<BankIndexFile> {
+        const data = await this.read<BankIndexFile>({ version: INDEX_VERSION, months: {} });
+        if (!data || typeof data !== "object" || typeof data.months !== "object" || data.months === null) {
+            return { version: INDEX_VERSION, months: {} };
+        }
+        return { version: INDEX_VERSION, months: data.months };
+    }
+
+    async writeAll(months: Record<string, string[]>): Promise<void> {
+        await this.write({ version: INDEX_VERSION, months });
+    }
+}
+
+/** 某个月份的题目分片 */
+class BankShardStore extends AsyncStore {
+    constructor(
+        plugin: StoragePlugin,
+        readonly month: string
+    ) {
+        super(plugin, `${SHARD_PREFIX}${month}.json`);
+    }
+
+    async readAll(): Promise<Record<string, BankItem>> {
         const data = await this.read<Record<string, BankItem>>({});
         return data && typeof data === "object" && !Array.isArray(data) ? { ...data } : {};
     }
 
-    /** 全部题库条目 */
-    async list(): Promise<BankItem[]> {
-        return Object.values(await this.readMap());
+    async writeAll(map: Record<string, BankItem>): Promise<void> {
+        await this.write(map);
+    }
+}
+
+/**
+ * 题库存储。
+ *
+ * 与成绩采用同样的分片思路：条目按「创建月份」分片，索引只记录每月有哪些指纹。
+ * 于是每次交卷只需重写当月分片与索引，写入量与当月题目数成正比，
+ * 而不是与题库总量成正比——题库是随使用持续增长的，这一点很关键。
+ */
+export class BankStore {
+    private readonly index: BankIndexStore;
+    private readonly shards = new Map<string, BankShardStore>();
+
+    constructor(protected readonly plugin: StoragePlugin) {
+        this.index = new BankIndexStore(plugin);
     }
 
-    async get(id: string): Promise<BankItem | null> {
-        return (await this.readMap())[id] ?? null;
+    private shard(month: string): BankShardStore {
+        let store = this.shards.get(month);
+        if (!store) {
+            store = new BankShardStore(this.plugin, month);
+            this.shards.set(month, store);
+        }
+        return store;
+    }
+
+    async list(): Promise<BankItem[]> {
+        const file = await this.index.readAll();
+        const out: BankItem[] = [];
+        for (const month of Object.keys(file.months)) {
+            out.push(...Object.values(await this.shard(month).readAll()));
+        }
+        return out;
     }
 
     async count(): Promise<number> {
-        return Object.keys(await this.readMap()).length;
+        const file = await this.index.readAll();
+        return Object.values(file.months).reduce((sum, ids) => sum + ids.length, 0);
+    }
+
+    async get(id: string): Promise<BankItem | null> {
+        const file = await this.index.readAll();
+        for (const [month, ids] of Object.entries(file.months)) {
+            if (!ids.includes(id)) continue;
+            const item = (await this.shard(month).readAll())[id];
+            if (item) return item;
+        }
+        return null;
     }
 
     async summary(now = Date.now()): Promise<BankSummary> {
         return summarizeBank(await this.list(), now);
     }
 
-    /** 按指纹批量查询（生成时用于判断题目是否已存在） */
+    /** 按指纹批量查询：只加载命中指纹所在的月份分片 */
     async findMany(ids: string[]): Promise<Map<string, BankItem>> {
-        const map = await this.readMap();
+        const wanted = new Set(ids);
+        const file = await this.index.readAll();
+        const months = Object.entries(file.months)
+            .filter(([, list]) => list.some((id) => wanted.has(id)))
+            .map(([month]) => month);
+
         const found = new Map<string, BankItem>();
-        for (const id of ids) {
-            const item = map[id];
-            if (item) found.set(id, item);
+        for (const month of months) {
+            const map = await this.shard(month).readAll();
+            for (const id of ids) {
+                const item = map[id];
+                if (item && !found.has(id)) found.set(id, item);
+            }
         }
         return found;
     }
 
     /** 新增或整体覆盖一个条目 */
     async upsert(item: BankItem): Promise<void> {
-        const map = await this.readMap();
-        map[item.id] = item;
-        await this.write(map);
+        await this.upsertMany([item]);
     }
 
-    /** 批量新增或覆盖（已存在的条目由调用方决定是否保留原有排程状态） */
+    /** 批量新增或覆盖：只写涉及的月份分片与索引 */
     async upsertMany(items: BankItem[]): Promise<void> {
         if (items.length === 0) return;
-        const map = await this.readMap();
-        for (const item of items) map[item.id] = item;
-        await this.write(map);
+        const file = await this.index.readAll();
+        const months = { ...file.months };
+
+        for (const [month, list] of groupByMonth(items)) {
+            const shard = this.shard(month);
+            const map = await shard.readAll();
+            for (const item of list) map[item.id] = item;
+            await shard.writeAll(map);
+            months[month] = Object.keys(map);
+        }
+        await this.index.writeAll(months);
     }
 
     /**
@@ -80,68 +156,111 @@ export class BankStore extends AsyncStore {
      */
     async mergeQuestions(items: BankItem[]): Promise<{ added: number; updated: number }> {
         if (items.length === 0) return { added: 0, updated: 0 };
-        const map = await this.readMap();
-        let added = 0;
-        let updated = 0;
 
-        for (const item of items) {
-            const existing = map[item.id];
-            if (existing) {
-                map[item.id] = {
-                    ...existing,
-                    // 保留 card / timesSeen / timesPassed / lastPercent / createdAt
-                    question: item.question,
-                    sourceDocId: item.sourceDocId,
-                    sourceTitle: item.sourceTitle,
-                    updatedAt: item.updatedAt,
-                };
-                updated++;
-            } else {
-                map[item.id] = item;
-                added++;
-            }
-        }
-        await this.write(map);
-        return { added, updated };
+        const existing = await this.findMany(items.map((item) => item.id));
+        const merged = items.map((item) => {
+            const previous = existing.get(item.id);
+            if (!previous) return item;
+            return {
+                ...previous,
+                // 保留 card / timesSeen / timesPassed / lastPercent / createdAt
+                question: item.question,
+                sourceDocId: item.sourceDocId,
+                sourceTitle: item.sourceTitle,
+                updatedAt: item.updatedAt,
+            };
+        });
+
+        await this.upsertMany(merged);
+        return { added: items.length - existing.size, updated: existing.size };
     }
 
     async remove(id: string): Promise<void> {
-        const map = await this.readMap();
-        if (!(id in map)) return;
-        delete map[id];
-        await this.write(map);
+        const file = await this.index.readAll();
+        for (const [month, ids] of Object.entries(file.months)) {
+            if (!ids.includes(id)) continue;
+            const shard = this.shard(month);
+            const map = await shard.readAll();
+            if (!(id in map)) continue;
+            delete map[id];
+            await shard.writeAll(map);
+            await this.index.writeAll({ ...file.months, [month]: Object.keys(map) });
+            return;
+        }
     }
 
     async clear(): Promise<void> {
-        await this.write({});
+        const file = await this.index.readAll();
+        const months = { ...file.months };
+        for (const month of Object.keys(months)) {
+            await this.shard(month).writeAll({});
+        }
+        await this.index.writeAll({});
     }
 
     /**
-     * 按保留策略裁剪：删除「长期未考且已掌握」的题目。
-     * 返回删除条数。pruneBefore 用于测试注入时间。
+     * 按保留策略裁剪：删除「长期未考且已掌握」的题目，返回删除条数。
      */
     async prune(
         now = Date.now(),
         { olderThanMs = BANK_PRUNE_AFTER_MS, masteredAt = BANK_MASTERED_AT } = {}
     ): Promise<number> {
-        const map = await this.readMap();
-        const kept: Record<string, BankItem> = {};
+        const file = await this.index.readAll();
+        const months = { ...file.months };
         let removed = 0;
 
-        for (const [id, item] of Object.entries(map)) {
-            const stale = now - (item.updatedAt || item.createdAt || 0) > olderThanMs;
-            if (stale && masteryScore(item) >= masteredAt) {
-                removed++;
-                continue;
+        for (const month of Object.keys(months)) {
+            const shard = this.shard(month);
+            const map = await shard.readAll();
+            const kept: Record<string, BankItem> = {};
+            let changed = false;
+
+            for (const [id, item] of Object.entries(map)) {
+                const stale = now - (item.updatedAt || item.createdAt || 0) > olderThanMs;
+                if (stale && masteryScore(item) >= masteredAt) {
+                    removed++;
+                    changed = true;
+                    continue;
+                }
+                kept[id] = item;
             }
-            kept[id] = item;
+
+            if (changed) {
+                await shard.writeAll(kept);
+                months[month] = Object.keys(kept);
+            }
         }
-        if (removed > 0) await this.write(kept);
+
+        if (removed > 0) await this.index.writeAll(months);
         return removed;
     }
 
     /** 卸载插件时删除题库数据 */
     async purgeAll(): Promise<void> {
-        await this.plugin.removeData?.(BANK_NAME).catch(() => undefined);
+        const file = await this.index.readAll().catch(() => ({ version: INDEX_VERSION, months: {} }));
+        for (const month of Object.keys(file.months)) {
+            await this.plugin.removeData?.(`${SHARD_PREFIX}${month}.json`).catch(() => undefined);
+        }
+        await this.plugin.removeData?.(INDEX_NAME).catch(() => undefined);
     }
+
+    /** 等待索引与全部分片的写入完成 */
+    async flush(): Promise<void> {
+        await this.index.flush();
+        for (const shard of this.shards.values()) {
+            await shard.flush();
+        }
+    }
+}
+
+/** 按条目的创建时间分组到月份 */
+function groupByMonth(items: BankItem[]): Map<string, BankItem[]> {
+    const out = new Map<string, BankItem[]>();
+    for (const item of items) {
+        const month = monthKey(item.createdAt || item.updatedAt || Date.now());
+        const list = out.get(month);
+        if (list) list.push(item);
+        else out.set(month, [item]);
+    }
+    return out;
 }
