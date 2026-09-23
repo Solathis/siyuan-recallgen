@@ -218,6 +218,18 @@ export default class RecallGenPlugin extends Plugin {
                     onClearBank: async () => {
                         await self.bankStore.clear();
                     },
+                    onImportConfig: async (next, result) => {
+                        // 导入的配置立即生效并落盘；warnings 由设置面板逐条提示
+                        self.config = next;
+                        for (const listener of self.configListeners) listener(next);
+                        try {
+                            await self.configStore.set(next, { immediate: true });
+                        } catch (err) {
+                            console.error("[RecallGen] 导入配置落盘失败", err);
+                            showMessage(t("settings.saveFailed", (err as Error).message), 7000, "error");
+                        }
+                        console.info("[RecallGen] 配置导入完成", result.warnings);
+                    },
                     onSave: async (next: RecallGenConfig) => {
                         self.config = next;
                         for (const listener of self.configListeners) listener(next);
