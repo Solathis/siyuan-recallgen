@@ -420,6 +420,41 @@ describe("selectReviewItems", () => {
     it("ahead 且该范围题库为空时仍返回空", () => {
         expect(selectReviewItems(bank, { now: NOW, tag: "不存在的知识点", ahead: true })).toHaveLength(0);
     });
+
+    it("按题型筛选", () => {
+        const mixed: BankItem[] = [
+            { ...bank[0], question: { ...bank[0].question, type: "coding" } },
+            { ...bank[1], question: { ...bank[1].question, type: "subjective" } },
+        ];
+        expect(selectReviewItems(mixed, { now: NOW, type: "coding" }).map((i) => i.question.question)).toEqual(["甲"]);
+    });
+
+    it("题型与知识点可同时限定", () => {
+        const mixed: BankItem[] = [
+            { ...bank[0], question: { ...bank[0].question, type: "coding" } },
+            { ...bank[1], question: { ...bank[1].question, type: "coding" } },
+        ];
+        // 甲、乙都属于「代数」，其中只有甲是编程题
+        expect(selectReviewItems(mixed, { now: NOW, tag: "代数", type: "coding" })).toHaveLength(2);
+        expect(selectReviewItems(mixed, { now: NOW, tag: "几何", type: "coding" })).toHaveLength(0);
+    });
+
+    it("按题型复习同样支持提前复习", () => {
+        const future: BankItem[] = [
+            {
+                ...bank[0],
+                question: { ...bank[0].question, type: "coding" },
+                card: { ...bank[0].card, due: NOW + DAY },
+            },
+            {
+                ...bank[2],
+                question: { ...bank[2].question, type: "coding" },
+                card: { ...bank[2].card, due: NOW + DAY },
+            },
+        ];
+        expect(selectReviewItems(future, { now: NOW, type: "coding" })).toHaveLength(0);
+        expect(selectReviewItems(future, { now: NOW, type: "coding", ahead: true })).toHaveLength(2);
+    });
 });
 
 describe("bankTags", () => {

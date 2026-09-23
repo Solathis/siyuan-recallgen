@@ -16,7 +16,7 @@
         type RangeDays,
     } from "../quiz/charts";
     import { scorePercent } from "../quiz/stats";
-    import type { HeatmapConfig, ScoreIndexEntry } from "@/types/quiz";
+    import type { HeatmapConfig, QuestionType, ScoreIndexEntry } from "@/types/quiz";
     import DonutChart from "./DonutChart.svelte";
     import Heatmap from "./Heatmap.svelte";
     import LineChart from "./LineChart.svelte";
@@ -33,8 +33,8 @@
         /** 热力图配色配置；未提供时不渲染热力图 */
         heatmapConfig?: HeatmapConfig;
         lang?: "zh" | "en";
-        /** 按知识点开始一次到期复习；由插件层打开新的答题 Tab */
-        onStartReview?: (scope: { tag?: string }) => void;
+        /** 按知识点开始一次复习；由插件层打开新的答题 Tab */
+        onStartReview?: (scope: { tag?: string; type?: QuestionType }) => void;
     } = $props();
 
     let range = $state<RangeDays>(30);
