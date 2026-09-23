@@ -83,18 +83,20 @@
             } else {
                 panelState = "configuring";
             }
-        } else if (tabData.mode === "review" && tabData.reviewRecord) {
-            const rec = tabData.reviewRecord;
+        } else if (tabData.mode === "review" && tabData.review) {
+            const { entry, detail } = tabData.review;
             session = {
-                id: rec.quizId,
-                sourceDocId: rec.sourceDocId ?? "",
-                sourceTitle: rec.title,
-                questions: rec.questions ?? [],
-                createdAt: rec.timestamp,
+                id: entry.quizId,
+                sourceDocId: entry.sourceDocId ?? "",
+                sourceTitle: entry.title,
+                questions: detail.questions ?? [],
+                createdAt: entry.timestamp,
                 answers: {},
             };
-            results = rec.detail;
-            analysis = rec.analysis ?? "";
+            results = detail.detail;
+            analysis = detail.analysis ?? "";
+            // 回看时也要显示当时的答题耗时
+            durationVar = entry.duration ?? 0;
             panelState = "result";
         } else {
             error = t("quiz.invalidTab");
@@ -288,7 +290,7 @@
             progressValue = null;
             try {
                 analysis = await service.analyze(results, session.questions);
-                await service.updateScore(scoreId, { analysis });
+                await service.updateScoreAnalysis(scoreId, analysis);
             } catch (e) {
                 analysis = t("quiz.analysisFailed", (e as Error).message);
             }

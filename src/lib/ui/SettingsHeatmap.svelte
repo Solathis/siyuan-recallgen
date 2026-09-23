@@ -4,10 +4,10 @@
     import { button, card, field, input, select, cn } from "./components";
     import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
-    import type { ScoreRecord } from "@/types/quiz";
+    import type { ScoreIndexEntry } from "@/types/quiz";
 
     export let config: RecallGenConfig;
-    export let scores: ScoreRecord[] = [];
+    export let scores: ScoreIndexEntry[] = [];
     const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
 
     function v(e: Event): string {

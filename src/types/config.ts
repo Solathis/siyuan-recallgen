@@ -88,6 +88,18 @@ export interface RecallGenConfig {
     heatmap: HeatmapConfig;
 }
 
+/**
+ * 配置局部更新。
+ * 顶层与各分组都是可选的，且分组内也只需给出要改的字段，
+ * 未给出的字段由 store 用现有值补齐。
+ */
+export interface ConfigPatch {
+    ai?: Partial<AIConfig>;
+    prompts?: Partial<PromptConfig>;
+    general?: Partial<GeneralConfig>;
+    heatmap?: Partial<HeatmapConfig>;
+}
+
 // ── 默认值 ──────────────────────────────────────────────────────────
 
 export const DEFAULT_HEATMAP: HeatmapConfig = {

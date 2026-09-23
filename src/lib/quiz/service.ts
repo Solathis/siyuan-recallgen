@@ -1,5 +1,13 @@
 import type { RecallGenConfig } from "@/types/config";
-import type { GradingResult, Question, QuizSession, ScoreRecord, UserAnswer } from "@/types/quiz";
+import type {
+    GradingResult,
+    Question,
+    QuizSession,
+    ScoreDetail,
+    ScoreIndexEntry,
+    ScoreRecord,
+    UserAnswer,
+} from "@/types/quiz";
 import type { GenProgressCallback } from "../quiz/generator";
 
 /** QuizPanel 与插件后端交互的接口，由 index.ts 实现 */
@@ -45,8 +53,13 @@ export interface QuizService {
     findProgressBySourceDocId(sourceDocId: string): Promise<QuizSession | null>;
     clearProgress(id: string): Promise<void>;
     saveScore(record: ScoreRecord): Promise<void>;
-    updateScore(id: string, patch: Partial<ScoreRecord>): Promise<void>;
-    listScores(): Promise<ScoreRecord[]>;
+    /** 写入薄弱点分析（同时更新索引上的 hasAnalysis 标记） */
+    updateScoreAnalysis(id: string, analysis: string): Promise<void>;
+    /** 历史列表：只读轻量索引，不加载题目与判分明细 */
+    listScores(): Promise<ScoreIndexEntry[]>;
+    /** 按需加载单次成绩的明细（题目、判分明细、分析） */
+    loadScoreDetail(id: string): Promise<ScoreDetail | null>;
+    removeScore(id: string): Promise<void>;
     testConnection: () => Promise<string>;
     clearScores(): Promise<void>;
     clearAllProgress(): Promise<void>;
@@ -59,6 +72,12 @@ export interface DateGenConfig {
     baseMinute: number;
 }
 
+/** 回看历史成绩所需的索引条目 + 明细 */
+export interface ReviewPayload {
+    entry: ScoreIndexEntry;
+    detail: ScoreDetail;
+}
+
 /** Tab 初始数据 */
 export interface QuizTabData {
     mode: "generate" | "resume" | "dateGenerate" | "review";
@@ -68,8 +87,8 @@ export interface QuizTabData {
     sourceTitle: string;
     dateRange?: "today" | "beforeToday";
     notebookId?: string;
-    /** review 模式的完整记录 */
-    reviewRecord?: ScoreRecord;
+    /** review 模式的成绩数据 */
+    review?: ReviewPayload;
 }
 
 /** 对话轮次 */

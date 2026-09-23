@@ -142,6 +142,51 @@ export interface ScoreRecord {
     sourceTitle?: string;
 }
 
+/** 分组聚合统计（按题型或难度） */
+export interface ScoreAggregate {
+    /** 该分组题数 */
+    count: number;
+    /** 其中得分达到通过门槛的题数 */
+    passed: number;
+    score: number;
+    maxScore: number;
+}
+
+/**
+ * 成绩索引条目。
+ * 只保留列表展示与统计图表所需的字段，不含题目与判分明细，
+ * 因此历史列表与统计页可以只加载索引，交卷写入也不再重写全部历史。
+ */
+export interface ScoreIndexEntry {
+    id: string;
+    quizId: string;
+    title: string;
+    timestamp: number;
+    totalScore: number;
+    maxScore: number;
+    questionCount: number;
+    /** 得分达到通过门槛的题数，界面上的「正确」口径 */
+    passedCount: number;
+    /** 未作答题数 */
+    unanswered: number;
+    /** 答题耗时（秒） */
+    duration?: number;
+    sourceDocId?: string;
+    sourceTitle?: string;
+    byType: Partial<Record<QuestionType, ScoreAggregate>>;
+    byDifficulty: Partial<Record<Difficulty, ScoreAggregate>>;
+    /** 是否已生成薄弱点分析 */
+    hasAnalysis: boolean;
+}
+
+/** 单次成绩的明细，按月分片存储，按需加载 */
+export interface ScoreDetail {
+    id: string;
+    detail: GradingResult[];
+    questions?: Question[];
+    analysis?: string;
+}
+
 /** 热力图分数区间颜色映射 */
 export interface ScoreRange {
     min: number;

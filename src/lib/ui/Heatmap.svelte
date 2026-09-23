@@ -1,9 +1,9 @@
 <script lang="ts">
     import { heatmap as h } from "./components";
     import { t } from "../i18n";
-    import type { ScoreRecord, ScoreRange, HeatmapConfig as HMConfig } from "@/types/quiz";
+    import type { ScoreIndexEntry, ScoreRange, HeatmapConfig as HMConfig } from "@/types/quiz";
 
-    export let records: ScoreRecord[] = [];
+    export let records: ScoreIndexEntry[] = [];
     export let config: HMConfig;
 
     /** GitHub 风格：固定 53 周 × 7 天 */
@@ -28,7 +28,7 @@
         return t("heatmap.scoreTip", cell.date, String(cell.score), String(cell.count));
     }
 
-    function buildCols(recs: ScoreRecord[], cfg: HMConfig): Col[] {
+    function buildCols(recs: ScoreIndexEntry[], cfg: HMConfig): Col[] {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayDow = (today.getDay() + 6) % 7;
@@ -54,7 +54,7 @@
         return out;
     }
 
-    function aggregate(recs: ScoreRecord[], metric: "max" | "avg"): Map<string, { score: number; count: number }> {
+    function aggregate(recs: ScoreIndexEntry[], metric: "max" | "avg"): Map<string, { score: number; count: number }> {
         const m = new Map<string, { scores: number[]; count: number }>();
         for (const r of recs) {
             const d = new Date(r.timestamp);
