@@ -246,3 +246,23 @@ size-*
 .rg-markdown img {
     max-width: 100%;
 }
+
+/* 不确定进度条的无尽滑动动画（shadcn 的 Progress 只支持确定值） */
+@keyframes rg-indeterminate {
+    0% {
+        transform: translateX(-120%);
+    }
+    100% {
+        transform: translateX(320%);
+    }
+}
+.rg-indeterminate-bar {
+    animation: rg-indeterminate 1.2s ease-in-out infinite;
+}
+
+/* 尊重系统的「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+    .rg-indeterminate-bar {
+        animation-duration: 3s;
+    }
+}

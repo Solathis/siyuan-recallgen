@@ -36,7 +36,7 @@
     }
 </script>
 
-<div class="rg-setting-layout">
+<div class="rg-scope rg-setting-layout">
     <nav class={sidebarNav}>
         {#each SECTIONS as s}
             <button type="button" class={sidebarNavItem(active === s.key)} on:click={() => (active = s.key)}>
@@ -59,7 +59,7 @@
                 {:else if active === "heatmap"}
                     <SettingsHeatmap {config} {scores} on:save={handleSave} />
                 {:else if active === "data"}
-                    <SettingsData {onClearScores} {onClearProgress} />
+                    <SettingsData {onClearScores} {onClearProgress} scoreCount={scores.length} />
                 {/if}
             </div>
         </div>

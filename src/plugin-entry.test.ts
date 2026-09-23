@@ -8,14 +8,17 @@ import { describe, expect, it } from "vitest";
  * 在 jsdom 下真实求值一次插件模块图（浏览器模块加载器加载的是同一份代码），
  * 用来拦住「Svelte 版本升级后组件模块在导入期就抛错」这类只能真机才发现的问题。
  */
+/** 首次导入需要转译并求值整张模块图（含 bits-ui），默认 5s 超时不够 */
+const IMPORT_TIMEOUT = 60_000;
+
 describe("插件入口模块", () => {
-    it("模块图可被求值，默认导出为插件类", async () => {
+    it("模块图可被求值，默认导出为插件类", { timeout: IMPORT_TIMEOUT }, async () => {
         const mod = await import("./index");
         expect(typeof mod.default).toBe("function");
         expect(mod.default.name).toBe("RecallGenPlugin");
     });
 
-    it("插件类带有思源要求的生命周期方法", async () => {
+    it("插件类带有思源要求的生命周期方法", { timeout: IMPORT_TIMEOUT }, async () => {
         const mod = await import("./index");
         const proto = mod.default.prototype as unknown as Record<string, unknown>;
         for (const name of ["onload", "onunload", "uninstall"]) {
@@ -23,7 +26,7 @@ describe("插件入口模块", () => {
         }
     });
 
-    it("三个面板组件模块都能在导入期求值", async () => {
+    it("三个面板组件模块都能在导入期求值", { timeout: IMPORT_TIMEOUT }, async () => {
         const [quiz, history, setting] = await Promise.all([
             import("./lib/ui/QuizPanel.svelte"),
             import("./lib/ui/HistoryPanel.svelte"),

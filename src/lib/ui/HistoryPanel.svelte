@@ -70,7 +70,7 @@
     }
 </script>
 
-<div class="rg-history">
+<div class="rg-scope rg-history">
     <header class="rg-history__bar">
         <h2 class="rg-history__title">{t("history.title")}</h2>
         <div class="rg-history__controls">

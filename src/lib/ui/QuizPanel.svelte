@@ -398,7 +398,7 @@
     }
 </script>
 
-<div class="rg-panel" style="--rg-panel-width: {config.general.panelWidth}px">
+<div class="rg-scope rg-panel" style="--rg-panel-width: {config.general.panelWidth}px">
     <div class="rg-panel__inner">
         {#if panelState === "configuring"}
             <div class="rg-config">
