@@ -290,7 +290,7 @@
                 analysis = await service.analyze(results, session.questions);
                 await service.updateScore(scoreId, { analysis });
             } catch (e) {
-                analysis = `薄弱点分析失败：${(e as Error).message}`;
+                analysis = t("quiz.analysisFailed", (e as Error).message);
             }
             panelState = "result";
         } catch (e) {

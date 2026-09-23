@@ -1,5 +1,6 @@
-import { resolve } from "path";
-import { defineConfig, loadEnv } from "vite";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "path";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import livereload from "rollup-plugin-livereload";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
@@ -24,6 +25,8 @@ export default defineConfig({
 
     plugins: [
         svelte(),
+
+        katexLocalAssets(),
 
         viteStaticCopy({
             targets: [
@@ -102,6 +105,49 @@ function watchExternalFiles(patterns: string[]) {
             const files = await fg(patterns);
             for (const file of files) {
                 this.addWatchFile(file);
+            }
+        },
+    };
+}
+
+/**
+ * 把 KaTeX 样式与字体打进插件包，避免依赖 CDN：
+ * 离线或 jsDelivr 不可达时公式仍能正常排版。
+ *
+ * 只保留 woff2（思源桌面端与移动端 WebView 均支持），
+ * 丢掉 woff/ttf 可让字体体积从 1.2MB 降到约 296KB。
+ */
+function katexLocalAssets(): Plugin {
+    const katexDist = resolve(__dirname, "node_modules/katex/dist");
+    const fontsDir = join(katexDist, "fonts");
+
+    return {
+        name: "recallgen-katex-local-assets",
+        enforce: "post",
+        generateBundle(_options, bundle) {
+            const css = readFileSync(join(katexDist, "katex.min.css"), "utf8").replace(
+                /,url\(fonts\/[^)]+\.(?:woff|ttf)\)\s*format\("(?:woff|truetype)"\)/g,
+                ""
+            );
+
+            let appended = false;
+            for (const file of Object.values(bundle)) {
+                if (file.type === "asset" && file.fileName.endsWith(".css")) {
+                    file.source = `${String(file.source)}\n${css}`;
+                    appended = true;
+                }
+            }
+            if (!appended) {
+                this.warn("未找到 CSS 产物，KaTeX 样式未注入");
+            }
+
+            for (const name of readdirSync(fontsDir)) {
+                if (!name.endsWith(".woff2")) continue;
+                this.emitFile({
+                    type: "asset",
+                    fileName: `fonts/${name}`,
+                    source: readFileSync(join(fontsDir, name)),
+                });
             }
         },
     };

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AIError } from "@/lib/ai/client";
 import type { Question } from "@/types/quiz";
 import { checkFillBlank, checkObjective, clampScore, gradeObjective, isObjective, setEqual } from "./grader";
 
@@ -164,15 +165,29 @@ describe("clampScore", () => {
     });
 
     it("undefined 视为缺失并抛错", () => {
-        expect(() => clampScore(undefined)).toThrow(/缺少 score/);
+        expect(() => clampScore(undefined)).toThrow(/缺少有效的 score/);
     });
 
     it("非数字字符串抛错", () => {
-        expect(() => clampScore("abc")).toThrow(/缺少 score/);
+        expect(() => clampScore("abc")).toThrow(/缺少有效的 score/);
     });
 
-    // ── 已确认缺陷，修复后把 it.fails 改回 it ────────────────────────────
-    it.fails("null 应视为缺失并抛错（缺陷：Number(null) 得到 0，被静默判为 0 分）", () => {
-        expect(() => clampScore(null)).toThrow(/缺少 score/);
+    it("null 视为缺失并抛错（回归：Number(null) 曾得到 0 被静默判为 0 分）", () => {
+        expect(() => clampScore(null)).toThrow(/缺少有效的 score/);
+    });
+
+    it("空字符串与 NaN 视为缺失并抛错", () => {
+        expect(() => clampScore("")).toThrow(/缺少有效的 score/);
+        expect(() => clampScore(Number.NaN)).toThrow(/缺少有效的 score/);
+    });
+
+    it("抛出的错误归类为 parse，便于上层区分", () => {
+        try {
+            clampScore(undefined);
+            throw new Error("应当抛错");
+        } catch (e) {
+            expect(e).toBeInstanceOf(AIError);
+            expect((e as AIError).kind).toBe("parse");
+        }
     });
 });

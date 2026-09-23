@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import PromiseLimitPool from "@/libs/promise-pool";
 import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
 import { buildGradeSubjectiveMessages } from "../ai/prompts";
@@ -43,7 +44,7 @@ export async function gradeAll(
                     correct: null,
                     score: 0,
                     maxScore: 100,
-                    comment: `判分失败: ${(e as Error).message}`,
+                    comment: t("grade.failed", (e as Error).message),
                     userAnswer: ua,
                 }));
                 results.push(r);
@@ -54,8 +55,9 @@ export async function gradeAll(
         }
     }
     await pool.awaitAll();
-    // 保持题序
-    return results.sort((a, b) => a.questionId.localeCompare(b.questionId, undefined, { numeric: true }));
+    // 按原题序返回，避免依赖 questionId 的字符串排序（id 格式一旦变化就会错位）
+    const byId = new Map(results.map((r) => [r.questionId, r]));
+    return questions.map((q) => byId.get(q.id)).filter((r): r is GradingResult => r !== undefined);
 }
 
 export function isObjective(type: Question["type"]): boolean {
@@ -114,7 +116,7 @@ export function checkFillBlank(accepted: string[][], user: string[]): boolean {
 /** 主观/编程题 AI 判分 */
 async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | undefined): Promise<GradingResult> {
     const userText = ua?.type === "subjective" || ua?.type === "coding" ? ua.value : "";
-    const messages = buildGradeSubjectiveMessages(config.prompts, q, userText);
+    const messages = buildGradeSubjectiveMessages(config.prompts, q, userText, config.general.language);
     const callOpts = pickGradingOpts(config.ai.jsonSchemaEnabled);
     const rc = resolveAI(config.ai, config.ai.roles.grader);
     const result = await callLLM(rc, messages as ChatMessage[], {
@@ -122,7 +124,10 @@ async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | un
         temperature: 0,
         maxTokens: 512,
     });
-    const parsed = parseJsonLoose(result.content) as { score?: number; comment?: string };
+    const parsed = parseJsonLoose(result.content) as { score?: unknown; comment?: unknown } | null;
+    if (!parsed || typeof parsed !== "object") {
+        throw new AIError(t("grade.notObject"), undefined, "parse");
+    }
     const score = clampScore(parsed.score);
     return {
         questionId: q.id,
@@ -148,17 +153,22 @@ function pickGradingOpts(jsonSchemaEnabled: boolean): {
 } {
     if (jsonSchemaEnabled) {
         return {
-            tools: buildTools("recallgen_grading", "判分", GRADING_SCHEMA as object),
+            tools: buildTools("recallgen_grading", t("grade.toolDescription"), GRADING_SCHEMA as object),
             toolChoice: buildToolChoice("recallgen_grading"),
         };
     }
     return { responseFormat: buildJsonObjectResponseFormat() };
 }
 
+/**
+ * 收敛分数到 0-100。
+ * 只接受数字与可解析的数字字符串；null/undefined/空串/NaN 一律视为缺失并抛错，
+ * 避免 Number(null) === 0 把「模型没给分」静默记成 0 分。
+ */
 export function clampScore(v: unknown): number {
-    const n = typeof v === "number" ? v : Number(v);
-    if (Number.isNaN(n)) {
-        throw new AIError("AI 判分缺少 score");
+    const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : Number.NaN;
+    if (!Number.isFinite(n)) {
+        throw new AIError(t("grade.noScore"), undefined, "parse");
     }
     return Math.max(0, Math.min(100, n));
 }

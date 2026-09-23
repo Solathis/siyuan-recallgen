@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
 import { buildGenerateMessages, buildReviewMessages, buildRegenerateMessages } from "../ai/prompts";
 import {
@@ -9,7 +10,7 @@ import {
     parseJsonLoose,
 } from "../ai/schema";
 import type { RecallGenConfig } from "@/types/config";
-import type { DifficultyDistribution, Question, QuestionType } from "@/types/quiz";
+import type { Difficulty, Question, QuestionType } from "@/types/quiz";
 
 /** 审题进度回调：phase=当前阶段, round=当前轮次(1-based), detail=描述 */
 export type GenProgressCallback = (phase: GenPhase, round: number, detail: string) => void;
@@ -40,7 +41,7 @@ export async function generateQuestions(
     const difficulty = general.difficulty;
 
     // 1. 生成
-    onProgress?.("generating", 1, "AI 正在生成题目…");
+    onProgress?.("generating", 1, t("quiz.generating"));
     const genAI = resolveAI(ai, ai.roles.generator);
     const messages = buildGenerateMessages(prompts, general, content, types, difficulty);
     const callOpts = pickCallOpts(ai.jsonSchemaEnabled, "recallgen_quiz", "生成复习题目", QUIZ_SCHEMA as object);
@@ -59,9 +60,16 @@ export async function generateQuestions(
         rawQuestions = parsed.items;
     }
     if (!rawQuestions) {
-        throw new AIError(`AI 返回缺少 questions 数组（解析后 keys: ${Object.keys(parsed ?? {}).join(",")}）`);
+        throw new AIError(t("gen.missingQuestions", parsed === null ? "null" : typeof parsed), undefined, "parse");
     }
-    let questions = validateQuestions(rawQuestions, types, difficulty);
+
+    let skipped = 0;
+    let questions = validateQuestions(rawQuestions, types, () => {
+        skipped++;
+    });
+    if (skipped > 0) {
+        onProgress?.("generating", 1, t("gen.dropped", String(questions.length), String(skipped)));
+    }
 
     // 2. 审题循环（仅当审题者模型存在时执行）
     if (ai.roles.reviewer && ai.models.some((m) => m.id === ai.roles.reviewer)) {
@@ -86,9 +94,9 @@ async function reviewLoop(
     const types = config.general.allowedTypes;
 
     for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
-        onProgress?.("reviewing", round, `第 ${round} 轮审题中…`);
+        onProgress?.("reviewing", round, t("gen.reviewing", String(round)));
 
-        const reviewMessages = buildReviewMessages(prompts, questions);
+        const reviewMessages = buildReviewMessages(prompts, questions, config.general.language);
         const reviewResult = await callLLM(reviewAI, reviewMessages as ChatMessage[], {
             ...reviewOpts,
             temperature: 0.3,
@@ -107,39 +115,45 @@ async function reviewLoop(
         for (const r of reviews) {
             if (!r.passed && r.index >= 0 && r.index < questions.length) {
                 failedIndices.push(r.index);
-                reasons.push(r.reason ?? "未通过审核");
+                reasons.push(r.reason ?? t("gen.reviewNoReason"));
             }
         }
 
         if (failedIndices.length === 0) {
-            onProgress?.("reviewing", round, `第 ${round} 轮审题通过，共 ${questions.length} 题`);
+            onProgress?.("reviewing", round, t("gen.reviewPassed", String(round), String(questions.length)));
             break;
         }
 
         if (round === MAX_REVIEW_ROUNDS) {
-            onProgress?.("reviewing", round, `已达最大审题轮次，${failedIndices.length} 题仍未通过`);
+            onProgress?.("reviewing", round, t("gen.reviewMaxRounds", String(failedIndices.length)));
             break;
         }
 
         // 重新生成失败题
-        onProgress?.("regenerating", round, `第 ${round} 轮：重新生成 ${failedIndices.length} 道未通过题目…`);
+        onProgress?.("regenerating", round, t("gen.regenerating", String(round), String(failedIndices.length)));
         const failedQuestions = failedIndices.map((i) => questions[i]);
         const regenMessages = buildRegenerateMessages(prompts, config.general, failedQuestions, reasons, content);
         const regenResult = await callLLM(genAI, regenMessages as ChatMessage[], genOpts);
 
-        const regenParsed = parseJsonLoose(regenResult.content) as { questions?: unknown[] };
-        if (!regenParsed?.questions || !Array.isArray(regenParsed.questions)) {
+        const regenParsed = parseJsonLoose(regenResult.content) as { questions?: unknown[] } | null;
+        if (!regenParsed || !Array.isArray(regenParsed.questions)) {
             break; // 重新生成失败，保留原题
         }
-        const regenQuestions = validateQuestionsLenient(regenParsed.questions, types);
 
-        // 逐题替换失败题，单题校验失败则保留原题
-        for (let i = 0; i < failedIndices.length && i < regenQuestions.length; i++) {
-            const newQ = regenQuestions[i];
-            if (!newQ) continue;
-            newQ.id = questions[failedIndices[i]].id;
-            questions[failedIndices[i]] = newQ;
+        // 逐题替换失败题；单题校验失败则保留原题
+        let replaced = 0;
+        for (let i = 0; i < failedIndices.length; i++) {
+            const target = failedIndices[i];
+            const result = coerceQuestion(regenParsed.questions[i], questions[target].id, types);
+            if (!result.ok || !result.question) continue;
+            questions[target] = result.question;
+            replaced++;
         }
+        onProgress?.(
+            "regenerating",
+            round,
+            t("gen.regenerated", String(round), String(replaced), String(failedIndices.length))
+        );
     }
 
     return questions;
@@ -165,50 +179,81 @@ function pickCallOpts(
     return { responseFormat: buildJsonObjectResponseFormat() };
 }
 
-/** 宽松校验：逐题 try-catch，单题失败返回 null 而非整批异常 */
-function validateQuestionsLenient(raw: unknown[], allowedTypes: QuestionType[]): (Question | null)[] {
-    return raw.map((item, i) => {
-        try {
-            const obj = item as Record<string, unknown>;
-            const type = obj.type as QuestionType;
-            if (!allowedTypes.includes(type)) return null;
-            const base = {
-                id: `q-${i + 1}`,
-                type,
-                difficulty: (obj.difficulty as Question["difficulty"]) ?? "medium",
-                question: String(obj.question ?? ""),
-                explanation: obj.explanation ? String(obj.explanation) : undefined,
-            };
-            return coerceByType(base, type, obj);
-        } catch {
-            return null;
-        }
-    });
+// ── 题目校验与类型收敛 ──────────────────────────────────────────────
+
+export interface CoerceResult {
+    ok: boolean;
+    question?: Question;
+    reason?: string;
 }
 
-/** 校验并转换为强类型 Question[]，赋 id */
-function validateQuestions(
+/**
+ * 单题宽松校验：任何字段问题都通过返回值上报，不抛异常。
+ * 单题不合格只应被丢弃，而不应让整批生成作废。
+ */
+export function coerceQuestion(raw: unknown, id: string, allowedTypes: QuestionType[]): CoerceResult {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        return { ok: false, reason: t("validate.notObject") };
+    }
+    const item = raw as Record<string, unknown>;
+    const type = item.type as QuestionType;
+    if (!allowedTypes.includes(type)) {
+        return { ok: false, reason: t("validate.typeDisabled", String(item.type)) };
+    }
+    const question = String(item.question ?? "").trim();
+    if (!question) {
+        return { ok: false, reason: t("validate.emptyQuestion") };
+    }
+    const base = {
+        id,
+        type,
+        difficulty: toDifficulty(item.difficulty),
+        question,
+        explanation: item.explanation ? String(item.explanation) : undefined,
+    };
+    try {
+        return { ok: true, question: coerceByType(base, type, item) };
+    } catch (e) {
+        return { ok: false, reason: (e as Error).message };
+    }
+}
+
+/**
+ * 批量校验：逐题丢弃不合格题目，并按输出顺序重新编号为 q-1..q-n。
+ * 仅当一道题都没通过时才抛错。
+ */
+export function validateQuestions(
     raw: unknown[],
     allowedTypes: QuestionType[],
-    _difficulty: DifficultyDistribution
+    onSkip?: (reason: string) => void
 ): Question[] {
     const out: Question[] = [];
-    for (let i = 0; i < raw.length; i++) {
-        const item = raw[i] as Record<string, unknown>;
-        const type = item.type as QuestionType;
-        if (!allowedTypes.includes(type)) {
-            throw new AIError(`第 ${i + 1} 题：题型 ${type} 未启用`);
+    const reasons: string[] = [];
+
+    for (const item of raw) {
+        const result = coerceQuestion(item, `q-${out.length + 1}`, allowedTypes);
+        if (result.ok && result.question) {
+            out.push(result.question);
+        } else {
+            const reason = result.reason ?? t("gen.unknownReason");
+            reasons.push(reason);
+            onSkip?.(reason);
         }
-        const base = {
-            id: `q-${i + 1}`,
-            type,
-            difficulty: (item.difficulty as Question["difficulty"]) ?? "medium",
-            question: String(item.question ?? ""),
-            explanation: item.explanation ? String(item.explanation) : undefined,
-        };
-        out.push(coerceByType(base, type, item));
+    }
+
+    if (out.length === 0) {
+        throw new AIError(
+            raw.length === 0
+                ? t("gen.emptyQuestions")
+                : t("gen.allInvalid", String(raw.length), reasons.slice(0, 3).join("; "))
+        );
     }
     return out;
+}
+
+function toDifficulty(value: unknown): Difficulty {
+    const s = String(value ?? "").toLowerCase();
+    return s === "easy" || s === "medium" || s === "hard" ? s : "medium";
 }
 
 function coerceByType(base: Omit<Question, never>, type: QuestionType, item: Record<string, unknown>): Question {
@@ -216,23 +261,24 @@ function coerceByType(base: Omit<Question, never>, type: QuestionType, item: Rec
         case "single_choice": {
             const options = toStringArray(item.options);
             const answer = toNumber(item.answer);
-            if (options.length < 2 || answer === null || answer >= options.length) {
-                throw new AIError("单选题字段不完整");
+            // 越界或负数索引会导致用户永远答不对，必须丢弃
+            if (options.length < 2 || answer === null || answer < 0 || answer >= options.length) {
+                throw new AIError(t("validate.singleChoice"));
             }
             return { ...base, type, options, answer } as Question;
         }
         case "multiple_choice": {
             const options = toStringArray(item.options);
-            const answer = toNumberArray(item.answer);
-            if (options.length < 2 || answer.length === 0) {
-                throw new AIError("多选题字段不完整");
+            const answer = [...new Set(toNumberArray(item.answer))].sort((a, b) => a - b);
+            if (options.length < 2 || answer.length === 0 || answer.some((i) => i < 0 || i >= options.length)) {
+                throw new AIError(t("validate.multipleChoice"));
             }
             return { ...base, type, options, answer } as Question;
         }
         case "fill_blank": {
             const answer = toAnswerMatrix(item.answer);
-            if (answer.length === 0) {
-                throw new AIError("填空题答案缺失");
+            if (answer.length === 0 || answer.some((opts) => opts.length === 0)) {
+                throw new AIError(t("validate.blankMissing"));
             }
             return { ...base, type, answer } as Question;
         }
@@ -240,21 +286,26 @@ function coerceByType(base: Omit<Question, never>, type: QuestionType, item: Rec
             if (typeof item.answer === "boolean") return { ...base, type, answer: item.answer } as Question;
             if (typeof item.answer === "string") {
                 const s = item.answer.trim().toLowerCase();
-                if (s === "true" || s === "正确" || s === "1") return { ...base, type, answer: true } as Question;
-                if (s === "false" || s === "错误" || s === "0") return { ...base, type, answer: false } as Question;
+                if (s === "true" || s === "正确" || s === "对" || s === "1") {
+                    return { ...base, type, answer: true } as Question;
+                }
+                if (s === "false" || s === "错误" || s === "错" || s === "0") {
+                    return { ...base, type, answer: false } as Question;
+                }
             }
             if (typeof item.answer === "number") return { ...base, type, answer: item.answer !== 0 } as Question;
-            throw new AIError("判断题 answer 非布尔的");
+            throw new AIError(t("validate.notBoolean"));
         }
         case "subjective": {
-            const reference_answer = String(item.reference_answer ?? "");
+            const reference_answer = String(item.reference_answer ?? "").trim();
             if (!reference_answer) {
-                throw new AIError("主观题缺少参考答案");
+                throw new AIError(t("validate.subjectiveNoRef"));
             }
             return { ...base, type, reference_answer } as Question;
         }
         case "coding": {
             const language = String(item.language ?? "python");
+            const answer = String(item.answer ?? "");
             const test_cases = Array.isArray(item.test_cases)
                 ? item.test_cases.map((t) => ({
                       input:
@@ -268,39 +319,48 @@ function coerceByType(base: Omit<Question, never>, type: QuestionType, item: Rec
                               : undefined,
                   }))
                 : undefined;
+            // 编程题至少要能对照参考答案或测试用例，否则无从判分
+            if (!answer.trim() && !test_cases?.length) {
+                throw new AIError(t("validate.codingNoRef"));
+            }
             return {
                 ...base,
                 type,
                 language,
                 starter_code: item.starter_code !== undefined ? String(item.starter_code) : undefined,
                 test_cases,
-                answer: String(item.answer ?? ""),
+                answer,
                 reference_answer: item.reference_answer !== undefined ? String(item.reference_answer) : undefined,
             } as Question;
         }
         default:
-            throw new AIError(`未知题型: ${type}`);
+            throw new AIError(t("validate.unknownType", String(type)));
     }
 }
 
 function toStringArray(v: unknown): string[] {
     return Array.isArray(v) ? v.map((x) => String(x)) : [];
 }
+
+/** 数字或字母索引（A=0, B=1, …）转 0-based 索引 */
 function toNumber(v: unknown): number | null {
-    if (typeof v === "number") return v;
+    if (typeof v === "number") return Number.isFinite(v) ? v : null;
     if (typeof v === "string") {
-        const n = parseInt(v, 10);
+        const trimmed = v.trim();
+        const n = parseInt(trimmed, 10);
         if (!Number.isNaN(n)) return n;
-        // 字母索引 A=0, B=1, …
-        const upper = v.trim().toUpperCase();
+        const upper = trimmed.toUpperCase();
         if (upper.length === 1 && upper >= "A" && upper <= "Z") return upper.charCodeAt(0) - 65;
     }
     return null;
 }
+
 function toNumberArray(v: unknown): number[] {
-    return Array.isArray(v) ? v.map((x) => Number(x)).filter((n) => !Number.isNaN(n)) : [];
+    if (!Array.isArray(v)) return [];
+    return v.map((x) => toNumber(x)).filter((n): n is number => n !== null);
 }
-/** 填空题 answer: 二维数组 string[][] */
+
+/** 填空题 answer: 二维数组 string[][]，单个答案会包成一元数组 */
 function toAnswerMatrix(v: unknown): string[][] {
     if (!Array.isArray(v)) return [];
     return v.map((blank) => (Array.isArray(blank) ? blank.map((x) => String(x)) : [String(blank)]));

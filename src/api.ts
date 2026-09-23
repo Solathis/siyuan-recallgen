@@ -16,6 +16,14 @@ export async function request<T = unknown>(url: string, payload: unknown, return
 
 // ── SQL ──────────────────────────────────────────────────────────────
 
+/**
+ * 转义为 SQL 字符串字面量。
+ * 思源 SQL 没有参数绑定，只能拼接，因此所有来自外部的值都必须经过这里。
+ */
+export function quoteSqlLiteral(value: string): string {
+    return `'${String(value).replace(/'/g, "''")}'`;
+}
+
 export async function sql(stmt: string): Promise<any[]> {
     return request("/api/query/sql", { stmt });
 }
@@ -23,7 +31,7 @@ export async function sql(stmt: string): Promise<any[]> {
 // ── 块 ───────────────────────────────────────────────────────────────
 
 export async function getBlockByID(blockId: string): Promise<Block> {
-    const data = await sql(`select * from blocks where id ='${blockId}'`);
+    const data = await sql(`select * from blocks where id =${quoteSqlLiteral(blockId)}`);
     return data?.[0];
 }
 

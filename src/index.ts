@@ -212,7 +212,7 @@ export default class RecallGenPlugin extends Plugin {
     }
 
     private async analyze(results: GradingResult[], questions: Question[]): Promise<string> {
-        const messages = buildAnalysisMessages(this.config.prompts, results, questions);
+        const messages = buildAnalysisMessages(this.config.prompts, results, questions, this.config.general.language);
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
         const res = await callLLM(rc, messages as ChatMessage[], {
             temperature: 0.5,
@@ -227,7 +227,11 @@ export default class RecallGenPlugin extends Plugin {
         results: GradingResult[],
         wrongOnly?: boolean
     ): Promise<string> {
-        const questions = wrongOnly ? session.questions.filter((_, i) => results[i].score < 60) : session.questions;
+        // 按 questionId 对齐而不是按下标，避免题序不一致时筛错题目
+        const scoreById = new Map(results.map((r) => [r.questionId, r.score]));
+        const questions = wrongOnly
+            ? session.questions.filter((q) => (scoreById.get(q.id) ?? 100) < 60)
+            : session.questions;
         if (questions.length === 0) {
             showMessage(t("quiz.noWrongToSave"));
             return "";
@@ -244,7 +248,15 @@ export default class RecallGenPlugin extends Plugin {
         history: Array<{ role: "user" | "assistant"; content: string }>,
         userMessage: string
     ): Promise<string> {
-        const messages = buildChatMessages(this.config.prompts, question, result, analysis, history, userMessage);
+        const messages = buildChatMessages(
+            this.config.prompts,
+            question,
+            result,
+            analysis,
+            history,
+            userMessage,
+            this.config.general.language
+        );
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
         const res = await callLLM(rc, messages as ChatMessage[], {
             temperature: 0.6,
@@ -266,7 +278,8 @@ export default class RecallGenPlugin extends Plugin {
             results,
             analysis,
             history,
-            userMessage
+            userMessage,
+            this.config.general.language
         );
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
         const res = await callLLM(rc, messages as ChatMessage[], {

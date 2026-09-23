@@ -1,4 +1,5 @@
 import { jsonrepair } from "jsonrepair";
+import { t } from "@/lib/i18n";
 
 /**
  * 题目 JSON Schema：遵循标准规则（additionalProperties:false + required + 简单类型）。
@@ -130,14 +131,14 @@ export function parseJsonLoose(text: string): unknown {
         try {
             return JSON.parse(jsonrepair(extracted));
         } catch (e) {
-            throw new Error(`JSON 解析失败: ${(e as Error).message}（原文前200字: ${cleaned.slice(0, 200)}）`);
+            throw new Error(t("schema.parseFailed", (e as Error).message, cleaned.slice(0, 200)));
         }
     }
     // 3. 对全文做 jsonrepair 最后尝试
     try {
         return JSON.parse(jsonrepair(cleaned));
     } catch (e) {
-        throw new Error(`JSON 解析失败: ${(e as Error).message}（原文前200字: ${cleaned.slice(0, 200)}）`);
+        throw new Error(t("schema.parseFailed", (e as Error).message, cleaned.slice(0, 200)));
     }
 }
 

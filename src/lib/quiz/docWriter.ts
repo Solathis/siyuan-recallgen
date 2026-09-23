@@ -15,9 +15,37 @@ function fmtDate(d = new Date()): string {
     return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
 }
 
-function titleOf(sourceTitle: string): string {
-    const safe = sourceTitle.replace(/[\/\\:*?"<>|]/g, "_").slice(0, 40);
-    return `${t("doc.titlePrefix")}_${fmtDate()}_${safe}`;
+/**
+ * 生成文档标题。
+ * 思源桌面端会用 hpath 落文件，因此需要剔除路径非法字符、控制字符，
+ * 并去掉结尾的点和空格（Windows 不允许），截断长度避免超长路径。
+ */
+export function titleOf(sourceTitle: string, date = new Date()): string {
+    const safe =
+        String(sourceTitle)
+            .replace(/[\u0000-\u001f]/g, "")
+            .replace(/[/\\:*?"<>|]/g, "_")
+            .replace(/\s+/g, " ")
+            .trim()
+            .replace(/[.\s]+$/, "")
+            .slice(0, 40)
+            .trim() || t("doc.titlePrefix");
+    return `${t("doc.titlePrefix")}_${fmtDate(date)}_${safe}`;
+}
+
+/** 选取比内容中最长反引号串更长的代码围栏，避免内容提前闭合围栏 */
+function fenceFor(content: string): string {
+    let longest = 0;
+    for (const match of content.matchAll(/`+/g)) {
+        longest = Math.max(longest, match[0].length);
+    }
+    return "`".repeat(Math.max(3, longest + 1));
+}
+
+/** 将内容包裹为代码块 */
+function codeBlock(content: string, language = ""): string {
+    const fence = fenceFor(content);
+    return `${fence}${language}\n${content}\n${fence}`;
 }
 
 /**
@@ -26,33 +54,38 @@ function titleOf(sourceTitle: string): string {
  */
 export function buildQuestionsMarkdown(questions: Question[]): string {
     const lines: string[] = [];
+
     for (const q of questions) {
-        const head = `### ${typeLabel(q.type)} · ${diffLabel(q.difficulty)}`;
-        lines.push(`${head}\n{: custom-recallgen-id="${q.id}"}`);
+        lines.push(`### ${typeLabel(q.type)} · ${diffLabel(q.difficulty)}`);
+        lines.push(`{: custom-recallgen-id="${q.id}"}`);
         lines.push(q.question);
         lines.push("");
+
         if (q.type === "single_choice" || q.type === "multiple_choice") {
             q.options.forEach((opt, i) => {
-                const tag = String.fromCharCode(65 + i);
-                lines.push(`${tag}. ${opt}`);
+                lines.push(`${String.fromCharCode(65 + i)}. ${opt}`);
             });
             lines.push("");
         }
-        if (q.type === "coding") {
-            lines.push("```" + (q.language || ""));
-            if (q.starter_code) lines.push(q.starter_code);
-            lines.push("```");
+
+        if (q.type === "coding" && q.starter_code) {
+            lines.push(codeBlock(q.starter_code, q.language || ""));
             lines.push("");
         }
-        lines.push(`<details><summary>查看答案与解析</summary>`);
+
+        lines.push(`<details><summary>${t("doc.answerSummary")}</summary>`);
         lines.push("");
         lines.push(t("doc.answerLabel") + answerText(q));
-        if (q.explanation) lines.push("");
-        lines.push(t("doc.explanationLabel") + q.explanation);
+        // 解析可能为空，此时不应输出「解析：undefined」
+        if (q.explanation) {
+            lines.push("");
+            lines.push(t("doc.explanationLabel") + q.explanation);
+        }
         lines.push("");
-        lines.push(`</details>`);
+        lines.push("</details>");
         lines.push("");
     }
+
     return lines.join("\n");
 }
 
@@ -72,11 +105,12 @@ function answerText(q: Question): string {
         case "subjective":
             return q.reference_answer;
         case "coding":
-            return t("doc.seeCode") + "\n\n```" + q.language + "\n" + q.answer + "\n```";
+            return `${t("doc.seeCode")}\n\n${codeBlock(q.answer, q.language)}`;
     }
 }
 
-/** 新建子文档存放题目，返回新文档 ID
+/**
+ * 新建文档存放题目，返回新文档 ID。
  * sourceDocId 可以是文档块 ID 或笔记本 ID（笔记本生成时）。
  */
 export async function saveAsNewDoc(
@@ -89,20 +123,19 @@ export async function saveAsNewDoc(
     const title = titleOf(sourceTitle);
 
     if (config.storageLocation === "notebook" && config.notebookId) {
-        return createDocWithMd(config.notebookId, "/" + title, md);
+        return createDocWithMd(config.notebookId, `/${title}`, md);
     }
 
     const block = await getBlockByID(sourceDocId).catch(() => null);
     if (block) {
-        // 源是文档：在同级路径下创建子文档
+        // 源是文档：创建在其同级路径下
         const hpath = await getHPathByID(sourceDocId).catch(() => block.hpath);
-        const parent = hpath.lastIndexOf("/") >= 0 ? hpath.slice(0, hpath.lastIndexOf("/")) : "";
-        const path = (parent || "") + "/" + title;
-        return createDocWithMd(block.box, path, md);
+        const parent = hpath.lastIndexOf("/") > 0 ? hpath.slice(0, hpath.lastIndexOf("/")) : "";
+        return createDocWithMd(block.box, `${parent}/${title}`, md);
     }
 
     // 源是笔记本：直接在该笔记本根目录下创建文档
-    return createDocWithMd(sourceDocId as NotebookId, "/" + title, md);
+    return createDocWithMd(sourceDocId as NotebookId, `/${title}`, md);
 }
 
 /** 将薄弱点分析追加到文档末尾 */
