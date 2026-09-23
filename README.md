@@ -129,6 +129,7 @@ Left sidebar navigation + right content area, 6 independent sections:
 | Build Tool | Vite | 7.3+ |
 | Type System | TypeScript | 5.9+ |
 | Styling & Components | Tailwind CSS 4 + shadcn-svelte (bits-ui) | 4.3+ / 1.7+ |
+| Charts | Hand-drawn SVG + CSS (no chart library) | — |
 | SiYuan SDK | siyuan | 1.2.3 |
 | Code Editor | CodeMirror 6 | 6.x |
 | Math Rendering | KaTeX | 0.18.1 |
@@ -170,12 +171,14 @@ src/
 └── lib/
     ├── ai/                     # client.ts, errors.ts, schema.ts, scaffold.ts, prompts.ts
     ├── quiz/                   # generator.ts, grader.ts, selector.ts, content.ts, stats.ts,
-    │                           # export.ts, service.ts, docWriter.ts, dateRange.ts
+    │                           # charts.ts, chart-geometry.ts, paging.ts, bank.ts, export.ts,
+    │                           # service.ts, docWriter.ts, dateRange.ts
     ├── editor/codemirror.ts    # CodeMirror 6 editor (lazy language packs, theme follows SiYuan)
     ├── i18n/index.ts           # t() with global placeholder replacement and dictionary fallback
     ├── storage/                # store.ts, config.ts, scores.ts, progress.ts
     ├── ui/                     # QuizPanel, QuestionView, ResultPanel, HistoryPanel, Heatmap,
-    │                           # ProgressBar, SettingPanel + 6 Settings* panels, latex.ts
+    │                           # ProgressBar, LineChart, DonutChart, StatsPanel,
+    │                           # SettingPanel + 6 Settings* panels, latex.ts
     ├── components/ui/          # shadcn-svelte components (CLI-generated, editable)
     ├── utils.ts                # cn() plus the type helpers shadcn components import
     └── promise-pool.ts         # Concurrency-limited pool
@@ -210,7 +213,7 @@ pnpm run make-install
 
 ### Build Artifacts
 
-- `dist/index.js`: Single-file bundle (inlineDynamicImports), ~1.47MB (gzip 466KB)
+- `dist/index.js`: Single-file bundle (inlineDynamicImports), ~1.52MB (gzip 484KB)
 - `dist/index.css`: Stylesheet including KaTeX styles, ~74KB (gzip 12KB)
 - `dist/fonts/`: KaTeX fonts (20 woff2 files, ~296KB)
 - `dist/icon.png`: Plugin icon
@@ -350,7 +353,12 @@ The **Statistics** view of the history panel provides the following charts. All 
 
 Summary metrics: quiz and question counts, average and best score percentage, current and longest daily streak, average time per question, and active days.
 
-Chart colours are resolved from SiYuan's CSS variables, so they redraw automatically when the light/dark theme changes. Every chart carries an `aria-label` description, and a "recent records" text list provides an equivalent for screen readers.
+Charts are drawn directly with SVG and CSS; no chart library is used:
+
+- **Colours** come from CSS variables and Tailwind classes, so light/dark follows automatically without theme listeners or redraws
+- **Responsiveness** is handled by CSS (the line chart scales via `viewBox`, bars use percentage width/height), so no container size observation is needed
+- **Accessibility**: values and labels are rendered as text; decorative bars are marked `aria-hidden`, the line and donut charts carry `aria-label`, the donut additionally has a text legend with values, and there is a "recent records" text list
+- The geometry maths behind the line and donut charts (coordinate mapping, arc paths, ticks) lives in pure functions covered by unit tests
 
 ## 🔄 Recent Refactor
 

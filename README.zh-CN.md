@@ -129,6 +129,7 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 | 构建工具 | Vite | 7.3+ |
 | 类型系统 | TypeScript | 5.9+ |
 | 样式与组件 | Tailwind CSS 4 + shadcn-svelte（bits-ui） | 4.3+ / 1.7+ |
+| 图表 | 自绘 SVG + CSS（无图表库依赖） | — |
 | 思源 SDK | siyuan | 1.2.3 |
 | 代码编辑器 | CodeMirror 6 | 6.x |
 | 数学渲染 | KaTeX | 0.18.1 |
@@ -181,6 +182,10 @@ src/
     │   ├── content.ts          # 文档批量导出（并发 + 顺序保持 + 字符预算）
     │   ├── stats.ts            # 成绩聚合（按题型/难度）与索引条目派生
     │   ├── export.ts           # 成绩导出（JSON / CSV / Markdown）
+    │   ├── charts.ts           # 统计图表的数据准备（纯函数）
+    │   ├── chart-geometry.ts   # 折线与环形的几何计算（纯函数）
+    │   ├── paging.ts           # 历史记录分段渲染
+    │   ├── bank.ts             # 题库、题干指纹与 FSRS 排程
     │   ├── service.ts          # QuizService 接口（QuizPanel 与后端解耦）
     │   ├── docWriter.ts        # 题目写入思源文档（IAL 标记、折叠答案）
     │   └── dateRange.ts        # 日期范围查询（SQL created 字段）
@@ -209,7 +214,9 @@ src/
     │   ├── SettingsHeatmap.svelte
     │   ├── SettingsData.svelte
     │   ├── latex.ts            # Markdown + LaTeX → 安全 HTML（DOMPurify 净化）
-    │   └── (无手写组件库)        # 组件统一来自 src/lib/components/ui/
+    │   ├── LineChart.svelte    # 折线图（SVG，时间轴）
+    │   ├── DonutChart.svelte   # 环形图（SVG 弧段 + 文本图例）
+    │   └── StatsPanel.svelte   # 统计仪表盘（图表容器）
     ├── components/ui/          # shadcn-svelte 组件（CLI 生成，可按需修改）
     ├── utils.ts                # cn() 与 shadcn 所需类型辅助
     └── promise-pool.ts         # 并发上限池
@@ -245,7 +252,7 @@ pnpm run make-install
 
 ### 构建产物
 
-- `dist/index.js`：单文件打包（inlineDynamicImports），约 1.47MB（gzip 466KB）
+- `dist/index.js`：单文件打包（inlineDynamicImports），约 1.52MB（gzip 484KB）
 - `dist/index.css`：样式文件（含 KaTeX 样式），约 74KB（gzip 12KB）
 - `dist/fonts/`：KaTeX 字体（20 个 woff2，约 296KB）
 - `dist/icon.png`：插件图标
@@ -380,7 +387,12 @@ ResultPanel (三标签: 题目列表/薄弱点分析/学习建议)
 
 总览指标：答题次数与累计题量、平均与最高得分率、当前连续打卡与历史最长连续、每题平均耗时与累计活跃天数。
 
-图表配色从思源的 CSS 变量解析而来，明暗主题切换时会自动重绘；每个图表都带 `aria-label` 文本说明，并额外提供「最近记录」文本列表作为等价内容。
+图表用 SVG 与 CSS 直接绘制，不引入图表库：
+
+- **配色**全部走 CSS 变量与 Tailwind 类，明暗主题自动跟随，不需要主题监听与重绘
+- **响应式**由 CSS 承担（折线图用 `viewBox` 缩放，条形与柱形用百分比宽度/高度），无需监听容器尺寸
+- **可访问性**：数值与标签本身就是文本；装饰性的条形与柱形标记为 `aria-hidden`，折线图与环形图带 `aria-label`，环形图另有含数值的文本图例，并额外提供「最近记录」文本列表
+- 折线与环形图的几何计算（坐标映射、圆弧路径、刻度）抽成纯函数并有单测覆盖
 
 ## 🔄 近期重构
 
