@@ -1,27 +1,28 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { confirm, showMessage } from "siyuan";
     import { t } from "../i18n";
     import type { QuizService } from "../quiz/service";
-    import type { ScoreRecord } from "@/types/quiz";
+    import type { ScoreIndexEntry } from "@/types/quiz";
 
     export let service: QuizService;
-    export let onOpenReview: (record: ScoreRecord) => void;
+    export let onOpenReview: (entry: ScoreIndexEntry) => void;
 
-    let records: ScoreRecord[] = [];
+    let records: ScoreIndexEntry[] = [];
     let loading = true;
     let groupBy: "date" | "notebook" = "date";
     let viewMode: "thumbnail" | "list" | "table" = "thumbnail";
 
     onMount(async () => {
+        // 不再原地排序：store 返回的数组可能与其内部缓存共享引用
         records = await service.listScores();
-        records.sort((a, b) => b.timestamp - a.timestamp);
         loading = false;
     });
 
     $: grouped = groupRecords(records, groupBy);
 
-    function groupRecords(recs: ScoreRecord[], mode: "date" | "notebook") {
-        const map = new Map<string, { key: string; items: ScoreRecord[] }>();
+    function groupRecords(recs: ScoreIndexEntry[], mode: "date" | "notebook") {
+        const map = new Map<string, { key: string; items: ScoreIndexEntry[] }>();
         for (const r of recs) {
             let key: string;
             if (mode === "date") {
@@ -36,14 +37,31 @@
         return Array.from(map.values());
     }
 
-    function pct(r: ScoreRecord): number {
+    function pct(r: ScoreIndexEntry): number {
         return r.maxScore > 0 ? (r.totalScore / r.maxScore) * 100 : 0;
     }
     function timeStr(ts: number): string {
         const d = new Date(ts);
         return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     }
-    function scoreColor(r: ScoreRecord): string {
+    /** 删除单条成绩：二次确认后同时删除索引与明细 */
+    function removeRecord(entry: ScoreIndexEntry, e: Event) {
+        e.stopPropagation();
+        confirm(t("history.deleteOne"), t("history.deleteConfirm", entry.title), () => {
+            void service
+                .removeScore(entry.id)
+                .then(() => {
+                    records = records.filter((r) => r.id !== entry.id);
+                    showMessage(t("history.deleted"), 4000);
+                })
+                .catch((err) => {
+                    console.error("[RecallGen] 删除成绩失败", err);
+                    showMessage(t("history.deleteFailed", (err as Error).message), 7000, "error");
+                });
+        });
+    }
+
+    function scoreColor(r: ScoreIndexEntry): string {
         const p = pct(r);
         if (p >= 80) return "var(--b3-card-success, #65a84c)";
         if (p >= 60) return "var(--b3-theme-primary)";
@@ -103,34 +121,53 @@
                 {#if viewMode === "thumbnail"}
                     <div class="rg-thumb-grid">
                         {#each group.items as r (r.id)}
-                            <button type="button" class="rg-thumb" on:click={() => onOpenReview(r)}>
-                                <div class="rg-thumb__score" style="color:{scoreColor(r)}">
-                                    {pct(r).toFixed(0)}<span class="rg-thumb__unit">{t("history.pts")}</span>
-                                </div>
-                                <div class="rg-thumb__info">
-                                    <div class="rg-thumb__title">{r.title}</div>
-                                    <div class="rg-thumb__meta">
-                                        {t("result.qCount", String(r.questionCount))} · {timeStr(r.timestamp)}
-                                    </div>
-                                </div>
-                                <div class="rg-thumb__bar">
-                                    <div
-                                        class="rg-thumb__bar-fill"
-                                        style="width:{pct(r)}%;background:{scoreColor(r)}"
-                                    ></div>
-                                </div>
-                            </button>
+                            <div class="rg-thumb">
+                                <button type="button" class="rg-thumb__open" on:click={() => onOpenReview(r)}>
+                                    <span class="rg-thumb__score" style="color:{scoreColor(r)}">
+                                        {pct(r).toFixed(0)}<span class="rg-thumb__unit">{t("history.pts")}</span>
+                                    </span>
+                                    <span class="rg-thumb__info">
+                                        <span class="rg-thumb__title">{r.title}</span>
+                                        <span class="rg-thumb__meta">
+                                            {t("result.qCount", String(r.questionCount))} · {timeStr(r.timestamp)}
+                                        </span>
+                                    </span>
+                                    <span class="rg-thumb__bar">
+                                        <span
+                                            class="rg-thumb__bar-fill"
+                                            style="width:{pct(r)}%;background:{scoreColor(r)}"
+                                        ></span>
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rg-thumb__del"
+                                    title={t("history.deleteOne")}
+                                    aria-label={t("history.deleteOne")}
+                                    on:click={(e) => removeRecord(r, e)}>✕</button
+                                >
+                            </div>
                         {/each}
                     </div>
                 {:else if viewMode === "list"}
                     <div class="rg-list">
                         {#each group.items as r (r.id)}
-                            <button type="button" class="rg-list__item" on:click={() => onOpenReview(r)}>
-                                <span class="rg-list__score" style="color:{scoreColor(r)}">{pct(r).toFixed(0)}</span>
-                                <span class="rg-list__title">{r.title}</span>
-                                <span class="rg-list__meta">{t("result.qCount", String(r.questionCount))}</span>
-                                <span class="rg-list__time">{timeStr(r.timestamp)}</span>
-                            </button>
+                            <div class="rg-list__row">
+                                <button type="button" class="rg-list__item" on:click={() => onOpenReview(r)}>
+                                    <span class="rg-list__score" style="color:{scoreColor(r)}">{pct(r).toFixed(0)}</span
+                                    >
+                                    <span class="rg-list__title">{r.title}</span>
+                                    <span class="rg-list__meta">{t("result.qCount", String(r.questionCount))}</span>
+                                    <span class="rg-list__time">{timeStr(r.timestamp)}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rg-list__del"
+                                    title={t("history.deleteOne")}
+                                    aria-label={t("history.deleteOne")}
+                                    on:click={(e) => removeRecord(r, e)}>✕</button
+                                >
+                            </div>
                         {/each}
                     </div>
                 {:else}
@@ -139,7 +176,7 @@
                             <tr
                                 ><th>{t("history.colTitle")}</th><th>{t("history.colScore")}</th><th
                                     >{t("history.colCount")}</th
-                                ><th>{t("history.colTime")}</th></tr
+                                ><th>{t("history.colTime")}</th><th class="rg-table__op"></th></tr
                             >
                         </thead>
                         <tbody>
@@ -153,6 +190,15 @@
                                     <td style="color:{scoreColor(r)}">{pct(r).toFixed(0)} / 100</td>
                                     <td>{r.questionCount}</td>
                                     <td>{timeStr(r.timestamp)}</td>
+                                    <td class="rg-table__op"
+                                        ><button
+                                            type="button"
+                                            class="rg-table__del"
+                                            title={t("history.deleteOne")}
+                                            aria-label={t("history.deleteOne")}
+                                            on:click={(e) => removeRecord(r, e)}>✕</button
+                                        ></td
+                                    >
                                 </tr>
                             {/each}
                         </tbody>
@@ -244,23 +290,33 @@
         gap: 12px;
     }
     .rg-thumb {
+        position: relative;
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        background: var(--b3-theme-background);
+        transition:
+            border-color 0.12s,
+            box-shadow 0.12s;
+    }
+    .rg-thumb__open {
         appearance: none;
         -webkit-appearance: none;
         font: inherit;
         color: inherit;
         text-align: left;
         width: 100%;
-        border: 1px solid var(--b3-border-color);
-        border-radius: var(--b3-border-radius);
         padding: 12px;
+        border: none;
+        background: transparent;
+        border-radius: var(--b3-border-radius);
         cursor: pointer;
         display: flex;
         flex-direction: column;
         gap: 8px;
-        transition:
-            border-color 0.12s,
-            box-shadow 0.12s;
-        background: var(--b3-theme-background);
+    }
+    .rg-thumb__open:focus-visible {
+        outline: 2px solid var(--b3-theme-primary);
+        outline-offset: -2px;
     }
     .rg-thumb:hover {
         border-color: var(--b3-theme-primary);
@@ -278,6 +334,16 @@
     }
     .rg-thumb__info {
         flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    .rg-thumb__score,
+    .rg-thumb__title,
+    .rg-thumb__meta {
+        display: block;
+    }
+    .rg-thumb__bar {
+        display: block;
     }
     .rg-thumb__title {
         font-size: 13px;
@@ -307,6 +373,15 @@
         display: flex;
         flex-direction: column;
         gap: 4px;
+    }
+    .rg-list__row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .rg-list__row .rg-list__item {
+        flex: 1;
+        min-width: 0;
     }
     .rg-list__item {
         appearance: none;
@@ -389,6 +464,60 @@
     .rg-table__link:focus-visible {
         outline: 2px solid var(--b3-theme-primary);
         outline-offset: 2px;
+    }
+
+    /* 删除按钮：默认半透明，悬停/聚焦时高亮 */
+    .rg-thumb__del,
+    .rg-list__del,
+    .rg-table__del {
+        appearance: none;
+        -webkit-appearance: none;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--b3-theme-on-surface-light);
+        line-height: 1;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition:
+            opacity 0.12s,
+            background 0.12s,
+            color 0.12s;
+    }
+    .rg-thumb__del {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 22px;
+        height: 22px;
+        font-size: 12px;
+        opacity: 0;
+    }
+    .rg-list__del,
+    .rg-table__del {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+        opacity: 0.45;
+    }
+    .rg-thumb:hover .rg-thumb__del {
+        opacity: 1;
+    }
+    .rg-thumb__del:hover,
+    .rg-list__del:hover,
+    .rg-table__del:hover,
+    .rg-thumb__del:focus-visible,
+    .rg-list__del:focus-visible,
+    .rg-table__del:focus-visible {
+        background: var(--b3-card-error, #d23f31);
+        color: #fff;
+        opacity: 1;
+        outline: none;
+    }
+    .rg-table__op {
+        width: 40px;
+        text-align: center;
     }
     @media (max-width: 640px) {
         .rg-history {

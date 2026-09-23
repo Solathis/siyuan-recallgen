@@ -2,6 +2,8 @@
 export interface StoragePlugin {
     loadData: (name: string) => Promise<any>;
     saveData: (name: string, content: any) => Promise<any>;
+    /** 思源 Plugin.removeData；可选，便于测试替身省略 */
+    removeData?: (name: string) => Promise<any>;
 }
 
 /** 存储操作失败时抛出的错误 */
