@@ -250,16 +250,19 @@ export interface BackupImportPlan {
  */
 export function planBackupImport(backup: ScoreBackupFile, existingIds: Iterable<string>): BackupImportPlan {
     const existing = new Set(existingIds);
+    /** 已进入计划的 id：用集合判断，避免在循环里对数组做 some 造成 O(n²) */
+    const planned = new Set<string>();
     const items: BackupImportPlan["items"] = [];
     const warnings: string[] = [];
     let skipped = 0;
     let withoutDetail = 0;
 
     for (const entry of backup.entries) {
-        if (existing.has(entry.id) || items.some((item) => item.entry.id === entry.id)) {
+        if (existing.has(entry.id) || planned.has(entry.id)) {
             skipped++;
             continue;
         }
+        planned.add(entry.id);
         const detail = backup.details[entry.id] ?? null;
         if (!detail || !Array.isArray(detail.detail)) {
             withoutDetail++;
