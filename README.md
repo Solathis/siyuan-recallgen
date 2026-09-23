@@ -68,7 +68,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 ### Grading & Results
 
 - **Local Objective Grading**: Single/multiple choice, fill-in-the-blank, and true/false are graded instantly without AI calls
-  - Multiple choice: sorted array comparison
+  - Multiple choice: **partial credit** by default — `(hits − wrong picks) ÷ correct options`, floored at 0; selecting everything earns nothing. Switch to all-or-nothing in Settings; a result is marked correct only at full marks, otherwise partial
   - Fill-in-the-blank: trim + case-insensitive match against any accepted answer
 - **AI Subjective/Coding Grading**: Returns 0–100 score + brief comment, JSON Schema constrained
 - **Result Panel** (3-tab navigation):
@@ -80,7 +80,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 
 ### Score Records & Heatmap
 
-- **GitHub-style Heatmap**: Fixed 53 weeks × 7 days (371 cells) contribution graph showing the past year's daily quiz activity
+- **GitHub-style Heatmap**: 7 weekday rows × up to 53 week columns showing daily quiz activity, with a switchable range (last 12 months, or any calendar year found in your records). Weeks are always Monday-aligned
 - **Aggregation**: Daily max score or daily average score (configurable)
 - **Color Ranges**: Default GitHub green palette, customizable with color pickers
 - **Auto-Recording**: On submit the score index and the current month's detail shard are written immediately, independent of subsequent analysis. The history list loads only the lightweight index; detail is fetched on demand when reviewing
@@ -96,7 +96,7 @@ Left sidebar navigation + right content area, 6 independent sections:
 
 1. **AI Service**: Endpoint CRUD (name/provider/protocol/Base URL/API Key), nested models per endpoint (name/temperature/MaxTokens), duplicate name prevention, test connection (endpoint+model cascade select), global timeout and JSON Schema toggle
 2. **AI Roles**: Three role cards (generator/reviewer/grader) with endpoint+model cascade selection; different models recommended but same allowed
-3. **Quiz & Answer**: Question type toggles, difficulty distribution (total + per-difficulty + validation), extra-scope ratio, language (Chinese/English), countdown toggle and duration, panel width
+3. **Quiz & Answer**: Question type toggles, difficulty distribution (total + per-difficulty + validation), extra-scope ratio, language (Chinese/English), countdown toggle and duration, panel width, multiple-choice scoring policy; the current combination can also be saved as a named **quiz preset** (apply or delete it with one click, and the active preset is marked)
 4. **Prompts**: Four prompt editors (generate/review/grade/analysis), reset to default supported
 5. **Heatmap**: Heatmap preview + aggregation mode + color range management
 6. **Data Management**: Clear scores, quiz progress and the question bank; export/import configuration (optionally including API keys); export/import a score backup including questions and grading detail
@@ -309,6 +309,8 @@ Score record → recallgen-scores.json
 | panelWidth | number | 1100 | Answer panel width (px) |
 | storageLocation | "sibling" / "notebook" | sibling | Question save location |
 | notebookId | string | "" | Target notebook (when storageLocation=notebook) |
+| multipleChoicePolicy | "partial" / "strict" | partial | Multiple-choice scoring: partial credit or all-or-nothing |
+| presets | QuizPreset[] | [] | Saved quiz presets (question types + difficulty + extra scope) |
 
 ### Heatmap Configuration
 
@@ -321,14 +323,14 @@ Score record → recallgen-scores.json
 ## 🌐 Language Support
 
 - **AI Output Language**: Configurable (Chinese/English) — controls the language of generated questions, grading comments, and analysis
-- **UI Language**: Currently Chinese-only; i18n infrastructure is in place for future localization
+- **UI Language**: Chinese and English are both available, switchable in Settings → Quiz & Answer
 
 ## 📊 Grading & Scoring
 
 | Type | Scoring |
 |------|---------|
 | Single choice / True-false | 100 if correct, otherwise 0 |
-| Multiple choice | `(hits − wrong picks) ÷ number of correct options`, floored at 0; selecting everything earns nothing, partial selections earn partial credit |
+| Multiple choice | **Partial credit** by default: `(hits − wrong picks) ÷ number of correct options`, floored at 0; selecting everything earns nothing. Switch to **all-or-nothing** in Settings (any wrong or missing pick scores 0) |
 | Fill-in-the-blank | `correct blanks ÷ total blanks`; an empty string does not count |
 | Subjective / Coding | AI graded (0-100); coding questions can additionally run their test cases |
 
