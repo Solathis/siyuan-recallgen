@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StoragePlugin } from "./store";
-import type { GradingResult, Question, ScoreRecord } from "@/types/quiz";
+import type { GradingResult, Question, ScoreIndexEntry, ScoreRecord } from "@/types/quiz";
 import { ScoreStore } from "./scores";
 import { monthKey } from "@/lib/quiz/stats";
 
@@ -51,6 +51,23 @@ const record = (id: string, timestamp: number, score = 80, analysis = ""): Score
     duration: 60,
     sourceDocId: "doc-1",
     sourceTitle: "来源",
+});
+
+/** 构造索引条目（不带明细），用于导入用例 */
+const indexEntry = (id: string, timestamp: number): ScoreIndexEntry => ({
+    id,
+    quizId: `quiz-${id}`,
+    title: `记录 ${id}`,
+    timestamp,
+    totalScore: 100,
+    maxScore: 100,
+    questionCount: 1,
+    passedCount: 1,
+    unanswered: 0,
+    byType: {},
+    byDifficulty: {},
+    byTag: {},
+    hasAnalysis: false,
 });
 
 const MARCH = new Date(2026, 2, 10, 9, 0, 0).getTime();
@@ -248,5 +265,79 @@ describe("ScoreStore.purgeAll", () => {
         expect(disk[`recallgen-scores-${monthKey(MARCH)}.json`]).toBeUndefined();
         expect(disk[`recallgen-scores-${monthKey(APRIL)}.json`]).toBeUndefined();
         expect(removed).toContain("recallgen-scores.v1-backup.json");
+    });
+});
+
+describe("ScoreStore.exportAll / importMany", () => {
+    it("导出包含索引与明细", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new ScoreStore(plugin);
+        await store.add(record("s-1", MARCH, 80, "分析"));
+        await store.add(record("s-2", APRIL, 60));
+
+        const backup = await store.exportAll();
+        expect(backup.entries).toHaveLength(2);
+        expect(Object.keys(backup.details).sort()).toEqual(["s-1", "s-2"]);
+        expect(backup.details["s-1"].analysis).toBe("分析");
+        expect(backup.details["s-1"].questions).toHaveLength(1);
+    });
+
+    it("导入到空库后索引与明细都可读", async () => {
+        const source = memoryPlugin();
+        const sourceStore = new ScoreStore(source.plugin);
+        await sourceStore.add(record("s-1", MARCH, 70, "来自备份"));
+        const backup = await sourceStore.exportAll();
+
+        const target = memoryPlugin();
+        const targetStore = new ScoreStore(target.plugin);
+        await targetStore.importMany(
+            backup.entries.map((entry) => ({ entry, detail: backup.details[entry.id] ?? null }))
+        );
+
+        expect((await targetStore.listIndex()).map((e) => e.id)).toEqual(["s-1"]);
+        expect((await targetStore.loadDetail("s-1"))?.analysis).toBe("来自备份");
+    });
+
+    it("导入跨月份的成绩写入对应分片", async () => {
+        const { plugin, disk } = memoryPlugin();
+        const store = new ScoreStore(plugin);
+        await store.importMany([
+            {
+                entry: { ...indexEntry("s-1", MARCH) },
+                detail: { id: "s-1", detail: [result("q-1", "true_false", 100)] },
+            },
+            {
+                entry: { ...indexEntry("s-2", APRIL) },
+                detail: { id: "s-2", detail: [result("q-1", "true_false", 100)] },
+            },
+        ]);
+        expect(disk[`recallgen-scores-${monthKey(MARCH)}.json`]).toBeDefined();
+        expect(disk[`recallgen-scores-${monthKey(APRIL)}.json`]).toBeDefined();
+    });
+
+    it("没有明细的条目也能导入，列表与统计可用但回看为空", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new ScoreStore(plugin);
+        await store.importMany([{ entry: indexEntry("s-1", MARCH), detail: null }]);
+        expect((await store.listIndex()).map((e) => e.id)).toEqual(["s-1"]);
+        expect(await store.loadDetail("s-1")).toBeNull();
+    });
+
+    it("重复导入同一条目不会产生重复记录", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new ScoreStore(plugin);
+        const item = {
+            entry: indexEntry("s-1", MARCH),
+            detail: { id: "s-1", detail: [result("q-1", "true_false", 100)] },
+        };
+        await store.importMany([item]);
+        await store.importMany([item]);
+        expect(await store.listIndex()).toHaveLength(1);
+    });
+
+    it("空数组不做任何写入", async () => {
+        const { plugin, disk } = memoryPlugin();
+        await new ScoreStore(plugin).importMany([]);
+        expect(Object.keys(disk)).toEqual([]);
     });
 });

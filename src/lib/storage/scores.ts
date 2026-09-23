@@ -158,6 +158,54 @@ export class ScoreStore {
         await this.index.writeAll(entries);
     }
 
+    /** 导出全部成绩（索引 + 明细），用于完整备份 */
+    async exportAll(): Promise<{ entries: ScoreIndexEntry[]; details: Record<string, ScoreDetail> }> {
+        const file = await this.index.readAll();
+        const details: Record<string, ScoreDetail> = {};
+        for (const month of new Set(file.entries.map((e) => monthKey(e.timestamp)))) {
+            Object.assign(details, await this.shard(month).readAll());
+        }
+        return { entries: [...file.entries], details };
+    }
+
+    /**
+     * 批量导入成绩：按月份分组写入，索引一次写入。
+     * 调用方负责跳过已存在的 id（见 planBackupImport）。
+     */
+    async importMany(items: { entry: ScoreIndexEntry; detail: ScoreDetail | null }[]): Promise<void> {
+        if (items.length === 0) return;
+
+        const byMonth = new Map<string, ScoreIndexEntry[]>();
+        const detailByMonth = new Map<string, Record<string, ScoreDetail>>();
+
+        for (const { entry, detail } of items) {
+            const month = monthKey(entry.timestamp);
+            byMonth.set(month, [...(byMonth.get(month) ?? []), entry]);
+            if (detail) {
+                detailByMonth.set(month, { ...(detailByMonth.get(month) ?? {}), [entry.id]: detail });
+            }
+        }
+
+        for (const month of byMonth.keys()) {
+            const shard = this.shard(month);
+            const map = await shard.readAll();
+            Object.assign(map, detailByMonth.get(month) ?? {});
+            await shard.writeAll(map);
+        }
+
+        const file = await this.index.readAll();
+        const known = new Set(file.entries.map((e) => e.id));
+        const merged = [...file.entries];
+        for (const entry of byMonth.values()) {
+            for (const item of entry) {
+                if (known.has(item.id)) continue;
+                known.add(item.id);
+                merged.push(item);
+            }
+        }
+        await this.index.writeAll(merged);
+    }
+
     /** 更新薄弱点分析（写入明细并同步索引的 hasAnalysis 标记） */
     async updateAnalysis(id: string, analysis: string): Promise<void> {
         const file = await this.index.readAll();

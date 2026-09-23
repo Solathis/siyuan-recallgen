@@ -5,6 +5,7 @@
     import * as Card from "@/lib/components/ui/card";
     import { t } from "../i18n";
     import { buildConfigExport, mergeImportedConfig, type ImportResult } from "../quiz/config-io";
+    import { buildScoreBackup, parseScoreBackup, planBackupImport } from "../quiz/export";
     import type { RecallGenConfig } from "@/types/config";
 
     let {
@@ -13,6 +14,9 @@
         onClearBank = async () => {},
         config,
         onImportConfig = () => {},
+        onExportScores = async () => ({ entries: [], details: {} }),
+        onImportScores = async () => ({ added: 0, skipped: 0 }),
+        existingScoreIds = [],
         scoreCount = 0,
         bankSize = 0,
         bankDue = 0,
@@ -24,6 +28,20 @@
         config?: RecallGenConfig;
         /** 导入合并后的配置回调 */
         onImportConfig?: (next: RecallGenConfig, result: ImportResult) => void;
+        /** 取出全部成绩（索引 + 明细）用于打包备份 */
+        onExportScores?: () => Promise<{
+            entries: import("@/types/quiz").ScoreIndexEntry[];
+            details: Record<string, import("@/types/quiz").ScoreDetail>;
+        }>;
+        /** 写入导入的成绩 */
+        onImportScores?: (
+            items: {
+                entry: import("@/types/quiz").ScoreIndexEntry;
+                detail: import("@/types/quiz").ScoreDetail | null;
+            }[]
+        ) => Promise<{ added: number; skipped: number }>;
+        /** 已存在的成绩 id，用于导入时跳过重复项 */
+        existingScoreIds?: string[];
         scoreCount?: number;
         bankSize?: number;
         bankDue?: number;
@@ -34,6 +52,57 @@
     /** 导出是否包含 API Key；默认不包含，避免分享配置时泄露密钥 */
     let includeSecrets = $state(false);
     let fileInput: HTMLInputElement | null = $state(null);
+    let backupInput: HTMLInputElement | null = $state(null);
+    let backupBusy = $state(false);
+
+    /**
+     * 导出完整备份（含题目与判分明细），与「报表导出」不同：
+     * 报表用于阅读与分享，备份用于换机器或恢复数据。
+     */
+    async function exportBackup() {
+        backupBusy = true;
+        try {
+            const { entries, details } = await onExportScores();
+            const content = buildScoreBackup(entries, details);
+            const stamp = new Date().toISOString().slice(0, 10);
+            const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `recallgen-backup-${stamp}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showMessage(t("settings.data.backupExported", String(entries.length)), 4000);
+        } catch (e) {
+            showMessage(t("settings.data.backupExportFailed", (e as Error).message), 7000, "error");
+        } finally {
+            backupBusy = false;
+        }
+    }
+
+    async function importBackup(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        const file = input.files?.[0];
+        input.value = "";
+        if (!file) return;
+
+        backupBusy = true;
+        try {
+            const backup = parseScoreBackup(await file.text());
+            const plan = planBackupImport(backup, existingScoreIds);
+            if (plan.items.length === 0) {
+                showMessage(t("settings.data.backupNothingNew", String(plan.skipped)), 6000);
+                return;
+            }
+            const result = await onImportScores(plan.items);
+            showMessage(t("settings.data.backupImported", String(result.added), String(result.skipped)), 6000);
+            for (const warning of plan.warnings.slice(0, 3)) showMessage(warning, 8000);
+        } catch (e) {
+            showMessage(t("settings.data.backupImportFailed", (e as Error).message), 7000, "error");
+        } finally {
+            backupBusy = false;
+        }
+    }
 
     function exportConfig() {
         if (!config) return;
@@ -162,6 +231,29 @@
                     </AlertDialog.Footer>
                 </AlertDialog.Content>
             </AlertDialog.Root>
+        </div>
+
+        <!-- 成绩备份：含题目与判分明细，可再导入；与报表导出区分开 -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-col">
+                <span class="text-sm font-medium">{t("settings.data.backup")}</span>
+                <span class="text-muted-foreground text-xs">{t("settings.data.backupDesc")}</span>
+            </div>
+            <div class="flex gap-2">
+                <Button variant="outline" onclick={() => void exportBackup()} disabled={backupBusy || scoreCount === 0}>
+                    {t("settings.data.backupExport")}
+                </Button>
+                <Button variant="outline" onclick={() => backupInput?.click()} disabled={backupBusy}>
+                    {t("settings.data.backupImport")}
+                </Button>
+                <input
+                    bind:this={backupInput}
+                    type="file"
+                    accept="application/json,.json"
+                    class="hidden"
+                    onchange={importBackup}
+                />
+            </div>
         </div>
 
         <!-- 配置导出/导入：换机器或分享配置时使用 -->

@@ -218,6 +218,13 @@ export default class RecallGenPlugin extends Plugin {
                     onClearBank: async () => {
                         await self.bankStore.clear();
                     },
+                    onExportScores: () => self.scoreStore.exportAll(),
+                    onImportScores: async (items) => {
+                        const before = (await self.scoreStore.listIndex()).length;
+                        await self.scoreStore.importMany(items);
+                        const after = (await self.scoreStore.listIndex()).length;
+                        return { added: after - before, skipped: items.length - (after - before) };
+                    },
                     onImportConfig: async (next, result) => {
                         // 导入的配置立即生效并落盘；warnings 由设置面板逐条提示
                         self.config = next;
@@ -273,6 +280,13 @@ export default class RecallGenPlugin extends Plugin {
             listScores: () => this.scoreStore.listIndex(),
             loadScoreDetail: (id) => this.scoreStore.loadDetail(id),
             removeScore: (id) => this.scoreStore.remove(id),
+            exportAllScores: () => this.scoreStore.exportAll(),
+            importScores: async (items) => {
+                const before = await this.scoreStore.listIndex();
+                await this.scoreStore.importMany(items);
+                const after = await this.scoreStore.listIndex();
+                return { added: after.length - before.length, skipped: items.length - (after.length - before.length) };
+            },
             dueBankQuestions: async (limit = 0, sourceDocId) => {
                 const items = await this.bankStore.list();
                 const scoped = sourceDocId ? items.filter((item) => item.sourceDocId === sourceDocId) : items;
