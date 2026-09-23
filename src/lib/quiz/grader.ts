@@ -116,7 +116,7 @@ export function checkFillBlank(accepted: string[][], user: string[]): boolean {
 /** 主观/编程题 AI 判分 */
 async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | undefined): Promise<GradingResult> {
     const userText = ua?.type === "subjective" || ua?.type === "coding" ? ua.value : "";
-    const messages = buildGradeSubjectiveMessages(config.prompts, q, userText);
+    const messages = buildGradeSubjectiveMessages(config.prompts, q, userText, config.general.language);
     const callOpts = pickGradingOpts(config.ai.jsonSchemaEnabled);
     const rc = resolveAI(config.ai, config.ai.roles.grader);
     const result = await callLLM(rc, messages as ChatMessage[], {

@@ -212,7 +212,7 @@ export default class RecallGenPlugin extends Plugin {
     }
 
     private async analyze(results: GradingResult[], questions: Question[]): Promise<string> {
-        const messages = buildAnalysisMessages(this.config.prompts, results, questions);
+        const messages = buildAnalysisMessages(this.config.prompts, results, questions, this.config.general.language);
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
         const res = await callLLM(rc, messages as ChatMessage[], {
             temperature: 0.5,
@@ -248,7 +248,15 @@ export default class RecallGenPlugin extends Plugin {
         history: Array<{ role: "user" | "assistant"; content: string }>,
         userMessage: string
     ): Promise<string> {
-        const messages = buildChatMessages(this.config.prompts, question, result, analysis, history, userMessage);
+        const messages = buildChatMessages(
+            this.config.prompts,
+            question,
+            result,
+            analysis,
+            history,
+            userMessage,
+            this.config.general.language
+        );
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
         const res = await callLLM(rc, messages as ChatMessage[], {
             temperature: 0.6,
@@ -270,7 +278,8 @@ export default class RecallGenPlugin extends Plugin {
             results,
             analysis,
             history,
-            userMessage
+            userMessage,
+            this.config.general.language
         );
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
         const res = await callLLM(rc, messages as ChatMessage[], {

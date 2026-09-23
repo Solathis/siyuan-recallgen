@@ -96,7 +96,7 @@ async function reviewLoop(
     for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
         onProgress?.("reviewing", round, t("gen.reviewing", String(round)));
 
-        const reviewMessages = buildReviewMessages(prompts, questions);
+        const reviewMessages = buildReviewMessages(prompts, questions, config.general.language);
         const reviewResult = await callLLM(reviewAI, reviewMessages as ChatMessage[], {
             ...reviewOpts,
             temperature: 0.3,

@@ -102,12 +102,12 @@ export const DEFAULT_HEATMAP: HeatmapConfig = {
     ],
 };
 
-const DEFAULT_ENDPOINT_NAME_ZH = "默认端点";
-const DEFAULT_ENDPOINT_NAME_EN = "Default";
+/** 首次初始化时的端点名，用户可随时改名 */
+const DEFAULT_ENDPOINT_NAME = "默认端点";
 
 const DEFAULT_ENDPOINT: AIEndpoint = {
     id: "ep-default",
-    name: DEFAULT_ENDPOINT_NAME_ZH,
+    name: DEFAULT_ENDPOINT_NAME,
     provider: "openai",
     protocol: "chat",
     baseUrl: "https://api.openai.com/v1",
@@ -131,12 +131,6 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
 };
 
 /** 语言相关的默认值 */
-export function defaultEndpointName(lang: "zh" | "en"): string {
-    return lang === "en" ? DEFAULT_ENDPOINT_NAME_EN : DEFAULT_ENDPOINT_NAME_ZH;
-}
-export function defaultTestPrompt(lang: "zh" | "en"): string {
-    return lang === "en" ? "Briefly introduce yourself in one sentence." : "请用一句话简要介绍你自己";
-}
 
 const DEFAULT_PROMPTS_ZH: PromptConfig = {
     generate: `你是一位资深的出题专家。根据用户提供的笔记内容，按照指定的题型、难度分布生成复习题目。
@@ -274,7 +268,7 @@ export function migrateAIConfig(old: Partial<AIConfig> | undefined | null): AICo
 
     const endpoint: AIEndpoint = {
         id: "ep-default",
-        name: DEFAULT_ENDPOINT_NAME_ZH,
+        name: DEFAULT_ENDPOINT_NAME,
         provider: provider ?? "openai",
         protocol: protocol ?? "chat",
         baseUrl: baseUrl ?? "https://api.openai.com/v1",

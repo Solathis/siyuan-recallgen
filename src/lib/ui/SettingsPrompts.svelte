@@ -3,7 +3,7 @@
     import { button, card, field, textarea, cn } from "./components";
     import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
-    import { DEFAULT_PROMPTS } from "@/types/config";
+    import { getDefaultPrompts } from "@/types/config";
 
     export let config: RecallGenConfig;
     const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
@@ -22,8 +22,10 @@
     function onPromptInput(key: keyof typeof config.prompts, e: Event) {
         dispatch("save", { ...config, prompts: { ...config.prompts, [key]: v(e) } });
     }
-    function resetPrompt(key: keyof typeof DEFAULT_PROMPTS) {
-        dispatch("save", { ...config, prompts: { ...config.prompts, [key]: DEFAULT_PROMPTS[key] } });
+    function resetPrompt(key: keyof typeof config.prompts) {
+        // 按「输出语言」取对应语言的默认提示词，而不是固定用中文
+        const defaults = getDefaultPrompts(config.general.language);
+        dispatch("save", { ...config, prompts: { ...config.prompts, [key]: defaults[key] } });
     }
 </script>
 
