@@ -1,3 +1,4 @@
+import { mount, unmount, type Component } from "svelte";
 import { Plugin, showMessage, openTab, Setting, Dialog } from "siyuan";
 import type { Custom } from "siyuan";
 import "./index.scss";
@@ -31,9 +32,10 @@ export default class RecallGenPlugin extends Plugin {
     private scoreStore!: ScoreStore;
     private progressStore!: ProgressStore;
     private selector: QuizSelector | null = null;
-    private quizComp: QuizPanel | null = null;
-    private settingComp: SettingPanel | null = null;
-    private historyComp: HistoryPanel | null = null;
+    /** mount() 返回的是组件的导出成员（含 beforeDestroy 等），不是组件实例 */
+    private quizComp: { beforeDestroy?: () => void } | null = null;
+    private settingComp: Record<string, unknown> | null = null;
+    private historyComp: Record<string, unknown> | null = null;
 
     async onload() {
         this.addIcons(ICON);
@@ -70,18 +72,17 @@ export default class RecallGenPlugin extends Plugin {
                 const div = document.createElement("div");
                 div.style.height = "100%";
                 (c.element as HTMLElement).appendChild(div);
-                self.quizComp = new QuizPanel({
+                self.quizComp = mount(QuizPanel as Component, {
                     target: div,
                     props: {
                         service: self.buildService(),
                         tabData: c.data as QuizTabData,
                         closeTab: () => c.tab.close(),
                     },
-                });
+                }) as { beforeDestroy?: () => void };
             },
             destroy: () => {
-                self.quizComp?.beforeDestroy();
-                self.quizComp?.$destroy();
+                self.quizComp?.beforeDestroy?.();
                 self.quizComp = null;
             },
         });
@@ -93,16 +94,16 @@ export default class RecallGenPlugin extends Plugin {
                 div.style.height = "100%";
                 div.style.overflow = "auto";
                 (c.element as HTMLElement).appendChild(div);
-                self.historyComp = new HistoryPanel({
+                self.historyComp = mount(HistoryPanel as Component, {
                     target: div,
                     props: {
                         service: self.buildService(),
-                        onOpenReview: (entry) => void self.openReviewTab(entry),
+                        onOpenReview: (entry: ScoreIndexEntry) => void self.openReviewTab(entry),
                     },
                 });
             },
             destroy: () => {
-                self.historyComp?.$destroy();
+                if (self.historyComp) unmount(self.historyComp);
                 self.historyComp = null;
             },
         });
@@ -126,9 +127,12 @@ export default class RecallGenPlugin extends Plugin {
         // 先把合并窗口内待写的配置落盘，避免刚改完设置就退出导致丢失
         await this.configStore.flushDeferred().catch((e) => console.warn("[RecallGen] 配置落盘失败", e));
         await this.scoreStore.flush().catch((e) => console.warn("[RecallGen] 成绩落盘失败", e));
-        this.quizComp?.$destroy();
-        this.settingComp?.$destroy();
-        this.historyComp?.$destroy();
+        if (this.quizComp) unmount(this.quizComp);
+        if (this.settingComp) unmount(this.settingComp);
+        if (this.historyComp) unmount(this.historyComp);
+        this.quizComp = null;
+        this.settingComp = null;
+        this.historyComp = null;
         showMessage(this.i18n.byePlugin ?? t("byePlugin"));
     }
 
@@ -166,15 +170,16 @@ export default class RecallGenPlugin extends Plugin {
             content: '<div class="rg-setting-root"></div>',
             width: "900px",
             height: "70vh",
-            destroyCallback: () => {
-                self.settingComp?.$destroy();
-                self.settingComp = null;
-            },
+            destroyCallback: () => closeSetting(),
         });
         const root = dialog.element.querySelector(".rg-setting-root") as HTMLElement;
         if (!root) return;
+        const closeSetting = () => {
+            if (self.settingComp) unmount(self.settingComp);
+            self.settingComp = null;
+        };
         void this.scoreStore.listIndex().then((scores) => {
-            self.settingComp = new SettingPanel({
+            self.settingComp = mount(SettingPanel as Component, {
                 target: root,
                 props: {
                     config: self.config,
@@ -186,17 +191,17 @@ export default class RecallGenPlugin extends Plugin {
                     onClearProgress: async () => {
                         await self.progressStore.clearAll();
                     },
+                    onSave: async (next: RecallGenConfig) => {
+                        self.config = next;
+                        try {
+                            await self.configStore.set(self.config);
+                        } catch (err) {
+                            // 写盘失败不能再静默吞掉：否则用户以为设置已保存
+                            console.error("[RecallGen] 保存配置失败", err);
+                            showMessage(t("settings.saveFailed", (err as Error).message), 7000, "error");
+                        }
+                    },
                 },
-            });
-            self.settingComp.$on("save", async (e: { detail: RecallGenConfig }) => {
-                self.config = e.detail;
-                try {
-                    await self.configStore.set(self.config);
-                } catch (err) {
-                    // 写盘失败不能再静默吞掉：否则用户以为设置已保存
-                    console.error("[RecallGen] 保存配置失败", err);
-                    showMessage(t("settings.saveFailed", (err as Error).message), 7000, "error");
-                }
             });
         });
     }

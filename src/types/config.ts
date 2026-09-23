@@ -234,7 +234,13 @@ export function getDefaultConfig(): RecallGenConfig {
             testPrompt: DEFAULT_AI_CONFIG.testPrompt,
         },
         prompts: { ...DEFAULT_PROMPTS },
-        general: { ...DEFAULT_GENERAL_CONFIG, difficulty: { ...DEFAULT_GENERAL_CONFIG.difficulty } },
+        general: {
+            ...DEFAULT_GENERAL_CONFIG,
+            // allowedTypes 与 difficulty 都是可变结构，必须深拷贝，
+            // 否则调用方（如设置面板的题型勾选）会就地改到模块级默认值
+            allowedTypes: [...DEFAULT_GENERAL_CONFIG.allowedTypes],
+            difficulty: { ...DEFAULT_GENERAL_CONFIG.difficulty },
+        },
         heatmap: {
             ...DEFAULT_HEATMAP,
             ranges: DEFAULT_HEATMAP.ranges.map((r) => ({ ...r })),

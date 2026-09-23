@@ -1,9 +1,12 @@
 import { fileURLToPath } from "node:url";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vitest/config";
 
 const srcDir = fileURLToPath(new URL("./src", import.meta.url));
 
 export default defineConfig({
+    // 组件级冒烟测试需要真正编译 .svelte，因此这里也要挂载 svelte 插件
+    plugins: [svelte()],
     resolve: {
         alias: [
             {

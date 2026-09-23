@@ -88,10 +88,12 @@ export default defineConfig({
                 entryFileNames: "[name].js",
                 inlineDynamicImports: true,
                 assetFileNames: (assetInfo) => {
-                    if (assetInfo.name === "style.css") {
+                    // 思源按固定文件名加载插件样式，必须叫 index.css
+                    // （Vite 5 时代资源名为 style.css，Vite 7 变为 <libName>.css，故按扩展名判断）
+                    if (assetInfo.name?.endsWith(".css")) {
                         return "index.css";
                     }
-                    return assetInfo.name;
+                    return assetInfo.name ?? "[name][extname]";
                 },
             },
         },

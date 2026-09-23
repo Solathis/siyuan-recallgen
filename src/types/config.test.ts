@@ -72,6 +72,7 @@ describe("getDefaultConfig", () => {
         a.general.difficulty.total = 99;
         a.ai.endpoints[0].name = "改过了";
         a.ai.models[0].name = "改过了";
+        a.general.allowedTypes.push("coding");
 
         const b = getDefaultConfig();
         expect(b.heatmap.ranges[0].color).toBe(DEFAULT_HEATMAP.ranges[0].color);
@@ -85,8 +86,7 @@ describe("getDefaultConfig", () => {
         expect(difficulty.easy + difficulty.medium + difficulty.hard).toBe(difficulty.total);
     });
 
-    // ── 已确认缺陷，修复后把 it.fails 改回 it ────────────────────────────
-    it.fails("深拷贝 general.allowedTypes（缺陷：与默认常量共享同一数组引用）", () => {
+    it("深拷贝 general.allowedTypes（回归：曾与默认常量共享同一数组引用）", () => {
         const a = getDefaultConfig();
         a.general.allowedTypes.push("coding");
         expect(getDefaultConfig().general.allowedTypes).toHaveLength(6);

@@ -330,8 +330,7 @@
                 value={chatInput}
                 on:input={onChatInput}
                 on:keydown={onChatKey}
-                disabled={chatLoading}
-            ></textarea>
+                disabled={chatLoading}></textarea>
             <button class="rg-chat__send" on:click={sendChat} disabled={chatLoading || !chatInput.trim()}>➤</button>
         </div>
     </div>

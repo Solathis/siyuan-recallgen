@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import SettingsAI from "./SettingsAI.svelte";
     import SettingsAIRoles from "./SettingsAIRoles.svelte";
     import SettingsGeneral from "./SettingsGeneral.svelte";
@@ -16,8 +15,8 @@
     export let onTestConnection: () => Promise<string> = async () => "";
     export let onClearScores: () => Promise<void> = async () => {};
     export let onClearProgress: () => Promise<void> = async () => {};
-
-    const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
+    /** 保存回调。Svelte 5 的 mount() 不再暴露 $on，因此改用回调属性 */
+    export let onSave: (config: RecallGenConfig) => void = () => {};
 
     const SECTIONS = [
         { key: "ai", label: t("settings.nav.ai"), icon: "🔌" },
@@ -33,7 +32,7 @@
 
     function handleSave(e: { detail: RecallGenConfig }) {
         config = e.detail;
-        dispatch("save", e.detail);
+        onSave(e.detail);
     }
 </script>
 
