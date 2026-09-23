@@ -1,0 +1,55 @@
+import type { ScoreIndexEntry } from "@/types/quiz";
+
+/**
+ * 热力图的统计范围计算。
+ * 抽成纯函数模块便于单测：组件内只负责渲染。
+ */
+
+/** GitHub 风格最近窗口的周数 */
+export const HEATMAP_WEEKS = 53;
+export const HEATMAP_DAYS = HEATMAP_WEEKS * 7;
+
+/** 'recent' 为最近 53 周滚动窗口，数字为某个自然年 */
+export type HeatmapRange = "recent" | number;
+
+/** 周一为一周第一天时的偏移量 */
+export function mondayOffset(date: Date): number {
+    return (date.getDay() + 6) % 7;
+}
+
+/** 去掉时间部分，返回当天零点 */
+export function startOfDay(date: Date): Date {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+/**
+ * 当前范围内的起止日期（含首尾）。
+ * - 最近窗口：以今天所在周的周一为终点，向前 53 周
+ * - 自然年：1 月 1 日所在周的周一起算；今年止于今天，往年止于 12 月 31 日
+ */
+export function windowBounds(range: HeatmapRange, now: Date = new Date()): { start: Date; end: Date } {
+    const today = startOfDay(now);
+    if (range === "recent") {
+        const end = new Date(today);
+        const start = new Date(today);
+        // 起点必须是周一，否则整张图的星期标签会错位一行
+        start.setDate(start.getDate() - ((HEATMAP_WEEKS - 1) * 7 + mondayOffset(today)));
+        return { start, end };
+    }
+
+    const jan1 = new Date(range, 0, 1);
+    const start = new Date(jan1);
+    start.setDate(start.getDate() - mondayOffset(jan1));
+    const lastDay = new Date(range, 11, 31);
+    const end = range === today.getFullYear() && today < lastDay ? today : lastDay;
+    return { start, end };
+}
+
+/** 有记录的自然年 + 今年，倒序去重 */
+export function rangeYears(records: ScoreIndexEntry[], now: Date = new Date()): number[] {
+    const set = new Set<number>([now.getFullYear()]);
+    for (const r of records) set.add(new Date(r.timestamp).getFullYear());
+    return [...set].sort((a, b) => b - a);
+}

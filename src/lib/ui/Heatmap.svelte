@@ -1,5 +1,7 @@
 <script lang="ts">
     import { cn } from "@/lib/utils";
+    import * as Select from "@/lib/components/ui/select";
+    import { HEATMAP_WEEKS, rangeYears, startOfDay, windowBounds, type HeatmapRange } from "./heatmap-range";
     import { t } from "../i18n";
     import type { ScoreIndexEntry, ScoreRange, HeatmapConfig as HMConfig } from "@/types/quiz";
 
@@ -7,11 +9,15 @@
         records = [],
         config,
         lang = "zh",
-    }: { records?: ScoreIndexEntry[]; config: HMConfig; lang?: "zh" | "en" } = $props();
+        showRangePicker = true,
+    }: {
+        records?: ScoreIndexEntry[];
+        config: HMConfig;
+        lang?: "zh" | "en";
+        /** 设置页的预览不需要切换统计范围 */
+        showRangePicker?: boolean;
+    } = $props();
 
-    /** GitHub 风格：固定 53 周 × 7 天 */
-    const WEEKS = 53;
-    const DAYS = WEEKS * 7;
     /** 单元格边长（px）。固定尺寸 + 横向滚动，保证窄屏也能看清而不是被压成一条线 */
     const CELL = 12;
 
@@ -53,21 +59,31 @@
         return out;
     }
 
-    function buildCols(recs: ScoreIndexEntry[], cfg: HMConfig): Cell[][] {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayDow = (today.getDay() + 6) % 7;
-        const start = new Date(today);
-        start.setDate(start.getDate() - (DAYS - 1 - todayDow));
+    const today = startOfDay(new Date());
+
+    /** 有记录的自然年 + 今年，倒序；用于范围选择器 */
+    const years = $derived(rangeYears(records, today));
+
+    let range = $state<HeatmapRange>("recent");
+
+    function onRangeChange(v: string) {
+        range = v === "recent" ? "recent" : Number(v);
+        active = null;
+    }
+
+    function buildCols(recs: ScoreIndexEntry[], cfg: HMConfig, r: HeatmapRange): Cell[][] {
         const byDate = aggregate(recs, cfg.metric);
+        const { start, end } = windowBounds(r, today);
 
         const out: Cell[][] = [];
         const cur = new Date(start);
         let col: Cell[] = [];
         let guard = 0;
-        while (cur <= today && guard++ < 4000) {
-            const key = fmtDay(cur);
-            const e = byDate.get(key);
+        while (cur <= end && guard++ < 4000) {
+            // 年初/窗口前的补位格子没有日期，渲染为空占位
+            const inWindow = r === "recent" || cur.getFullYear() === r;
+            const key = inWindow ? fmtDay(cur) : "";
+            const e = key ? byDate.get(key) : undefined;
             col.push({ date: key, score: e ? e.score : null, count: e ? e.count : 0 });
             if (col.length === 7) {
                 out.push(col);
@@ -75,14 +91,24 @@
             }
             cur.setDate(cur.getDate() + 1);
         }
-        if (col.length > 0) out.push(col);
-        while (out.length < WEEKS) {
-            out.push(Array.from({ length: 7 }, () => ({ date: "", score: null, count: 0 })));
+        if (col.length > 0) {
+            while (col.length < 7) col.push({ date: "", score: null, count: 0 });
+            out.push(col);
+        }
+        if (r === "recent") {
+            while (out.length < HEATMAP_WEEKS) {
+                out.push(Array.from({ length: 7 }, () => ({ date: "", score: null, count: 0 })));
+            }
         }
         return out;
     }
 
-    const cols = $derived(buildCols(records, config));
+    const cols = $derived(buildCols(records, config, range));
+
+    /** 当前范围内的记录数，用于详情行的兜底文案 */
+    const inRange = $derived(
+        range === "recent" ? records : records.filter((r) => new Date(r.timestamp).getFullYear() === range)
+    );
 
     /**
      * 用用户配置的色阶取色。
@@ -132,13 +158,28 @@
 
 <div class="flex w-full flex-col gap-2">
     <!-- 详情行始终占位，避免悬停时布局跳动 -->
-    <div class="text-muted-foreground min-h-5 text-xs" aria-live="polite">
-        {#if active}
-            {fmtTip(active)}
-        {:else if records.length > 0}
-            {t("heatmap.totalRecords", String(records.length))}
-        {:else}
-            &nbsp;
+    <div class="flex items-center gap-2">
+        <div class="text-muted-foreground min-h-5 flex-1 text-xs" aria-live="polite">
+            {#if active}
+                {fmtTip(active)}
+            {:else if inRange.length > 0}
+                {t("heatmap.totalRecords", String(inRange.length))}
+            {:else}
+                &nbsp;
+            {/if}
+        </div>
+        {#if showRangePicker}
+            <Select.Root type="single" value={String(range)} onValueChange={onRangeChange}>
+                <Select.Trigger class="w-28 shrink-0" aria-label={t("heatmap.rangeLabel")}>
+                    {range === "recent" ? t("heatmap.rangeRecent") : t("heatmap.rangeYear", String(range))}
+                </Select.Trigger>
+                <Select.Content>
+                    <Select.Item value="recent">{t("heatmap.rangeRecent")}</Select.Item>
+                    {#each years as year (year)}
+                        <Select.Item value={String(year)}>{t("heatmap.rangeYear", String(year))}</Select.Item>
+                    {/each}
+                </Select.Content>
+            </Select.Root>
         {/if}
     </div>
 

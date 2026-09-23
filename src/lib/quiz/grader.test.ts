@@ -6,6 +6,7 @@ import {
     blankMatches,
     clampScore,
     gradeObjective,
+    isExactlyCorrect,
     isObjective,
     scoreFillBlank,
     scoreMultipleChoice,
@@ -245,5 +246,39 @@ describe("clampScore", () => {
 describe("PASS_SCORE", () => {
     it("通过线为 60，且统计、历史、错题筛选共用同一个来源", () => {
         expect(PASS_SCORE).toBe(60);
+    });
+});
+
+describe("多选题计分策略", () => {
+    it("partial 策略允许部分得分", () => {
+        expect(scoreObjective(multi([0, 1, 2, 3]), { type: "multiple_choice", value: [0, 1, 2] }, "partial")).toBe(75);
+    });
+
+    it("strict 策略下漏选得 0 分", () => {
+        expect(scoreObjective(multi([0, 1, 2, 3]), { type: "multiple_choice", value: [0, 1, 2] }, "strict")).toBe(0);
+    });
+
+    it("strict 策略下完全选对得满分（顺序无关）", () => {
+        expect(scoreObjective(multi([0, 2]), { type: "multiple_choice", value: [2, 0] }, "strict")).toBe(100);
+    });
+
+    it("strict 策略下多选也得 0 分", () => {
+        expect(scoreObjective(multi([0, 1]), { type: "multiple_choice", value: [0, 1, 2] }, "strict")).toBe(0);
+    });
+
+    it("默认策略为 partial", () => {
+        expect(scoreObjective(multi([0, 1, 2, 3]), { type: "multiple_choice", value: [0, 1, 2] })).toBe(75);
+    });
+
+    it("判断完全选对的辅助函数与顺序无关", () => {
+        expect(isExactlyCorrect([0, 2], [2, 0])).toBe(true);
+        expect(isExactlyCorrect([0, 2], [0])).toBe(false);
+        expect(isExactlyCorrect([0], [0, 1])).toBe(false);
+        expect(isExactlyCorrect([], [])).toBe(true);
+    });
+
+    it("其他题型的计分不受策略影响", () => {
+        expect(scoreObjective(single(1), { type: "single_choice", value: 1 }, "strict")).toBe(100);
+        expect(scoreObjective(blank([["a"], ["b"]]), { type: "fill_blank", value: ["a", ""] }, "strict")).toBe(50);
     });
 });

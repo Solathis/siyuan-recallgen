@@ -9,6 +9,22 @@ export type AIProtocol = "chat" | "responses" | "messages";
 /** 题目存储位置策略 */
 export type StorageLocation = "sibling" | "notebook";
 
+/** 试卷预设：保存一组题型与难度配置，便于快速切换 */
+export interface QuizPreset {
+    id: string;
+    name: string;
+    allowedTypes: QuestionType[];
+    difficulty: DifficultyDistribution;
+    extraScopePct: number;
+}
+
+/**
+ * 多选题计分策略。
+ * - partial：命中数减去错选数再按正确项数折算，允许部分得分（默认）
+ * - strict：必须完全选对才得分
+ */
+export type MultipleChoicePolicy = "partial" | "strict";
+
 // ── 多端点多模型架构 ────────────────────────────────────────────────
 
 /** API 端点：一个服务商连接配置 */
@@ -78,6 +94,10 @@ export interface GeneralConfig {
     extraScopePct: number;
     /** 答题面板宽度（px） */
     panelWidth: number;
+    /** 多选题计分策略 */
+    multipleChoicePolicy: MultipleChoicePolicy;
+    /** 试卷预设列表 */
+    presets: QuizPreset[];
 }
 
 /** 完整配置 */
@@ -220,6 +240,8 @@ export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     notebookId: "",
     extraScopePct: 20,
     panelWidth: 1100,
+    multipleChoicePolicy: "partial",
+    presets: [],
 };
 
 export function getDefaultConfig(): RecallGenConfig {
