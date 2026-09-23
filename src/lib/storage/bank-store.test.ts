@@ -265,6 +265,58 @@ describe("BankStore 复习历史", () => {
     });
 });
 
+describe("BankStore.importItems", () => {
+    it("空数组不做任何写入", async () => {
+        const { plugin, writes } = memoryPlugin();
+        expect(await new BankStore(plugin).importItems([])).toEqual({ added: 0, skipped: 0 });
+        expect(writes).toEqual([]);
+    });
+
+    it("题库为空时全部新增", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        expect(await store.importItems([item("A"), item("B")])).toEqual({ added: 2, skipped: 0 });
+        expect(await store.count()).toBe(2);
+    });
+
+    it("已存在的题目跳过，不覆盖本机的复习进度", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        const original = item("题干相同");
+        const advanced = applyResult(applyResult(original, 90, NOW), 90, NOW + DAY);
+        await store.upsert(advanced);
+
+        // 备份来自另一台机器：同一道题只做过一次，排程更旧
+        const stale = applyResult(original, 40, NOW - 10 * DAY);
+        expect(await store.importItems([stale, item("新题")])).toEqual({ added: 1, skipped: 1 });
+
+        const kept = await store.get(original.id);
+        expect(kept?.timesSeen).toBe(2);
+        expect(kept?.card.reps).toBe(advanced.card.reps);
+        expect(kept?.history).toHaveLength(2);
+    });
+
+    it("导入的题目保留其排程与复习历史", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        const source = applyResult(item("带历史"), 65, NOW - DAY);
+        expect(await store.importItems([source])).toEqual({ added: 1, skipped: 0 });
+
+        const loaded = await store.get(source.id);
+        expect(loaded?.history).toEqual([{ at: NOW - DAY, percent: 65 }]);
+        expect(loaded?.card.due).toBe(source.card.due);
+    });
+
+    it("同一批次里的重复条目只写一次", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        const one = item("重复");
+        // 同批次内的重复只算一次新增，另一次计入跳过
+        expect(await store.importItems([one, { ...one }])).toEqual({ added: 1, skipped: 1 });
+        expect(await store.count()).toBe(1);
+    });
+});
+
 describe("BankStore.prune", () => {
     /** 已掌握且长期未考的条目：连续满分若干次 */
     function masteredItem(text: string, createdAt: number, updatedAt: number): BankItem {

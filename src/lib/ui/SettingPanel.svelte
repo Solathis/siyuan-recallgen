@@ -18,6 +18,8 @@
         onClearProgress = async () => {},
         onSave = () => {},
         onClearBank = async () => {},
+        onExportBank = async () => [],
+        onImportBank = async () => ({ added: 0, skipped: 0 }),
         onImportConfig = () => {},
         onExportScores = async () => ({ entries: [], details: {} }),
         onImportScores = async () => ({ added: 0, skipped: 0 }),
@@ -30,6 +32,8 @@
         onClearScores?: () => Promise<void>;
         onClearProgress?: () => Promise<void>;
         onClearBank?: () => Promise<void>;
+        onExportBank?: () => Promise<import("@/lib/quiz/bank").BankItem[]>;
+        onImportBank?: (items: import("@/lib/quiz/bank").BankItem[]) => Promise<{ added: number; skipped: number }>;
         onImportConfig?: (next: RecallGenConfig, result: import("../quiz/config-io").ImportResult) => void;
         onExportScores?: () => Promise<{ entries: ScoreIndexEntry[]; details: Record<string, ScoreDetail> }>;
         onImportScores?: (
@@ -112,6 +116,8 @@
                     {onClearScores}
                     {onClearProgress}
                     {onClearBank}
+                    {onExportBank}
+                    {onImportBank}
                     config={localConfig}
                     {onImportConfig}
                     {onExportScores}

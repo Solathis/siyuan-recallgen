@@ -215,6 +215,8 @@ export default class RecallGenPlugin extends Plugin {
                     onClearProgress: async () => {
                         await self.progressStore.clearAll();
                     },
+                    onExportBank: () => this.bankStore.list(),
+                    onImportBank: (items) => this.bankStore.importItems(items),
                     onClearBank: async () => {
                         await self.bankStore.clear();
                     },
@@ -294,6 +296,8 @@ export default class RecallGenPlugin extends Plugin {
             },
             bankSummary: () => this.bankStore.summary(),
             listBank: () => this.bankStore.list(),
+            exportBank: () => this.bankStore.list(),
+            importBank: (items) => this.bankStore.importItems(items),
             removeBankItem: (id) => this.bankStore.remove(id),
             recordBankOutcomes: async (questions, source, results) => {
                 const scoreById = new Map(results.map((r) => [r.questionId, r.score]));
