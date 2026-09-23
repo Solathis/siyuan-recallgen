@@ -71,7 +71,6 @@ export interface GeneralConfig {
     language: "zh" | "en";
     countdownEnabled: boolean;
     countdownMinutes: number;
-    editorTheme: "auto" | "light" | "dark";
     storageLocation: StorageLocation;
     /** 指定笔记本 ID（storageLocation=notebook 时生效） */
     notebookId: string;
@@ -211,7 +210,6 @@ export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     language: "zh",
     countdownEnabled: true,
     countdownMinutes: 30,
-    editorTheme: "auto",
     storageLocation: "sibling",
     notebookId: "",
     extraScopePct: 20,

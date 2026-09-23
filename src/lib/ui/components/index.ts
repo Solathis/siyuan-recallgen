@@ -14,16 +14,15 @@ export function cn(...parts: (string | false | null | undefined)[]): string {
 }
 
 const BTN_BASE = "rg-btn";
-const BTN_VARIANT: Record<ButtonVariant, string> = {
-    default: "rg-btn--default",
+/** default 变体即基类样式，因此不产出额外修饰类 */
+const BTN_VARIANT: Partial<Record<ButtonVariant, string>> = {
     outline: "rg-btn--outline",
     ghost: "rg-btn--ghost",
     destructive: "rg-btn--destructive",
     secondary: "rg-btn--secondary",
     link: "rg-btn--link",
 };
-const BTN_SIZE: Record<ButtonSize, string> = {
-    default: "rg-btn--md",
+const BTN_SIZE: Partial<Record<ButtonSize, string>> = {
     sm: "rg-btn--sm",
     lg: "rg-btn--lg",
     icon: "rg-btn--icon",
@@ -48,12 +47,10 @@ export function badge(variant: BadgeVariant = "default"): string {
 
 export const input = "rg-input";
 export const textarea = "rg-textarea";
-export const label = "rg-label";
 export const select = "rg-select";
 export const switchCls = "rg-switch";
 export const checkbox = "rg-checkbox";
 export const slider = "rg-slider";
-export const separator = "rg-separator";
 
 export const card = {
     root: "rg-card",
@@ -64,8 +61,8 @@ export const card = {
     footer: "rg-card__footer",
 };
 
-const ALERT_VARIANT: Record<AlertVariant, string> = {
-    default: "rg-alert--default",
+/** default 变体即基类样式，因此不产出额外修饰类 */
+const ALERT_VARIANT: Partial<Record<AlertVariant, string>> = {
     destructive: "rg-alert--destructive",
     success: "rg-alert--success",
     warning: "rg-alert--warning",
@@ -90,21 +87,6 @@ export const progress = {
     indeterminate: "rg-progress__bar--indeterminate",
 };
 
-export const tabs = {
-    root: "rg-tabs",
-    list: "rg-tabs__list",
-    trigger: (active: boolean) => cn("rg-tabs__trigger", active && "rg-tabs__trigger--active"),
-    content: "rg-tabs__content",
-};
-
-export const collapsible = {
-    root: "rg-collapsible",
-    trigger: "rg-collapsible__trigger",
-    content: "rg-collapsible__content",
-};
-
-export const tooltip = "rg-tooltip";
-
 export const scrollArea = "rg-scroll-area";
 
 export const sidebarNav = "rg-sidebar-nav";
@@ -122,6 +104,3 @@ export const heatmap = {
     legendText: "rg-heatmap__legend-text",
     tip: "rg-heatmap__tip",
 };
-
-/** 共享 context key，所有 Tabs 组件必须使用同一个 Symbol 实例 */
-export const TABS_KEY = Symbol("rg-tabs");

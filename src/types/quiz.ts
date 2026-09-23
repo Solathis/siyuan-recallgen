@@ -32,8 +32,6 @@ export interface QuestionBase {
     difficulty: Difficulty;
     question: string;
     explanation?: string;
-    /** 题目权重，默认 1，总分按权重折算 */
-    weight?: number;
 }
 
 export interface SingleChoiceQuestion extends QuestionBase {

@@ -178,7 +178,6 @@ function validateQuestionsLenient(raw: unknown[], allowedTypes: QuestionType[]):
                 difficulty: (obj.difficulty as Question["difficulty"]) ?? "medium",
                 question: String(obj.question ?? ""),
                 explanation: obj.explanation ? String(obj.explanation) : undefined,
-                weight: 1,
             };
             return coerceByType(base, type, obj);
         } catch {
@@ -206,7 +205,6 @@ function validateQuestions(
             difficulty: (item.difficulty as Question["difficulty"]) ?? "medium",
             question: String(item.question ?? ""),
             explanation: item.explanation ? String(item.explanation) : undefined,
-            weight: 1,
         };
         out.push(coerceByType(base, type, item));
     }

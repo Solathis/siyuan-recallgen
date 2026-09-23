@@ -1,4 +1,4 @@
-import { Plugin, showMessage, getFrontend, openTab, Setting, Dialog } from "siyuan";
+import { Plugin, showMessage, openTab, Setting, Dialog } from "siyuan";
 import type { Custom } from "siyuan";
 import "./index.scss";
 
@@ -26,7 +26,6 @@ const QUIZ_TAB = "quiz";
 const HISTORY_TAB = "history";
 
 export default class RecallGenPlugin extends Plugin {
-    isMobile = false;
     private config: RecallGenConfig = getDefaultConfig();
     private configStore!: ConfigStore;
     private scoreStore!: ScoreStore;
@@ -37,8 +36,6 @@ export default class RecallGenPlugin extends Plugin {
     private historyComp: HistoryPanel | null = null;
 
     async onload() {
-        const frontEnd = getFrontend();
-        this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile";
         this.addIcons(ICON);
         initI18n(this.i18n);
         setFallback(enFallback as Record<string, string>);
