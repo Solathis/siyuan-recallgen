@@ -1,533 +1,399 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { confirm, showMessage } from "siyuan";
+    import { showMessage } from "siyuan";
+    import { Button } from "@/lib/components/ui/button";
+    import * as AlertDialog from "@/lib/components/ui/alert-dialog";
+    import * as Card from "@/lib/components/ui/card";
+    import * as DropdownMenu from "@/lib/components/ui/dropdown-menu";
+    import { Input } from "@/lib/components/ui/input";
+    import * as Select from "@/lib/components/ui/select";
+    import { Skeleton } from "@/lib/components/ui/skeleton";
+    import * as Table from "@/lib/components/ui/table";
+    import * as Tabs from "@/lib/components/ui/tabs";
+    import { cn } from "@/lib/utils";
     import { t } from "../i18n";
+    import { EXPORT_EXTENSION, EXPORT_MIME, buildExport, type ExportFormat } from "../quiz/export";
+    import { scorePercent } from "../quiz/stats";
     import type { QuizService } from "../quiz/service";
     import type { ScoreIndexEntry } from "@/types/quiz";
 
-    export let service: QuizService;
-    export let onOpenReview: (entry: ScoreIndexEntry) => void;
+    let { service, onOpenReview }: { service: QuizService; onOpenReview: (entry: ScoreIndexEntry) => void } = $props();
 
-    let records: ScoreIndexEntry[] = [];
-    let loading = true;
-    let groupBy: "date" | "notebook" = "date";
-    let viewMode: "thumbnail" | "list" | "table" = "thumbnail";
+    let records = $state<ScoreIndexEntry[]>([]);
+    let loading = $state(true);
+    let loadError = $state<string | null>(null);
+    let deleting = $state<string | null>(null);
+    let query = $state("");
+    let groupBy = $state<"date" | "notebook">("date");
+    let viewMode = $state<"thumbnail" | "list" | "table">("thumbnail");
+    /** 分数区间筛选 */
+    let scoreFilter = $state<"all" | "high" | "mid" | "low">("all");
 
-    onMount(async () => {
-        // 不再原地排序：store 返回的数组可能与其内部缓存共享引用
-        records = await service.listScores();
-        loading = false;
+    async function load() {
+        loading = true;
+        loadError = null;
+        try {
+            records = await service.listScores();
+        } catch (e) {
+            console.error("[RecallGen] 加载成绩记录失败", e);
+            loadError = (e as Error).message;
+        } finally {
+            loading = false;
+        }
+    }
+
+    onMount(() => void load());
+
+    const filtered = $derived.by(() => {
+        const q = query.trim().toLowerCase();
+        return records.filter((r) => {
+            if (q && !`${r.title} ${r.sourceTitle ?? ""}`.toLowerCase().includes(q)) return false;
+            const p = scorePercent(r);
+            if (scoreFilter === "high" && p < 80) return false;
+            if (scoreFilter === "mid" && (p < 60 || p >= 80)) return false;
+            if (scoreFilter === "low" && p >= 60) return false;
+            return true;
+        });
     });
 
-    $: grouped = groupRecords(records, groupBy);
-
-    function groupRecords(recs: ScoreIndexEntry[], mode: "date" | "notebook") {
-        const map = new Map<string, { key: string; items: ScoreIndexEntry[] }>();
-        for (const r of recs) {
+    /** 按日期或来源分组，保持录入顺序（列表本身已按时间倒序） */
+    const grouped = $derived.by(() => {
+        const map = new Map<string, ScoreIndexEntry[]>();
+        for (const r of filtered) {
             let key: string;
-            if (mode === "date") {
+            if (groupBy === "date") {
                 const d = new Date(r.timestamp);
                 key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
             } else {
-                key = r.sourceTitle?.replace(/·.*$/, "") || r.title.replace(/·.*$/, "") || t("common.unanswered");
+                // 原先来源为空时错用「未作答」当兜底文案，语义不符
+                key =
+                    r.sourceTitle?.replace(/·.*$/, "").trim() ||
+                    r.title.replace(/·.*$/, "").trim() ||
+                    t("history.noSource");
             }
-            if (!map.has(key)) map.set(key, { key, items: [] });
-            map.get(key)!.items.push(r);
+            const items = map.get(key);
+            if (items) items.push(r);
+            else map.set(key, [r]);
         }
-        return Array.from(map.values());
-    }
+        return [...map.entries()].map(([key, items]) => ({ key, items }));
+    });
 
-    function pct(r: ScoreIndexEntry): number {
-        return r.maxScore > 0 ? (r.totalScore / r.maxScore) * 100 : 0;
-    }
     function timeStr(ts: number): string {
         const d = new Date(ts);
         return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     }
-    /** 删除单条成绩：二次确认后同时删除索引与明细 */
-    function removeRecord(entry: ScoreIndexEntry, e: Event) {
-        e.stopPropagation();
-        confirm(t("history.deleteOne"), t("history.deleteConfirm", entry.title), () => {
-            void service
-                .removeScore(entry.id)
-                .then(() => {
-                    records = records.filter((r) => r.id !== entry.id);
-                    showMessage(t("history.deleted"), 4000);
-                })
-                .catch((err) => {
-                    console.error("[RecallGen] 删除成绩失败", err);
-                    showMessage(t("history.deleteFailed", (err as Error).message), 7000, "error");
-                });
-        });
+
+    /** 分数配色：全部走主题语义色，避免硬编码在暗色主题下不可读 */
+    function scoreClass(p: number): string {
+        if (p >= 80) return "text-success";
+        if (p >= 60) return "text-primary";
+        if (p >= 30) return "text-warning";
+        return "text-destructive";
     }
 
-    function scoreColor(r: ScoreIndexEntry): string {
-        const p = pct(r);
-        if (p >= 80) return "var(--b3-card-success, #65a84c)";
-        if (p >= 60) return "var(--b3-theme-primary)";
-        if (p >= 30) return "var(--b3-card-warning, #d97706)";
-        return "var(--b3-card-error, #d23f31)";
+    async function remove(entry: ScoreIndexEntry) {
+        deleting = entry.id;
+        try {
+            await service.removeScore(entry.id);
+            records = records.filter((r) => r.id !== entry.id);
+            showMessage(t("history.deleted"), 4000);
+        } catch (e) {
+            console.error("[RecallGen] 删除成绩失败", e);
+            showMessage(t("history.deleteFailed", (e as Error).message), 7000, "error");
+        } finally {
+            deleting = null;
+        }
+    }
+
+    /** 导出当前筛选结果：用 Blob + a[download]，不依赖思源接口 */
+    function exportAs(format: ExportFormat) {
+        try {
+            const content = buildExport(filtered, format, t("history.title"));
+            const stamp = new Date().toISOString().slice(0, 10);
+            const blob = new Blob([content], { type: `${EXPORT_MIME[format]};charset=utf-8` });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `recallgen-scores-${stamp}.${EXPORT_EXTENSION[format]}`;
+            a.click();
+            // 立即释放，避免长时间占用内存
+            URL.revokeObjectURL(url);
+            showMessage(t("history.exported", String(filtered.length)), 4000);
+        } catch (e) {
+            showMessage(t("history.exportFailed", (e as Error).message), 7000, "error");
+        }
     }
 </script>
 
-<div class="rg-scope rg-history">
-    <header class="rg-history__bar">
-        <h2 class="rg-history__title">{t("history.title")}</h2>
-        <div class="rg-history__controls">
-            <div class="rg-history__group">
-                <button class="rg-history__seg" class:active={groupBy === "date"} on:click={() => (groupBy = "date")}
-                    >{t("history.byDate")}</button
-                >
-                <button
-                    class="rg-history__seg"
-                    class:active={groupBy === "notebook"}
-                    on:click={() => (groupBy = "notebook")}>{t("history.bySource")}</button
-                >
-            </div>
-            <div class="rg-history__group">
-                <button
-                    class="rg-history__seg"
-                    class:active={viewMode === "thumbnail"}
-                    on:click={() => (viewMode = "thumbnail")}
-                    title={t("history.thumb")}>▦</button
-                >
-                <button
-                    class="rg-history__seg"
-                    class:active={viewMode === "list"}
-                    on:click={() => (viewMode = "list")}
-                    title={t("history.list")}>☰</button
-                >
-                <button
-                    class="rg-history__seg"
-                    class:active={viewMode === "table"}
-                    on:click={() => (viewMode = "table")}
-                    title={t("history.table")}>⊏</button
-                >
-            </div>
+<div class="flex flex-col gap-4 p-4">
+    <header class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold">{t("history.title")}</h2>
+        <div class="flex flex-wrap items-center gap-2">
+            <Input
+                class="h-8 w-44"
+                placeholder={t("history.searchPlaceholder")}
+                aria-label={t("history.searchPlaceholder")}
+                bind:value={query}
+            />
+            <Select.Root
+                type="single"
+                value={scoreFilter}
+                onValueChange={(v) => (scoreFilter = v as typeof scoreFilter)}
+            >
+                <Select.Trigger class="h-8 w-28" aria-label={t("history.filterScore")}>
+                    {t(`history.filter_${scoreFilter}`)}
+                </Select.Trigger>
+                <Select.Content>
+                    <Select.Item value="all">{t("history.filter_all")}</Select.Item>
+                    <Select.Item value="high">{t("history.filter_high")}</Select.Item>
+                    <Select.Item value="mid">{t("history.filter_mid")}</Select.Item>
+                    <Select.Item value="low">{t("history.filter_low")}</Select.Item>
+                </Select.Content>
+            </Select.Root>
+            <Button variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
+                {t("common.refresh")}
+            </Button>
+            <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                    {#snippet child({ props })}
+                        <Button {...props} variant="outline" size="sm" disabled={filtered.length === 0}>
+                            {t("history.export")}
+                        </Button>
+                    {/snippet}
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content align="end">
+                    <DropdownMenu.Item onclick={() => exportAs("json")}>{t("history.exportJson")}</DropdownMenu.Item>
+                    <DropdownMenu.Item onclick={() => exportAs("csv")}>{t("history.exportCsv")}</DropdownMenu.Item>
+                    <DropdownMenu.Item onclick={() => exportAs("markdown")}
+                        >{t("history.exportMarkdown")}</DropdownMenu.Item
+                    >
+                </DropdownMenu.Content>
+            </DropdownMenu.Root>
         </div>
     </header>
 
+    <!-- 分组与视图切换 -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <Tabs.Root value={groupBy} onValueChange={(v) => (groupBy = v as typeof groupBy)}>
+            <Tabs.List>
+                <Tabs.Trigger value="date">{t("history.byDate")}</Tabs.Trigger>
+                <Tabs.Trigger value="notebook">{t("history.bySource")}</Tabs.Trigger>
+            </Tabs.List>
+        </Tabs.Root>
+        <Tabs.Root value={viewMode} onValueChange={(v) => (viewMode = v as typeof viewMode)}>
+            <Tabs.List>
+                <Tabs.Trigger value="thumbnail">{t("history.thumb")}</Tabs.Trigger>
+                <Tabs.Trigger value="list">{t("history.list")}</Tabs.Trigger>
+                <Tabs.Trigger value="table">{t("history.table")}</Tabs.Trigger>
+            </Tabs.List>
+        </Tabs.Root>
+    </div>
+
     {#if loading}
-        <div class="rg-history__empty">{t("common.loading")}</div>
+        <div class="flex flex-col gap-2">
+            {#each [0, 1, 2] as i (i)}
+                <Skeleton class="h-16 w-full" />
+            {/each}
+        </div>
+    {:else if loadError}
+        <Card.Root>
+            <Card.Content class="flex flex-col items-start gap-2 pt-4">
+                <p class="text-destructive text-sm">{t("history.loadFailed", loadError)}</p>
+                <Button variant="outline" size="sm" onclick={() => void load()}>{t("common.retry")}</Button>
+            </Card.Content>
+        </Card.Root>
     {:else if records.length === 0}
-        <div class="rg-history__empty">{t("history.empty")}</div>
+        <div class="text-muted-foreground py-12 text-center text-sm">{t("history.empty")}</div>
+    {:else if filtered.length === 0}
+        <div class="text-muted-foreground py-12 text-center text-sm">{t("history.noMatch")}</div>
     {:else}
-        {#each grouped as group}
-            <section class="rg-history__group-section">
-                <h3 class="rg-history__group-title">
-                    {group.key} <span class="rg-history__count">({group.items.length})</span>
+        {#each grouped as group (group.key)}
+            <section class="flex flex-col gap-2">
+                <h3 class="border-border text-sm font-semibold border-b pb-1">
+                    {group.key}
+                    <span class="text-muted-foreground font-normal">({group.items.length})</span>
                 </h3>
 
                 {#if viewMode === "thumbnail"}
-                    <div class="rg-thumb-grid">
+                    <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
                         {#each group.items as r (r.id)}
-                            <div class="rg-thumb">
-                                <button type="button" class="rg-thumb__open" on:click={() => onOpenReview(r)}>
-                                    <span class="rg-thumb__score" style="color:{scoreColor(r)}">
-                                        {pct(r).toFixed(0)}<span class="rg-thumb__unit">{t("history.pts")}</span>
-                                    </span>
-                                    <span class="rg-thumb__info">
-                                        <span class="rg-thumb__title">{r.title}</span>
-                                        <span class="rg-thumb__meta">
+                            {@const p = scorePercent(r)}
+                            <Card.Root class="group relative overflow-hidden">
+                                <Card.Content class="flex flex-col gap-2 pt-4">
+                                    <div class="flex items-baseline gap-3">
+                                        <span class={cn("text-2xl font-bold", scoreClass(p))}>{p.toFixed(0)}</span>
+                                        <span class="text-muted-foreground text-xs">{t("history.pts")}</span>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="truncate text-sm font-medium" title={r.title}>{r.title}</div>
+                                        <div class="text-muted-foreground text-xs">
                                             {t("result.qCount", String(r.questionCount))} · {timeStr(r.timestamp)}
-                                        </span>
-                                    </span>
-                                    <span class="rg-thumb__bar">
-                                        <span
-                                            class="rg-thumb__bar-fill"
-                                            style="width:{pct(r)}%;background:{scoreColor(r)}"
-                                        ></span>
-                                    </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="rg-thumb__del"
-                                    title={t("history.deleteOne")}
-                                    aria-label={t("history.deleteOne")}
-                                    on:click={(e) => removeRecord(r, e)}>✕</button
-                                >
-                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-muted h-1 w-full overflow-hidden rounded-full">
+                                        <div
+                                            class={cn("h-full rounded-full", p >= 60 ? "bg-success" : "bg-destructive")}
+                                            style="width: {Math.min(100, Math.max(0, p))}%"
+                                        ></div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            class="flex-1"
+                                            onclick={() => onOpenReview(r)}>{t("history.review")}</Button
+                                        >
+                                        <AlertDialog.Root>
+                                            <AlertDialog.Trigger>
+                                                {#snippet child({ props })}
+                                                    <Button
+                                                        {...props}
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        disabled={deleting === r.id}
+                                                    >
+                                                        ✕
+                                                    </Button>
+                                                {/snippet}
+                                            </AlertDialog.Trigger>
+                                            <AlertDialog.Content>
+                                                <AlertDialog.Header>
+                                                    <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
+                                                    <AlertDialog.Description>
+                                                        {t("history.deleteConfirm", r.title)}
+                                                    </AlertDialog.Description>
+                                                </AlertDialog.Header>
+                                                <AlertDialog.Footer>
+                                                    <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                                                    <AlertDialog.Action
+                                                        variant="destructive"
+                                                        onclick={() => void remove(r)}
+                                                    >
+                                                        {t("common.delete")}
+                                                    </AlertDialog.Action>
+                                                </AlertDialog.Footer>
+                                            </AlertDialog.Content>
+                                        </AlertDialog.Root>
+                                    </div>
+                                </Card.Content>
+                            </Card.Root>
                         {/each}
                     </div>
                 {:else if viewMode === "list"}
-                    <div class="rg-list">
+                    <div class="flex flex-col gap-1">
                         {#each group.items as r (r.id)}
-                            <div class="rg-list__row">
-                                <button type="button" class="rg-list__item" on:click={() => onOpenReview(r)}>
-                                    <span class="rg-list__score" style="color:{scoreColor(r)}">{pct(r).toFixed(0)}</span
-                                    >
-                                    <span class="rg-list__title">{r.title}</span>
-                                    <span class="rg-list__meta">{t("result.qCount", String(r.questionCount))}</span>
-                                    <span class="rg-list__time">{timeStr(r.timestamp)}</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="rg-list__del"
-                                    title={t("history.deleteOne")}
-                                    aria-label={t("history.deleteOne")}
-                                    on:click={(e) => removeRecord(r, e)}>✕</button
+                            {@const p = scorePercent(r)}
+                            <div class="hover:bg-accent flex items-center gap-3 rounded-md px-2 py-2">
+                                <span class={cn("w-10 shrink-0 text-right text-lg font-bold", scoreClass(p))}>
+                                    {p.toFixed(0)}
+                                </span>
+                                <Button
+                                    variant="link"
+                                    class="min-w-0 flex-1 justify-start px-0 text-left"
+                                    onclick={() => onOpenReview(r)}
                                 >
+                                    <span class="truncate">{r.title}</span>
+                                </Button>
+                                <span class="text-muted-foreground shrink-0 text-xs"
+                                    >{t("result.qCount", String(r.questionCount))}</span
+                                >
+                                <span class="text-muted-foreground shrink-0 text-xs">{timeStr(r.timestamp)}</span>
+                                <AlertDialog.Root>
+                                    <AlertDialog.Trigger>
+                                        {#snippet child({ props })}
+                                            <Button {...props} variant="ghost" size="sm" disabled={deleting === r.id}
+                                                >✕</Button
+                                            >
+                                        {/snippet}
+                                    </AlertDialog.Trigger>
+                                    <AlertDialog.Content>
+                                        <AlertDialog.Header>
+                                            <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
+                                            <AlertDialog.Description
+                                                >{t("history.deleteConfirm", r.title)}</AlertDialog.Description
+                                            >
+                                        </AlertDialog.Header>
+                                        <AlertDialog.Footer>
+                                            <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                                            <AlertDialog.Action variant="destructive" onclick={() => void remove(r)}>
+                                                {t("common.delete")}
+                                            </AlertDialog.Action>
+                                        </AlertDialog.Footer>
+                                    </AlertDialog.Content>
+                                </AlertDialog.Root>
                             </div>
                         {/each}
                     </div>
                 {:else}
-                    <table class="rg-table">
-                        <thead>
-                            <tr
-                                ><th>{t("history.colTitle")}</th><th>{t("history.colScore")}</th><th
-                                    >{t("history.colCount")}</th
-                                ><th>{t("history.colTime")}</th><th class="rg-table__op"></th></tr
-                            >
-                        </thead>
-                        <tbody>
+                    <Table.Root>
+                        <Table.Header>
+                            <Table.Row>
+                                <Table.Head>{t("history.colTitle")}</Table.Head>
+                                <Table.Head class="w-20 text-right">{t("history.colScore")}</Table.Head>
+                                <Table.Head class="w-16 text-right">{t("history.colCount")}</Table.Head>
+                                <Table.Head class="w-20 text-right">{t("history.colTime")}</Table.Head>
+                                <Table.Head class="w-24"></Table.Head>
+                            </Table.Row>
+                        </Table.Header>
+                        <Table.Body>
                             {#each group.items as r (r.id)}
-                                <tr>
-                                    <td
-                                        ><button type="button" class="rg-table__link" on:click={() => onOpenReview(r)}
-                                            >{r.title}</button
-                                        ></td
-                                    >
-                                    <td style="color:{scoreColor(r)}">{pct(r).toFixed(0)} / 100</td>
-                                    <td>{r.questionCount}</td>
-                                    <td>{timeStr(r.timestamp)}</td>
-                                    <td class="rg-table__op"
-                                        ><button
-                                            type="button"
-                                            class="rg-table__del"
-                                            title={t("history.deleteOne")}
-                                            aria-label={t("history.deleteOne")}
-                                            on:click={(e) => removeRecord(r, e)}>✕</button
-                                        ></td
-                                    >
-                                </tr>
+                                {@const p = scorePercent(r)}
+                                <Table.Row>
+                                    <Table.Cell>
+                                        <Button
+                                            variant="link"
+                                            class="h-auto justify-start px-0"
+                                            onclick={() => onOpenReview(r)}
+                                        >
+                                            {r.title}
+                                        </Button>
+                                    </Table.Cell>
+                                    <Table.Cell class={cn("text-right font-semibold", scoreClass(p))}>
+                                        {p.toFixed(0)}%
+                                    </Table.Cell>
+                                    <Table.Cell class="text-right">{r.questionCount}</Table.Cell>
+                                    <Table.Cell class="text-muted-foreground text-right text-xs">
+                                        {timeStr(r.timestamp)}
+                                    </Table.Cell>
+                                    <Table.Cell>
+                                        <AlertDialog.Root>
+                                            <AlertDialog.Trigger>
+                                                {#snippet child({ props })}
+                                                    <Button
+                                                        {...props}
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        disabled={deleting === r.id}
+                                                    >
+                                                        ✕
+                                                    </Button>
+                                                {/snippet}
+                                            </AlertDialog.Trigger>
+                                            <AlertDialog.Content>
+                                                <AlertDialog.Header>
+                                                    <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
+                                                    <AlertDialog.Description>
+                                                        {t("history.deleteConfirm", r.title)}
+                                                    </AlertDialog.Description>
+                                                </AlertDialog.Header>
+                                                <AlertDialog.Footer>
+                                                    <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                                                    <AlertDialog.Action
+                                                        variant="destructive"
+                                                        onclick={() => void remove(r)}
+                                                    >
+                                                        {t("common.delete")}
+                                                    </AlertDialog.Action>
+                                                </AlertDialog.Footer>
+                                            </AlertDialog.Content>
+                                        </AlertDialog.Root>
+                                    </Table.Cell>
+                                </Table.Row>
                             {/each}
-                        </tbody>
-                    </table>
+                        </Table.Body>
+                    </Table.Root>
                 {/if}
             </section>
         {/each}
     {/if}
 </div>
-
-<style>
-    .rg-history {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        padding: 16px 24px;
-        max-width: 1200px;
-        margin: 0 auto;
-        width: 100%;
-        box-sizing: border-box;
-    }
-    .rg-history__bar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 12px;
-    }
-    .rg-history__title {
-        font-size: 18px;
-        font-weight: 600;
-        margin: 0;
-    }
-    .rg-history__controls {
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-    .rg-history__group {
-        display: flex;
-        border: 1px solid var(--b3-border-color);
-        border-radius: var(--b3-border-radius);
-        overflow: hidden;
-    }
-    .rg-history__seg {
-        padding: 4px 12px;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        font-size: 13px;
-        color: var(--b3-theme-on-surface-light);
-        border-radius: 0;
-    }
-    .rg-history__seg.active {
-        background: var(--b3-theme-primary);
-        color: #fff;
-    }
-    .rg-history__seg:hover:not(.active) {
-        background: var(--b3-list-hover);
-    }
-    .rg-history__empty {
-        text-align: center;
-        padding: 48px;
-        color: var(--b3-theme-on-surface-light);
-        font-size: 14px;
-    }
-    .rg-history__group-section {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .rg-history__group-title {
-        font-size: 14px;
-        font-weight: 600;
-        margin: 0;
-        color: var(--b3-theme-on-background);
-        border-bottom: 1px solid var(--b3-border-color);
-        padding-bottom: 4px;
-    }
-    .rg-history__count {
-        font-size: 12px;
-        color: var(--b3-theme-on-surface-light);
-        font-weight: 400;
-    }
-    /* thumbnail */
-    .rg-thumb-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 12px;
-    }
-    .rg-thumb {
-        position: relative;
-        border: 1px solid var(--b3-border-color);
-        border-radius: var(--b3-border-radius);
-        background: var(--b3-theme-background);
-        transition:
-            border-color 0.12s,
-            box-shadow 0.12s;
-    }
-    .rg-thumb__open {
-        appearance: none;
-        -webkit-appearance: none;
-        font: inherit;
-        color: inherit;
-        text-align: left;
-        width: 100%;
-        padding: 12px;
-        border: none;
-        background: transparent;
-        border-radius: var(--b3-border-radius);
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .rg-thumb__open:focus-visible {
-        outline: 2px solid var(--b3-theme-primary);
-        outline-offset: -2px;
-    }
-    .rg-thumb:hover {
-        border-color: var(--b3-theme-primary);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-    .rg-thumb__score {
-        font-size: 28px;
-        font-weight: 700;
-        line-height: 1;
-    }
-    .rg-thumb__unit {
-        font-size: 13px;
-        font-weight: 400;
-        margin-left: 2px;
-    }
-    .rg-thumb__info {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-    }
-    .rg-thumb__score,
-    .rg-thumb__title,
-    .rg-thumb__meta {
-        display: block;
-    }
-    .rg-thumb__bar {
-        display: block;
-    }
-    .rg-thumb__title {
-        font-size: 13px;
-        font-weight: 500;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .rg-thumb__meta {
-        font-size: 12px;
-        color: var(--b3-theme-on-surface-light);
-        margin-top: 2px;
-    }
-    .rg-thumb__bar {
-        height: 4px;
-        border-radius: 2px;
-        background: var(--b3-theme-surface);
-        overflow: hidden;
-    }
-    .rg-thumb__bar-fill {
-        height: 100%;
-        border-radius: 2px;
-        transition: width 0.3s;
-    }
-    /* list */
-    .rg-list {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-    .rg-list__row {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-    .rg-list__row .rg-list__item {
-        flex: 1;
-        min-width: 0;
-    }
-    .rg-list__item {
-        appearance: none;
-        -webkit-appearance: none;
-        font: inherit;
-        color: inherit;
-        text-align: left;
-        width: 100%;
-        background: transparent;
-        border: none;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 8px 12px;
-        border-radius: var(--b3-border-radius);
-        cursor: pointer;
-        transition: background 0.12s;
-    }
-    .rg-list__item:hover {
-        background: var(--b3-list-hover);
-    }
-    .rg-list__score {
-        font-size: 18px;
-        font-weight: 700;
-        min-width: 40px;
-        text-align: right;
-    }
-    .rg-list__title {
-        flex: 1;
-        font-size: 13px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .rg-list__meta {
-        font-size: 12px;
-        color: var(--b3-theme-on-surface-light);
-    }
-    .rg-list__time {
-        font-size: 12px;
-        color: var(--b3-theme-on-surface-light);
-    }
-    /* table */
-    .rg-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-    }
-    .rg-table th {
-        text-align: left;
-        padding: 6px 12px;
-        font-weight: 600;
-        border-bottom: 1px solid var(--b3-border-color);
-        color: var(--b3-theme-on-surface-light);
-    }
-    .rg-table td {
-        padding: 8px 12px;
-        border-bottom: 1px solid var(--b3-border-color);
-    }
-    .rg-table tr:hover td {
-        background: var(--b3-list-hover);
-    }
-    .rg-table__link {
-        appearance: none;
-        -webkit-appearance: none;
-        font: inherit;
-        color: inherit;
-        text-align: left;
-        padding: 0;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        text-decoration: underline;
-        text-decoration-color: transparent;
-        transition: text-decoration-color 0.12s;
-    }
-    .rg-table__link:hover {
-        text-decoration-color: currentColor;
-    }
-    .rg-table__link:focus-visible {
-        outline: 2px solid var(--b3-theme-primary);
-        outline-offset: 2px;
-    }
-
-    /* 删除按钮：默认半透明，悬停/聚焦时高亮 */
-    .rg-thumb__del,
-    .rg-list__del,
-    .rg-table__del {
-        appearance: none;
-        -webkit-appearance: none;
-        padding: 0;
-        border: none;
-        border-radius: 50%;
-        background: transparent;
-        color: var(--b3-theme-on-surface-light);
-        line-height: 1;
-        cursor: pointer;
-        flex-shrink: 0;
-        transition:
-            opacity 0.12s,
-            background 0.12s,
-            color 0.12s;
-    }
-    .rg-thumb__del {
-        position: absolute;
-        top: 6px;
-        right: 6px;
-        width: 22px;
-        height: 22px;
-        font-size: 12px;
-        opacity: 0;
-    }
-    .rg-list__del,
-    .rg-table__del {
-        width: 24px;
-        height: 24px;
-        font-size: 12px;
-        opacity: 0.45;
-    }
-    .rg-thumb:hover .rg-thumb__del {
-        opacity: 1;
-    }
-    .rg-thumb__del:hover,
-    .rg-list__del:hover,
-    .rg-table__del:hover,
-    .rg-thumb__del:focus-visible,
-    .rg-list__del:focus-visible,
-    .rg-table__del:focus-visible {
-        background: var(--b3-card-error, #d23f31);
-        color: #fff;
-        opacity: 1;
-        outline: none;
-    }
-    .rg-table__op {
-        width: 40px;
-        text-align: center;
-    }
-    @media (max-width: 640px) {
-        .rg-history {
-            padding: 12px;
-        }
-        .rg-thumb-grid {
-            grid-template-columns: 1fr;
-        }
-        .rg-list__item {
-            flex-wrap: wrap;
-        }
-    }
-</style>

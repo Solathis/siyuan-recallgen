@@ -89,9 +89,10 @@ describe("i18n 字典", () => {
         expect(walk(SRC_DIR).length).toBeGreaterThan(20);
     });
 
-    it("检测到动态 key 前缀，避免把 type./diff. 误报为死 key", () => {
+    it("检测到动态 key 前缀，避免把动态拼出的 key 误报为死 key", () => {
         const { prefixes } = collectReferencedKeys();
-        expect([...prefixes].sort()).toEqual(["diff.", "type."]);
+        // 至少覆盖已知的两处动态前缀；新增其他动态前缀不应导致本用例失败
+        expect([...prefixes]).toEqual(expect.arrayContaining(["diff.", "type."]));
     });
 
     it("字典文件位于 public/i18n 下（打包后由 Vite publicDir 复制）", () => {
