@@ -33,6 +33,11 @@ export class QuizSelector {
             callback: () => void this.onCommand(),
         });
         this.plugin.addCommand({
+            langKey: "reviewDue",
+            langText: this.plugin.i18n.reviewDue ?? t("bank.reviewDue"),
+            callback: () => this.openDueReview(),
+        });
+        this.plugin.addCommand({
             langKey: "generateNotebookQuiz",
             langText: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
             callback: () => void this.onNotebookCommand(),
@@ -72,6 +77,11 @@ export class QuizSelector {
             icon: "iconFiles",
             label: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
             click: () => void this.onNotebookCommand(),
+        });
+        detail.menu.addItem({
+            icon: "iconHistory",
+            label: t("bank.reviewDue"),
+            click: () => this.openDueReview(),
         });
         detail.menu.addItem({
             icon: "iconCalendar",
@@ -176,6 +186,15 @@ export class QuizSelector {
                     }),
             });
         }
+    }
+
+    /** 复习到期题目：不依赖文档，直接按题库排程出题 */
+    private openDueReview() {
+        this.open({
+            mode: "reviewDue",
+            sourceDocId: "bank-due",
+            sourceTitle: t("bank.reviewDue"),
+        });
     }
 
     /** 命令面板：从当前文档生成 */

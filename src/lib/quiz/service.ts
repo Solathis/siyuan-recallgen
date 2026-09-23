@@ -1,4 +1,5 @@
 import type { RecallGenConfig } from "@/types/config";
+import type { BankSummary } from "./bank";
 import type {
     GradingResult,
     Question,
@@ -67,6 +68,22 @@ export interface QuizService {
     removeScore(id: string): Promise<void>;
     /** 已打开的笔记本列表，用于设置面板选择存储位置 */
     listNotebooks(): Promise<{ id: string; name: string }[]>;
+
+    // ── 题库与间隔重复 ──────────────────────────────────────────
+    /** 按 FSRS 排程取出到期的题目，用于「复习到期题目」 */
+    dueBankQuestions(limit?: number): Promise<Question[]>;
+    /** 题库规模概览 */
+    bankSummary(): Promise<BankSummary>;
+    /**
+     * 交卷后把作答结果写回题库：新题目入库，已有题目推进排程并累计统计。
+     * 返回新增与复用（已存在）的题数。
+     */
+    recordBankOutcomes(
+        questions: Question[],
+        source: { sourceDocId: string; sourceTitle: string },
+        results: GradingResult[]
+    ): Promise<{ added: number; reused: number }>;
+    clearBank(): Promise<void>;
     testConnection: () => Promise<string>;
     clearScores(): Promise<void>;
     clearAllProgress(): Promise<void>;
@@ -87,7 +104,7 @@ export interface ReviewPayload {
 
 /** Tab 初始数据 */
 export interface QuizTabData {
-    mode: "generate" | "resume" | "dateGenerate" | "review";
+    mode: "generate" | "resume" | "dateGenerate" | "review" | "reviewDue";
     content?: string;
     quizId?: string;
     sourceDocId: string;
