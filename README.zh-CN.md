@@ -79,12 +79,18 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 - **GitHub 风格热力图**：固定 53 周 × 7 天（371 格）贡献图，展示过去一年每日答题情况
 - **聚合方式**：每日最高分 / 每日平均分（可配置）
 - **配色区间**：默认 GitHub 绿色色阶，支持自定义颜色区间与色盘选色
-- **成绩自动记录**：交卷时立即保存成绩到 `recallgen-scores.json`，不受后续分析成败影响
-- **复习记录 Tab**：右上角图标打开历史记录面板，支持按日期/按来源分组，缩略图/列表/表格三种视图，点击记录可回看完整结果
+- **成绩自动记录**：交卷时立即写入成绩索引与当月明细分片，不受后续分析成败影响；历史列表只加载轻量索引，回看时才按需拉取明细
+- **复习记录 Tab**：右上角图标打开历史记录面板
+  - 支持按日期/按来源分组，缩略图/列表/表格三种视图
+  - **搜索**：按标题与来源模糊匹配
+  - **筛选**：全部分数 / 80 分及以上 / 60-79 分 / 60 分以下
+  - **导出**：JSON / CSV / Markdown（导出当前筛选结果）
+  - **单条删除**：带二次确认，同时删除索引与明细
+  - 点击记录可回看完整结果
 
 ### 设置面板
 
-左侧导航栏 + 右侧内容区，5 个独立设置分区：
+左侧导航栏 + 右侧内容区，6 个独立设置分区：
 
 1. **AI 服务**：端点 CRUD（名称/提供商/协议/Base URL/API Key），每个端点下嵌套管理模型（名称/温度/MaxTokens），端点内模型名去重，测试连接（端点+模型级联选择），全局超时与 JSON Schema 开关
 2. **AI 身份**：出题者/审题者/判题者三角色卡片，端点+模型级联选择，不同角色推荐使用不同模型但允许相同
@@ -121,14 +127,17 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 
 | 组件 | 技术 | 版本 |
 |------|------|------|
-| 前端框架 | Svelte | 4.2+ |
-| 构建工具 | Vite | 5.2+ |
-| 类型系统 | TypeScript | 5.1+ |
+| 前端框架 | Svelte | 5.57+ |
+| 构建工具 | Vite | 7.3+ |
+| 类型系统 | TypeScript | 5.9+ |
+| 样式与组件 | Tailwind CSS 4 + shadcn-svelte（bits-ui） | 4.3+ / 1.7+ |
 | 思源 SDK | siyuan | 1.2.3 |
 | 代码编辑器 | CodeMirror 6 | 6.x |
 | 数学渲染 | KaTeX | 0.18.1 |
 | Markdown 渲染 | marked | 18.0.9 |
 | JSON 修复 | jsonrepair | 3.15+ |
+| HTML 净化 | DOMPurify | 3.4+ |
+| 单元测试 | Vitest | 4.1+ |
 | 包管理器 | pnpm | 11+ |
 
 ### 架构要点
@@ -137,64 +146,76 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 - **AI 网络代理**：所有 AI 请求经 `forwardProxy`（内核 HTTP 代理），`payloadEncoding: 'json'` 传递 JSON 对象，避免 CORS，API Key 不暴露前端
 - **数据持久化**：使用思源 `saveData`/`loadData`（非 localStorage），支持多端同步
   - `recallgen-config.json`：插件配置
-  - `recallgen-scores.json`：成绩记录（含题目、答案、评语、分析）
+  - `recallgen-scores-index.json`：成绩索引（含按题型/难度的聚合值，历史列表与统计图表只读它）
+  - `recallgen-scores-YYYY-MM.json`：按月分片的成绩明细（题目、判分、分析），按需加载
   - `recallgen-progress.json`：答题进度（未交卷的会话）
-- **异步存储基类**：`AsyncStore` 实现写入串行化（Promise 链），内存缓存 + 磁盘持久化，并发安全
+- **异步存储基类**：`AsyncStore` 统一处理读串行化、写串行化、读写不互相覆盖、写入失败上抛；配置写入按 400ms 合并，避免每次按键都重写配置文件；答题进度按 30 天 TTL 自动清理
 - **Tab 状态机**：`configuring → loading_generating → answering → loading_grading → result`
-- **UI 组件**：shadcn 风格的 Svelte 组件（Card/Button/Badge/Field/Progress/Separator/Tooltip 等），使用思源 `--b3-*` CSS 变量，主题原生一致，无 Tailwind 依赖
+- **UI 组件**：全部使用 shadcn-svelte 组件（Button/Card/Badge/Input/Select/Switch/Tabs/Table/AlertDialog/DropdownMenu/Progress/Skeleton 等，基于 bits-ui）。shadcn 的语义变量映射到思源 `--b3-*`，因此明暗主题自动跟随；`dark:` 变体绑定思源的 `.theme-dark`
+- **样式隔离**：**刻意不引入 Tailwind 的 preflight**——思源本体与插件共享同一文档，全局重置会破坏思源界面。只引入 theme 与 utilities 两个 layer，并把工具类依赖的重置收窄到插件容器 `.rg-scope` 内；KaTeX 自带的 `body{counter-reset}` 规则也改写为容器作用域，保证对思源全局样式零侵入
 - **Tab 恢复**：思源重启时恢复自定义 Tab，`mode='generate'` 的 Tab 自动检测已有进度并恢复为答题状态，避免重新生成
-- **LaTeX CSS**：KaTeX 样式通过 CDN `<link>` 动态注入（非 Vite import），避免字体文件 base64 内联导致 CSS 体积膨胀
+- **公式渲染**：KaTeX 样式与字体随插件打包（仅 woff2，共约 296KB），不再依赖 CDN，离线可用；渲染走「marked → DOMPurify 净化 → 回填 KaTeX」的顺序，净化时公式还是占位符，既拦住了笔记/AI 文本里的脚本注入，又不会误伤 KaTeX 生成的 MathML
 
 ### 项目结构
 
 ```
 src/
-├── index.ts                    # 插件入口：生命周期、Tab 注册、服务组装
-├── index.scss                  # 全局样式（rg-* 组件类映射思源变量）
-├── api.ts                      # 思源 API 封装（forwardProxy、块操作、SQL、导出）
+├── index.ts                    # 插件入口：生命周期、Tab 注册（mount/unmount）、服务组装
+├── index.css 的源头 app.css     # Tailwind v4 入口 + shadcn 语义变量映射 + .rg-scope 收窄重置
+├── api.ts                      # 思源 API 封装（仅保留实际使用：forwardProxy、块、SQL、导出）
+├── test/
+│   ├── siyuan-stub.ts          # siyuan 包替身（该包只有类型声明，无运行时实现）
+│   └── setup-i18n.ts           # 单测统一加载真实中文字典
 ├── types/
-│   ├── config.ts               # 配置类型与默认值
-│   └── quiz.ts                 # 题目/答题/判分/成绩类型
-├── lib/
-│   ├── ai/
-│   │   ├── client.ts           # AI 调用（三协议、重试、超时、forwardProxy）
-│   │   ├── schema.ts           # JSON Schema 定义与宽松解析（parseJsonLoose）
-│   │   └── prompts.ts          # 提示词构建（生成/审题/重生/判分/分析/答疑）
-│   ├── quiz/
-│   │   ├── generator.ts        # 出题+审题循环+容错校验
-│   │   ├── grader.ts           # 判分（客观本地+主观AI）
-│   │   ├── selector.ts         # 触发入口注册（菜单/命令/事件）
-│   │   ├── service.ts          # QuizService 接口（QuizPanel 与后端解耦）
-│   │   ├── docWriter.ts        # 题目写入思源文档（IAL 标记）
-│   │   └── dateRange.ts        # 日期范围查询（SQL created 字段）
-│   ├── editor/
-│   │   └── codemirror.ts       # CodeMirror 6 编辑器（语言包动态导入）
-│   ├── storage/
-│   │   ├── store.ts            # AsyncStore 基类（串行化写入+缓存）
-│   │   ├── config.ts           # 配置存储（mergeDefaults 迁移）
-│   │   ├── scores.ts           # 成绩存储
-│   │   ├── progress.ts         # 答题进度存储
-│   │   └── index.ts            # 存储模块导出
-│   └── ui/
-│       ├── QuizPanel.svelte    # 答题主面板（状态机）
-│       ├── QuestionView.svelte # 单题渲染（Markdown+LaTeX+编辑器）
-│       ├── ResultPanel.svelte  # 结果面板（三标签+AI答疑）
-│       ├── ChatPanel.svelte     # 题目级AI答疑对话
-│       ├── ProgressBar.svelte   # 生成/判分进度条
-│       ├── Heatmap.svelte       # 热力图组件
-│       ├── HistoryPanel.svelte  # 历史记录面板
-│       ├── SettingPanel.svelte  # 设置面板（左侧导航）
-│       ├── SettingsAI.svelte    # AI端点/模型管理
-│       ├── SettingsAIRoles.svelte # AI角色配置
-│       ├── SettingsGeneral.svelte # 题目与答题设置
-│       ├── SettingsPrompts.svelte # 提示词编辑
-│       ├── SettingsHeatmap.svelte # 热力图设置
-│       ├── SettingsData.svelte   # 数据管理
-│       ├── latex.ts            # Markdown+LaTeX 渲染函数
-│       └── components/         # shadcn 风格组件库
-│           ├── index.ts        # CSS 类常量导出
-│           └── Tabs*.svelte    # Tabs 组件（context API）
-└── libs/                       # 模板工具（dialog、setting-utils）
+│   ├── config.ts               # 配置类型、默认值、ConfigPatch、旧配置迁移
+│   └── quiz.ts                 # 题目/作答/判分/成绩索引与明细类型
+└── lib/
+    ├── ai/
+    │   ├── client.ts           # AI 调用（三协议、超时看门狗、指数退避重试、错误分类）
+    │   ├── errors.ts           # 错误 → 「标题 + 建议 + 原文」的展示映射
+    │   ├── schema.ts           # JSON Schema 与宽松解析（parseJsonLoose）
+    │   ├── scaffold.ts         # 提示词脚手架文案（中英双份，跟随输出语言）
+    │   └── prompts.ts          # 生成/审题/重生/判分/分析/答疑消息构建
+    ├── quiz/
+    │   ├── generator.ts        # 出题 + 审题循环 + 逐题容错校验与类型收敛
+    │   ├── grader.ts           # 判分（客观本地 + 主观 AI，并发 ≤4）
+    │   ├── selector.ts         # 触发入口注册（菜单/命令/事件）与内容选取
+    │   ├── content.ts          # 文档批量导出（并发 + 顺序保持 + 字符预算）
+    │   ├── stats.ts            # 成绩聚合（按题型/难度）与索引条目派生
+    │   ├── export.ts           # 成绩导出（JSON / CSV / Markdown）
+    │   ├── service.ts          # QuizService 接口（QuizPanel 与后端解耦）
+    │   ├── docWriter.ts        # 题目写入思源文档（IAL 标记、折叠答案）
+    │   └── dateRange.ts        # 日期范围查询（SQL created 字段）
+    ├── editor/
+    │   └── codemirror.ts       # CodeMirror 6 编辑器（语言包按需导入、主题跟随思源）
+    ├── i18n/
+    │   └── index.ts            # t() 翻译（占位符全局替换、字典回退）
+    ├── storage/
+    │   ├── store.ts            # AsyncStore 基类（读写串行化、合并写入、错误上抛）
+    │   ├── config.ts           # 配置存储（合并写入 + 旧配置迁移）
+    │   ├── scores.ts           # 成绩存储（索引 + 按月分片 + v1 迁移）
+    │   ├── progress.ts         # 答题进度（30 天 TTL 自动清理）
+    │   └── index.ts            # 存储模块导出
+    ├── ui/
+    │   ├── QuizPanel.svelte    # 答题主面板（状态机、倒计时、确认对话框）
+    │   ├── QuestionView.svelte # 单题渲染（Markdown+LaTeX+代码编辑器）
+    │   ├── ResultPanel.svelte  # 结果面板（统计卡片、题目详情、AI 答疑）
+    │   ├── HistoryPanel.svelte # 历史记录（搜索/筛选/导出/删除，三种视图）
+    │   ├── Heatmap.svelte      # 热力图（跟随主题、窄屏横向滚动、可聚焦查看）
+    │   ├── ProgressBar.svelte  # 进度条（确定/不确定两种形态）
+    │   ├── SettingPanel.svelte # 设置面板外壳（左侧导航）
+    │   ├── SettingsAI.svelte   # 端点/模型管理与测试连接
+    │   ├── SettingsAIRoles.svelte
+    │   ├── SettingsGeneral.svelte
+    │   ├── SettingsPrompts.svelte
+    │   ├── SettingsHeatmap.svelte
+    │   ├── SettingsData.svelte
+    │   ├── latex.ts            # Markdown + LaTeX → 安全 HTML（DOMPurify 净化）
+    │   └── (无手写组件库)        # 组件统一来自 src/lib/components/ui/
+    ├── components/ui/          # shadcn-svelte 组件（CLI 生成，可按需修改）
+    ├── utils.ts                # cn() 与 shadcn 所需类型辅助
+    └── promise-pool.ts         # 并发上限池
+tests/                          # 与源码同目录的 *.test.ts（19 个文件 / 344 个用例）
 ```
 
 ## 💻 开发
@@ -226,8 +247,9 @@ pnpm run make-install
 
 ### 构建产物
 
-- `dist/index.js`：单文件打包（inlineDynamicImports），约 1MB（gzip 360KB）
-- `dist/index.css`：样式文件，约 24KB（gzip 4KB）
+- `dist/index.js`：单文件打包（inlineDynamicImports），约 1.47MB（gzip 466KB）
+- `dist/index.css`：样式文件（含 KaTeX 样式），约 74KB（gzip 12KB）
+- `dist/fonts/`：KaTeX 字体（20 个 woff2，约 296KB）
 - `dist/icon.png`：插件图标
 - `dist/plugin.json`：插件清单
 - `package.zip`：打包压缩文件
@@ -237,7 +259,9 @@ pnpm run make-install
 - **npm/npx 不可用**：本环境 MSYS2 bash 中 npm 路径不可执行，必须使用 `pnpm` 或 `pnpm exec`
 - **SiYuan SDK 补丁**：`siyuan@1.2.3` 存在 TS6196 未使用导入问题，通过 `patches/siyuan@1.2.3.patch` 修复（`pnpm-workspace.yaml` 配置 `patchedDependencies`）
 - **Vite 配置**：`output.inlineDynamicImports: true` 强制单文件输出；`viteStaticCopy` 复制 `icon.png`；`optimizeDeps.include` 预打包 CodeMirror 语言包
-- **Svelte 4 限制**：markup 中 `on:event` 不能内联 TS 类型断言，需用命名处理函数；`getContext`/`setContext` 的 Symbol 必须在共享模块中声明
+- **Svelte 5**：组件挂载用 `mount`/`unmount`（`new Component()` 与 `$destroy()` 已不可用）；`mount()` 不再暴露 `$on`，插件入口与组件之间统一改用回调属性（`onsave`、`onchange` 等）；新组件一律使用 runes（`$props`/`$state`/`$derived`/`$effect`）
+- **质量门禁**：`pnpm run typecheck`（svelte-check）、`pnpm run format:check`（prettier）、`pnpm test`（vitest）、`pnpm run build`；CI 在 push/PR 上全部执行，并在 tag 发布前校验 tag 与 `plugin.json` 版本一致
+- **输出目录**：生产构建默认输出到 `dist/`；需要直接构建到思源插件目录时，复制 `.env.local.example` 为 `.env.local` 并填写 `OUTPUT_DIR`（该文件已被 gitignore）
 - **思源插件加载器**：使用浏览器模块加载（非 Node require），Rollup code-split 产生的 `require()` 存根会导致运行时失败
 
 ## 📊 数据流
@@ -283,7 +307,7 @@ ResultPanel (三标签: 题目列表/薄弱点分析/学习建议)
     └─ 放弃保存 (关闭Tab)
     │
     ▼
-成绩记录 → recallgen-scores.json
+成绩记录 → recallgen-scores-index.json + recallgen-scores-YYYY-MM.json（按月分片）
     ├─ 热力图 (SettingsHeatmap)
     └─ 历史记录 (HistoryPanel → review 回看)
 ```
@@ -323,6 +347,41 @@ ResultPanel (三标签: 题目列表/薄弱点分析/学习建议)
 | enabled | boolean | true | 热力图开关 |
 | metric | "max" / "avg" | avg | 每日聚合方式 |
 | ranges | ScoreRange[] | GitHub 绿色色阶 | 分数区间配色 |
+
+## 🔄 近期重构
+
+本轮重构把插件从「Svelte 4 + 手写 CSS 类」迁移到「Svelte 5 + Tailwind 4 + shadcn-svelte」，并修掉了一批正确性问题。
+
+### 正确性与安全
+
+- **渲染安全**：Markdown 渲染此前未做净化，笔记或 AI 输出中的 `<img onerror>`、`<script>` 可在思源桌面端执行；现经 DOMPurify 净化后再注入
+- **公式渲染**：修复了占位符序号错配导致「第二个及以后的公式全部渲染失败」的问题；KaTeX 样式与字体改为随插件打包，不再依赖 CDN
+- **AI 调用重试**：修复超时错误因按英文文案匹配而永远不会重试，以及超时看门狗定时器未清理造成的未捕获拒绝
+- **出题容错**：修复「一道题不合格导致整批作废」，以及单选/多选题答案索引越界（这类题目用户永远答不对）
+- **内容选取**：修复短内容确认弹窗点「取消」仍会继续、笔记本超过 200 篇文档时静默截断、文档导出串行且内容无长度上限
+- **数据安全**：清空成绩/进度改为二次确认；配置写盘失败不再静默；答题进度按 30 天自动清理
+- **设置面板**：修复新增模型名恒为空字符串、重名时输入框与配置脱钩、题型可被全部取消勾选、以及每次按键都重写配置文件
+
+### 存储结构
+
+成绩由「单个文件装下全部记录、每次交卷全量重写」改为「轻量索引 + 按月分片明细」：
+历史列表与统计只读索引（不含题目与判分明细），交卷写入量与该月记录数成正比。首次启动会自动迁移旧文件并保留备份。
+
+### 交互与界面
+
+- 全部界面改用 shadcn-svelte 组件，删除四百余行手写 CSS 类
+- 修复深色主题下多处硬编码颜色导致的不可读
+- 修复热力图提示永远不可见、以及窄屏下单元格被压到不足 4px
+- 修复答题过程中修改设置不生效、换题后代码编辑器残留上一题内容
+- 修复「薄弱点分析」与「学习建议」两个标签页显示同一段文本
+- 补齐空态、加载态（骨架屏）、错误态（标题 + 可操作建议 + 原文）与键盘可达性
+- 提示词脚手架与默认提示词改为跟随「输出语言」设置
+
+### 尚未实现（已列入计划）
+
+- **数据统计图表**：分数趋势、题型正确率、薄弱知识点排行、分数分布等图表尚未实现，当前只有热力图
+- **间隔重复**：尚未引入 FSRS/SM-2 排程与可复用题库，每次生成的都是新题目
+- **历史记录虚拟滚动**：记录很多时列表会一次性渲染
 
 ## 📄 许可证
 
