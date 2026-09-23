@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { GradingResult, Question, ScoreRecord } from "@/types/quiz";
 import { PASS_SCORE, aggregateResults, buildIndexEntry, monthKey, scorePercent } from "./stats";
 
-const question = (id: string, type: Question["type"], difficulty: Question["difficulty"]): Question =>
-    ({ id, type, difficulty, question: "题干" }) as Question;
+const question = (id: string, type: Question["type"], difficulty: Question["difficulty"], tags?: string[]): Question =>
+    ({ id, type, difficulty, question: "题干", tags }) as Question;
 
 const result = (questionId: string, type: Question["type"], score: number, userValue?: unknown): GradingResult =>
     ({
@@ -56,7 +56,7 @@ describe("aggregateResults", () => {
     });
 
     it("空结果返回空聚合", () => {
-        expect(aggregateResults([], questions)).toEqual({ byType: {}, byDifficulty: {} });
+        expect(aggregateResults([], questions)).toEqual({ byType: {}, byDifficulty: {}, byTag: {} });
     });
 });
 
@@ -166,5 +166,75 @@ describe("monthKey", () => {
         const a = monthKey(new Date(2026, 5, 1).getTime());
         const b = monthKey(new Date(2026, 5, 30).getTime());
         expect(a).toBe(b);
+    });
+});
+
+describe("aggregateResults - 知识点标签", () => {
+    it("同一道题的多个标签各自累加", () => {
+        const { byTag } = aggregateResults(
+            [result("q-1", "single_choice", 100)],
+            [question("q-1", "single_choice", "easy", ["二叉树", "递归"])]
+        );
+        expect(byTag["二叉树"]).toEqual({ count: 1, passed: 1, score: 100, maxScore: 100 });
+        expect(byTag["递归"]).toEqual({ count: 1, passed: 1, score: 100, maxScore: 100 });
+    });
+
+    it("跨题目累加同一标签", () => {
+        const { byTag } = aggregateResults(
+            [result("q-1", "single_choice", 100), result("q-2", "single_choice", 0)],
+            [question("q-1", "single_choice", "easy", ["二叉树"]), question("q-2", "single_choice", "hard", ["二叉树"])]
+        );
+        expect(byTag["二叉树"]).toEqual({ count: 2, passed: 1, score: 100, maxScore: 200 });
+    });
+
+    it("没有标签的题目不出现在 byTag 中", () => {
+        const { byTag } = aggregateResults(
+            [result("q-1", "single_choice", 80)],
+            [question("q-1", "single_choice", "easy")]
+        );
+        expect(byTag).toEqual({});
+    });
+
+    it("标签去重由生成阶段负责，聚合只按题目上的标签计数", () => {
+        const { byTag } = aggregateResults(
+            [result("q-1", "single_choice", 80)],
+            [question("q-1", "single_choice", "easy", ["A"])]
+        );
+        expect(Object.keys(byTag)).toEqual(["A"]);
+    });
+
+    it("缺少题目信息时 byTag 为空（旧数据兼容）", () => {
+        const { byTag } = aggregateResults([result("q-1", "single_choice", 80)], undefined);
+        expect(byTag).toEqual({});
+    });
+
+    it("buildIndexEntry 输出 byTag", () => {
+        const record: ScoreRecord = {
+            id: "s-1",
+            quizId: "quiz-1",
+            title: "标题",
+            timestamp: 1_700_000_000_000,
+            totalScore: 100,
+            maxScore: 100,
+            questionCount: 1,
+            detail: [result("q-1", "subjective", 100)],
+            questions: [question("q-1", "subjective", "easy", ["知识点 X"])],
+        };
+        expect(buildIndexEntry(record).byTag["知识点 X"]).toMatchObject({ count: 1, passed: 1 });
+    });
+
+    it("题目缺 tags 字段时 byTag 为空", () => {
+        const record: ScoreRecord = {
+            id: "s-1",
+            quizId: "quiz-1",
+            title: "标题",
+            timestamp: 1,
+            totalScore: 0,
+            maxScore: 100,
+            questionCount: 1,
+            detail: [result("q-1", "subjective", 0)],
+            questions: [question("q-1", "subjective", "easy")],
+        };
+        expect(buildIndexEntry(record).byTag).toEqual({});
     });
 });

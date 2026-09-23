@@ -6,6 +6,7 @@
     import { t } from "../i18n";
     import {
         accuracyByDifficulty,
+        accuracyByTag,
         accuracyByType,
         filterByRange,
         scoreDistribution,
@@ -28,8 +29,11 @@
     const byType = $derived(accuracyByType(inRange));
     const byDifficulty = $derived(accuracyByDifficulty(inRange));
     const distribution = $derived(scoreDistribution(inRange));
+    const byTag = $derived(accuracyByTag(inRange));
     const weakTypes = $derived(weakestGroups(byType));
     const weakDifficulties = $derived(weakestGroups(byDifficulty));
+    /** 知识点排行：样本 ≥2 的按正确率升序取前 8 */
+    const weakTags = $derived(weakestGroups(byTag, 2, 8));
 
     /** 时间范围下拉的选项文案由各 range 值拼出 */
     function rangeLabel(value: RangeDays): string {
@@ -291,7 +295,29 @@
                     <Card.Description>{t("stats.weakDesc")}</Card.Description>
                 </Card.Header>
                 <Card.Content class="flex flex-col gap-3">
-                    {#if weakTypes.length === 0 && weakDifficulties.length === 0}
+                    {#if weakTags.length > 0}
+                        <div class="flex flex-col gap-1.5">
+                            <span class="text-muted-foreground text-xs font-semibold">{t("stats.weakByTag")}</span>
+                            {#each weakTags as group (group.key)}
+                                <div class="flex items-center gap-2">
+                                    <span class="w-24 shrink-0 truncate text-xs" title={group.key}>{group.key}</span>
+                                    <span class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+                                        <span
+                                            class={cn(
+                                                "block h-full rounded-full",
+                                                group.accuracy >= 60 ? "bg-success" : "bg-destructive"
+                                            )}
+                                            style="width: {Math.max(2, Math.min(100, group.accuracy))}%"
+                                        ></span>
+                                    </span>
+                                    <span class="text-muted-foreground w-16 shrink-0 text-right text-xs">
+                                        {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
+                                    </span>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                    {#if weakTypes.length === 0 && weakDifficulties.length === 0 && weakTags.length === 0}
                         <p class="text-muted-foreground text-xs">{t("stats.weakEmpty")}</p>
                     {:else}
                         {#if weakTypes.length > 0}

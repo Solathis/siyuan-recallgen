@@ -183,6 +183,22 @@ export function accuracyByDifficulty(entries: ScoreIndexEntry[]): GroupAccuracy[
     return DIFFICULTY_ORDER.map((d) => accuracyOf(entries, (e) => e.byDifficulty[d], d)).filter((g) => g.count > 0);
 }
 
+/**
+ * 按知识点标签统计正确率。
+ * 标签来自索引中的 byTag 聚合，按样本量倒序输出（样本多的知识点更可信）。
+ * 旧记录没有标签时返回空数组。
+ */
+export function accuracyByTag(entries: ScoreIndexEntry[]): GroupAccuracy[] {
+    const keys = new Set<string>();
+    for (const entry of entries) {
+        for (const key of Object.keys(entry.byTag ?? {})) keys.add(key);
+    }
+    return [...keys]
+        .map((key) => accuracyOf(entries, (e) => e.byTag?.[key], key))
+        .filter((group) => group.count > 0)
+        .sort((a, b) => b.count - a.count);
+}
+
 /** 分数分布直方图：0-59 / 60-69 / 70-79 / 80-89 / 90-100 */
 export const SCORE_BUCKETS = [
     { key: "0-59", min: 0, max: 59 },

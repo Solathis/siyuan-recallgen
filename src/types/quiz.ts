@@ -32,6 +32,8 @@ export interface QuestionBase {
     difficulty: Difficulty;
     question: string;
     explanation?: string;
+    /** 知识点标签（1-3 个），用于按知识点维度统计薄弱环节 */
+    tags?: string[];
 }
 
 export interface SingleChoiceQuestion extends QuestionBase {
@@ -175,6 +177,8 @@ export interface ScoreIndexEntry {
     sourceTitle?: string;
     byType: Partial<Record<QuestionType, ScoreAggregate>>;
     byDifficulty: Partial<Record<Difficulty, ScoreAggregate>>;
+    /** 按知识点标签聚合；同一道题可计入多个标签 */
+    byTag: Record<string, ScoreAggregate>;
     /** 是否已生成薄弱点分析 */
     hasAnalysis: boolean;
 }
