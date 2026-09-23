@@ -396,6 +396,7 @@
     "ai.responseNoContent": "AI 响应缺少内容",
     "ai.testPromptDefault": "请用一句话简要介绍你自己",
 
+    "gen.batchProgress": "正在生成第 {0}/{1} 批（本批 {2} 题）…",
     "gen.reviewing": "第 {0} 轮审题中…",
     "gen.reviewPassed": "第 {0} 轮审题通过，共 {1} 题",
     "gen.reviewNoReason": "未通过审核",
