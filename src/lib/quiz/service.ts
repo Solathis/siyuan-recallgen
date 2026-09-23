@@ -87,6 +87,10 @@ export interface QuizService {
     bankSummary(): Promise<BankSummary>;
     /** 题库全部条目，用于题库浏览界面 */
     listBank(): Promise<BankItem[]>;
+    /** 导出题库全部条目（含排程与复习历史）用于备份 */
+    exportBank(): Promise<BankItem[]>;
+    /** 导入题库备份；只新增不覆盖，返回新增与跳过的条数 */
+    importBank(items: BankItem[]): Promise<{ added: number; skipped: number }>;
     /** 从题库中删除单条题目 */
     removeBankItem(id: string): Promise<void>;
     /**

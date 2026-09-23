@@ -140,6 +140,24 @@ export class BankStore {
         return found;
     }
 
+    /**
+     * 导入题库条目：**只新增不覆盖**。
+     * 已存在的指纹一律跳过——本机可能已经把这道题复习了若干轮，
+     * 用备份里的旧排程覆盖会直接抹掉复习进度。
+     */
+    async importItems(items: BankItem[]): Promise<{ added: number; skipped: number }> {
+        if (items.length === 0) return { added: 0, skipped: 0 };
+        // 同一批次内的重复先把指纹收敛，否则 added 会把同一条题算两次
+        const unique = new Map<string, BankItem>();
+        for (const item of items) if (!unique.has(item.id)) unique.set(item.id, item);
+
+        const candidates = [...unique.values()];
+        const existing = await this.findMany(candidates.map((item) => item.id));
+        const fresh = candidates.filter((item) => !existing.has(item.id));
+        await this.upsertMany(fresh);
+        return { added: fresh.length, skipped: items.length - fresh.length };
+    }
+
     /** 新增或整体覆盖一个条目 */
     async upsert(item: BankItem): Promise<void> {
         await this.upsertMany([item]);
