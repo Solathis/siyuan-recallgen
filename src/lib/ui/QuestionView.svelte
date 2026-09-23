@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { untrack } from "svelte";
     import { Input } from "@/lib/components/ui/input";
     import { Textarea } from "@/lib/components/ui/textarea";
     import * as Tabs from "@/lib/components/ui/tabs";
@@ -65,15 +66,21 @@
     let editorReady = $state(false);
 
     /**
-     * 编辑器在挂载后创建，并在题目变化时同步内容。
-     * 原实现只在 onMount 创建一次，换题后会残留上一题的代码与语言。
+     * 创建编辑器。
+     *
+     * 依赖必须只包含「题目身份 + 语言」：作答内容每次按键都会变，
+     * 若在这里读取它建立依赖，编辑器会在每个字符输入时被销毁重建，
+     * 焦点、光标与撤销历史全部丢失，实际无法连续输入。
+     * 初始内容用 untrack 读取，既拿到当前值又不建立依赖。
      */
     $effect(() => {
         const el = editorEl;
-        if (!el || question.type !== "coding") return;
+        // 通过局部变量收窄类型，同时把依赖固定为「这道题 + 这个语言」
+        const coding = question.type === "coding" ? question : null;
+        if (!el || !coding) return;
 
-        const initial = codingValue || (question.starter_code ?? "");
-        const instance = new CodeEditor(el, question.language, initial, (doc) => {
+        const initial = untrack(() => codingValue || coding.starter_code || "");
+        const instance = new CodeEditor(el, coding.language, initial, (doc) => {
             onchange({ type: "coding", value: doc });
         });
         editor = instance;

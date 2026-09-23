@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { lineGeometry, ticks, timeTicks } from "@/lib/quiz/chart-geometry";
+    import { lineGeometry, pickMarkerIndices, ticks, timeTicks } from "@/lib/quiz/chart-geometry";
 
     /**
      * 得分率折线图（时间轴）。
@@ -22,15 +22,16 @@
 
     const padding = { top: 12, right: 12, bottom: 24, left: 34 };
 
-    const geometry = $derived(
-        lineGeometry(
-            data.map((d) => d.percent),
-            width,
-            height,
-            padding
-        )
-    );
+    const percents = $derived(data.map((d) => d.percent));
+    const geometry = $derived(lineGeometry(percents, width, height, padding));
     const yTicks = $derived(ticks(100, 4));
+
+    /**
+     * 标记点上限：点数很多时逐点画圆既慢又糊成一片，
+     * 因此只保留首末与峰谷附近的点；悬停提示也只挂在这些点上。
+     */
+    const MARKER_LIMIT = 40;
+    const markers = $derived(pickMarkerIndices(percents, MARKER_LIMIT));
 
     const innerHeight = $derived(height - padding.top - padding.bottom);
     const baseline = $derived(padding.top + innerHeight);
@@ -91,9 +92,9 @@
             <path d={geometry.area} class="fill-primary" opacity="0.12" />
         {/if}
         <path d={geometry.line} class="stroke-primary" stroke-width="2" fill="none" stroke-linejoin="round" />
-        {#each geometry.points as point, i (i)}
-            <circle cx={point.x} cy={point.y} r="3" class="fill-primary">
-                <title>{fmtDate(data[i].timestamp)} · {data[i].percent.toFixed(0)}%</title>
+        {#each markers as index (index)}
+            <circle cx={geometry.points[index].x} cy={geometry.points[index].y} r="3" class="fill-primary">
+                <title>{fmtDate(data[index].timestamp)} · {data[index].percent.toFixed(0)}%</title>
             </circle>
         {/each}
     {/if}

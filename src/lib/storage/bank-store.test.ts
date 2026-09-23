@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { StoragePlugin } from "./store";
 import type { BankItem } from "@/lib/quiz/bank";
 import { applyResult, createBankItem } from "@/lib/quiz/bank";
+import { monthKey } from "@/lib/quiz/stats";
 import type { Question } from "@/types/quiz";
 import { BankStore, BANK_MASTERED_AT, BANK_PRUNE_AFTER_MS } from "./bank";
 
 const DAY = 86_400_000;
 const NOW = new Date(2026, 8, 23, 12, 0, 0).getTime();
+/** 另一个月份的基准时间，用于验证分片 */
+const EARLIER = new Date(2026, 6, 10, 12, 0, 0).getTime();
 
 const question = (text: string): Question =>
     ({ id: "q-1", type: "true_false", difficulty: "easy", question: text, answer: true }) as Question;
@@ -14,21 +17,30 @@ const question = (text: string): Question =>
 const item = (text: string, now = NOW): BankItem =>
     createBankItem(question(text), { sourceDocId: "doc-1", sourceTitle: "笔记" }, now);
 
-function memoryPlugin(initial: unknown = null) {
-    let stored: unknown = initial;
+/**
+ * 按文件名存取的假存储，贴合思源 saveData/loadData 的按名读写语义。
+ * 分片之后必须按名区分，否则索引与各分片会互相覆盖。
+ */
+function memoryPlugin(initial: Record<string, unknown> = {}) {
+    const disk: Record<string, unknown> = { ...initial };
+    const writes: string[] = [];
     const removed: string[] = [];
     const plugin: StoragePlugin = {
-        loadData: async () => stored,
-        saveData: async (_name, content) => {
-            stored = content;
+        loadData: async (name) => (name in disk ? disk[name] : null),
+        saveData: async (name, content) => {
+            disk[name] = content;
+            writes.push(name);
         },
         removeData: async (name) => {
-            stored = null;
+            delete disk[name];
             removed.push(name);
         },
     };
-    return { plugin, removed, getStored: () => stored as Record<string, BankItem> | null };
+    return { plugin, disk, writes, removed };
 }
+
+const INDEX = "recallgen-bank-index.json";
+const shardOf = (timestamp: number) => `recallgen-bank-${monthKey(timestamp)}.json`;
 
 describe("BankStore 基本读写", () => {
     it("空题库返回空数组与 0 条", async () => {
@@ -65,9 +77,9 @@ describe("BankStore 基本读写", () => {
     });
 
     it("upsertMany 空数组不写盘", async () => {
-        const { plugin, getStored } = memoryPlugin();
+        const { plugin, writes } = memoryPlugin();
         await new BankStore(plugin).upsertMany([]);
-        expect(getStored()).toBeNull();
+        expect(writes).toEqual([]);
     });
 
     it("findMany 只返回命中的条目", async () => {
@@ -116,6 +128,47 @@ describe("BankStore 基本读写", () => {
     });
 });
 
+describe("BankStore 分片", () => {
+    it("不同月份写入不同分片", async () => {
+        const { plugin, disk } = memoryPlugin();
+        const store = new BankStore(plugin);
+        await store.upsertMany([item("本月", NOW), item("上上个月", EARLIER)]);
+        expect(disk[shardOf(NOW)]).toBeDefined();
+        expect(disk[shardOf(EARLIER)]).toBeDefined();
+        expect(await store.count()).toBe(2);
+    });
+
+    it("索引只记录月份与指纹，不含题目本体", async () => {
+        const { plugin, disk } = memoryPlugin();
+        const store = new BankStore(plugin);
+        const entry = item("题干 A");
+        await store.upsert(entry);
+        const index = JSON.stringify(disk[INDEX]);
+        expect(index).toContain(entry.id);
+        expect(index).not.toContain("题干 A");
+    });
+
+    it("再次入库只重写涉及的月份分片（分片的意义所在）", async () => {
+        const { plugin, writes } = memoryPlugin();
+        const store = new BankStore(plugin);
+        await store.upsertMany([item("上月", EARLIER)]);
+        writes.length = 0;
+        await store.upsertMany([item("本月", NOW)]);
+        expect(writes).toContain(shardOf(NOW));
+        expect(writes).not.toContain(shardOf(EARLIER));
+    });
+
+    it("findMany 能找到另一月份的条目", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        const older = item("上月", EARLIER);
+        await store.upsertMany([older, item("本月", NOW)]);
+        // 重新构造 store，确保统计的是本次真实读盘而非缓存
+        const found = await new BankStore(plugin).findMany([older.id]);
+        expect([...found.keys()]).toEqual([older.id]);
+    });
+});
+
 describe("BankStore.mergeQuestions", () => {
     it("新题目计入 added", async () => {
         const { plugin } = memoryPlugin();
@@ -127,14 +180,12 @@ describe("BankStore.mergeQuestions", () => {
         const { plugin } = memoryPlugin();
         const store = new BankStore(plugin);
         const original = item("题干相同");
-        // 模拟已经复习过若干次
         const reviewed = applyResult(applyResult(original, 100, NOW), 100, NOW + DAY);
         await store.upsert(reviewed);
 
         const regenerated = { ...item("题干相同"), updatedAt: NOW + 10 * DAY };
-        const result = await store.mergeQuestions([regenerated]);
+        expect(await store.mergeQuestions([regenerated])).toEqual({ added: 0, updated: 1 });
 
-        expect(result).toEqual({ added: 0, updated: 1 });
         const merged = await store.get(original.id);
         expect(merged?.timesSeen).toBe(2);
         expect(merged?.timesPassed).toBe(2);
@@ -150,18 +201,18 @@ describe("BankStore.mergeQuestions", () => {
     });
 
     it("空数组不做任何写入", async () => {
-        const { plugin, getStored } = memoryPlugin();
+        const { plugin, writes } = memoryPlugin();
         expect(await new BankStore(plugin).mergeQuestions([])).toEqual({ added: 0, updated: 0 });
-        expect(getStored()).toBeNull();
+        expect(writes).toEqual([]);
     });
 });
 
 describe("BankStore.prune", () => {
-    /** 构造一个「已掌握且长期未考」的条目：多次满分 + 时间久远 */
-    function masteredItem(text: string, updatedAt: number): BankItem {
-        let entry = item(text, updatedAt);
+    /** 已掌握且长期未考的条目：连续满分若干次 */
+    function masteredItem(text: string, createdAt: number, updatedAt: number): BankItem {
+        let entry = item(text, createdAt);
         for (let i = 0; i < 6; i++) {
-            entry = applyResult(entry, 100, updatedAt + i * DAY);
+            entry = applyResult(entry, 100, createdAt + i * DAY);
         }
         return { ...entry, updatedAt };
     }
@@ -169,10 +220,8 @@ describe("BankStore.prune", () => {
     it("清理长期未考且已掌握的题目", async () => {
         const { plugin } = memoryPlugin();
         const store = new BankStore(plugin);
-        const stale = masteredItem("老题", NOW - BANK_PRUNE_AFTER_MS - DAY);
-        const fresh = item("新题", NOW);
-        await store.upsertMany([stale, fresh]);
-
+        const staleAt = NOW - BANK_PRUNE_AFTER_MS - DAY;
+        await store.upsertMany([masteredItem("老题", staleAt, staleAt), item("新题", NOW)]);
         expect(await store.prune(NOW)).toBe(1);
         expect((await store.list()).map((i) => i.question.question)).toEqual(["新题"]);
     });
@@ -180,8 +229,8 @@ describe("BankStore.prune", () => {
     it("未掌握的题目即使很久没考也保留", async () => {
         const { plugin } = memoryPlugin();
         const store = new BankStore(plugin);
-        const weak = { ...item("薄弱题", NOW - BANK_PRUNE_AFTER_MS - DAY), updatedAt: NOW - BANK_PRUNE_AFTER_MS - DAY };
-        await store.upsert(weak);
+        const staleAt = NOW - BANK_PRUNE_AFTER_MS - DAY;
+        await store.upsert({ ...item("薄弱题", staleAt), updatedAt: staleAt });
         expect(await store.prune(NOW)).toBe(0);
         expect(await store.count()).toBe(1);
     });
@@ -189,28 +238,34 @@ describe("BankStore.prune", () => {
     it("已掌握但最近考过的题目保留", async () => {
         const { plugin } = memoryPlugin();
         const store = new BankStore(plugin);
-        const recent = masteredItem("最近考的", NOW - DAY);
-        await store.upsert(recent);
+        await store.upsert(masteredItem("最近考的", NOW - DAY, NOW - DAY));
         expect(await store.prune(NOW)).toBe(0);
     });
 
     it("无内容可清理时不写盘", async () => {
-        let writes = 0;
-        const plugin: StoragePlugin = {
-            loadData: async () => ({ x: item("新题", NOW) }),
-            saveData: async () => {
-                writes++;
-            },
-        };
-        expect(await new BankStore(plugin).prune(NOW)).toBe(0);
-        expect(writes).toBe(0);
+        const { plugin, writes } = memoryPlugin();
+        const store = new BankStore(plugin);
+        await store.upsert(item("新题", NOW));
+        writes.length = 0;
+        expect(await store.prune(NOW)).toBe(0);
+        expect(writes).toEqual([]);
+    });
+
+    it("只重写有内容被删掉的分片", async () => {
+        const { plugin, writes } = memoryPlugin();
+        const store = new BankStore(plugin);
+        const staleAt = NOW - BANK_PRUNE_AFTER_MS - DAY;
+        await store.upsertMany([masteredItem("老题", staleAt, staleAt), item("新题", NOW)]);
+        writes.length = 0;
+
+        expect(await store.prune(NOW)).toBe(1);
+        expect(writes).toEqual([shardOf(staleAt), INDEX]);
     });
 
     it("阈值可注入", async () => {
         const { plugin } = memoryPlugin();
         const store = new BankStore(plugin);
-        const stale = masteredItem("老题", NOW - 10 * DAY);
-        await store.upsert(stale);
+        await store.upsert(masteredItem("老题", NOW - 10 * DAY, NOW - 10 * DAY));
         expect(await store.prune(NOW, { olderThanMs: DAY })).toBe(1);
     });
 
@@ -228,9 +283,19 @@ describe("BankStore.prune", () => {
 });
 
 describe("BankStore.purgeAll", () => {
-    it("删除题库数据文件", async () => {
-        const { plugin, removed } = memoryPlugin({ x: item("A") });
-        await new BankStore(plugin).purgeAll();
-        expect(removed).toContain("recallgen-bank.json");
+    it("删除索引与全部分片", async () => {
+        const { plugin, removed } = memoryPlugin();
+        const store = new BankStore(plugin);
+        await store.upsertMany([item("本月", NOW), item("上上个月", EARLIER)]);
+        await store.purgeAll();
+        expect(removed).toContain(INDEX);
+        expect(removed).toContain(shardOf(NOW));
+        expect(removed).toContain(shardOf(EARLIER));
+    });
+
+    it("空题库时只删除索引，不抛错", async () => {
+        const { plugin, removed } = memoryPlugin();
+        await expect(new BankStore(plugin).purgeAll()).resolves.toBeUndefined();
+        expect(removed).toEqual([INDEX]);
     });
 });

@@ -70,6 +70,14 @@ export default class RecallGenPlugin extends Plugin {
             })
             .catch((e) => console.warn("[RecallGen] 题库清理失败", e));
 
+        // 间隔重复的提醒：有到期题目时在启动后提示一次，否则用户不会知道该复习了
+        void this.bankStore
+            .summary()
+            .then((summary) => {
+                if (summary.due > 0) showMessage(t("bank.dueNotice", String(summary.due)), 8000);
+            })
+            .catch((e) => console.warn("[RecallGen] 读取题库概览失败", e));
+
         // 清理长期未交卷的废弃进度，避免进度文件无限增长
         void this.progressStore
             .pruneExpired()
