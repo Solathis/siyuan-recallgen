@@ -1,274 +1,212 @@
 <script lang="ts">
-    import { onMount, onDestroy, createEventDispatcher } from "svelte";
+    import { Input } from "@/lib/components/ui/input";
+    import { Textarea } from "@/lib/components/ui/textarea";
+    import * as Tabs from "@/lib/components/ui/tabs";
+    import { cn } from "@/lib/utils";
     import { CodeEditor } from "../editor/codemirror";
-    import { card, input, textarea, cn } from "./components";
-    import { renderMarkdownLatex as renderLatex } from "../ui/latex";
     import { t } from "../i18n";
+    import { renderMarkdownLatex } from "./latex";
     import type { Question, UserAnswer } from "@/types/quiz";
 
-    export let question: Question;
-    export let answer: UserAnswer | undefined;
+    let {
+        question,
+        answer = undefined,
+        onchange,
+    }: {
+        question: Question;
+        answer?: UserAnswer;
+        /** Svelte 5 用回调属性取代 createEventDispatcher */
+        onchange: (answer: UserAnswer) => void;
+    } = $props();
 
-    const dispatch = createEventDispatcher<{ change: UserAnswer }>();
+    /* ── 单选题 / 多选题 / 判断题 ─────────────────────────────────── */
+
+    const singleValue = $derived(answer?.type === "single_choice" ? answer.value : null);
+    const multiValue = $derived(answer?.type === "multiple_choice" ? answer.value : []);
+    const boolValue = $derived(answer?.type === "true_false" ? answer.value : null);
+
+    function setSingle(index: number) {
+        onchange({ type: "single_choice", value: index });
+    }
+
+    function toggleMulti(index: number) {
+        const next = multiValue.includes(index) ? multiValue.filter((i) => i !== index) : [...multiValue, index];
+        onchange({ type: "multiple_choice", value: next.sort((a, b) => a - b) });
+    }
+
+    function setBool(value: boolean) {
+        onchange({ type: "true_false", value });
+    }
+
+    /* ── 填空题 ──────────────────────────────────────────────────── */
+
+    /** 空的数量由题目答案结构决定，作答值按空序保存 */
+    const blankCount = $derived(question.type === "fill_blank" ? question.answer.length : 0);
+    const blankValues = $derived(answer?.type === "fill_blank" ? answer.value : []);
+
+    function setBlank(index: number, value: string) {
+        const next = Array.from({ length: blankCount }, (_, i) => blankValues[i] ?? "");
+        next[index] = value;
+        onchange({ type: "fill_blank", value: next });
+    }
+
+    /* ── 主观题 ──────────────────────────────────────────────────── */
+
+    const subjectiveValue = $derived(answer?.type === "subjective" ? answer.value : "");
+    /** 必须是派生值：写成普通常量只会渲染一次，输入后预览不会更新 */
+    const subjectivePreview = $derived(renderMarkdownLatex(subjectiveValue));
+    let subjectiveMode = $state<"edit" | "preview">("edit");
+
+    /* ── 编程题 ──────────────────────────────────────────────────── */
+
+    const codingValue = $derived(answer?.type === "coding" ? answer.value : "");
+    let editorEl = $state<HTMLDivElement | null>(null);
     let editor: CodeEditor | null = null;
-    let editorEl: HTMLDivElement;
-    let preview = false;
+    let editorReady = $state(false);
 
-    function emit(value: UserAnswer) {
-        answer = value;
-        dispatch("change", value);
-    }
-    function setSingle(idx: number) {
-        emit({ type: "single_choice", value: idx });
-    }
-    function toggleMulti(idx: number) {
-        const cur = answer?.type === "multiple_choice" ? [...answer.value] : [];
-        const i = cur.indexOf(idx);
-        if (i >= 0) cur.splice(i, 1);
-        else cur.push(idx);
-        emit({ type: "multiple_choice", value: cur.sort((a, b) => a - b) });
-    }
-    function setBlank(i: number, v: string) {
-        const cur =
-            answer?.type === "fill_blank"
-                ? [...answer.value]
-                : question.type === "fill_blank"
-                  ? question.answer.map(() => "")
-                  : [];
-        cur[i] = v;
-        emit({ type: "fill_blank", value: cur });
-    }
-    function setBool(v: boolean) {
-        emit({ type: "true_false", value: v });
-    }
-    function setSubjective(v: string) {
-        emit({ type: "subjective", value: v });
-    }
-    function setCoding(v: string) {
-        emit({ type: "coding", value: v });
-    }
-    function onBlankInput(i: number, e: Event) {
-        setBlank(i, (e.target as HTMLInputElement).value);
-    }
-    function onSubjectiveInput(e: Event) {
-        setSubjective((e.target as HTMLTextAreaElement).value);
-    }
+    /**
+     * 编辑器在挂载后创建，并在题目变化时同步内容。
+     * 原实现只在 onMount 创建一次，换题后会残留上一题的代码与语言。
+     */
+    $effect(() => {
+        const el = editorEl;
+        if (!el || question.type !== "coding") return;
 
-    onMount(() => {
-        if (question.type === "coding") {
-            editor = new CodeEditor(
-                editorEl,
-                question.language,
-                answer?.type === "coding" ? answer.value : (question.starter_code ?? ""),
-                (doc) => setCoding(doc)
-            );
-            void editor.mount();
-        }
+        const initial = codingValue || (question.starter_code ?? "");
+        const instance = new CodeEditor(el, question.language, initial, (doc) => {
+            onchange({ type: "coding", value: doc });
+        });
+        editor = instance;
+        editorReady = false;
+        void instance.mount().then(() => {
+            // 若 effect 已清理（组件销毁或题目切换），不要再标记就绪
+            if (editor !== instance) return;
+            editorReady = true;
+        });
+
+        return () => {
+            editor = null;
+            editorReady = false;
+            instance.destroy();
+        };
     });
-    onDestroy(() => {
-        editor?.destroy();
-        editor = null;
+
+    /** 题目或语言变化时把编辑器内容切换到当前题 */
+    $effect(() => {
+        const key = `${question.id}:${question.type === "coding" ? question.language : ""}`;
+        void key;
+        if (!editor || !editorReady) return;
+        const target = codingValue || (question.type === "coding" ? (question.starter_code ?? "") : "");
+        if (editor.getValue() !== target) editor.setValue(target);
     });
 </script>
 
-<div class={cn(card.root, "rg-q")}>
-    <div class={card.content}>
-        <p class="rg-q__title">{@html renderLatex(question.question)}</p>
+<div class="bg-card text-card-foreground rounded-lg border p-4">
+    <p class="rg-markdown mb-3 text-[15px] leading-relaxed">{@html renderMarkdownLatex(question.question)}</p>
 
-        {#if question.type === "single_choice"}
-            <div class="rg-q__options">
-                {#each question.options as opt, i}
-                    <label class="rg-q__opt" class:checked={answer?.type === "single_choice" && answer.value === i}>
-                        <input
-                            type="radio"
-                            name={question.id}
-                            checked={answer?.type === "single_choice" && answer.value === i}
-                            on:change={() => setSingle(i)}
-                        />
-                        <span>{@html renderLatex(opt)}</span>
-                    </label>
-                {/each}
-            </div>
-        {:else if question.type === "multiple_choice"}
-            <div class="rg-q__options">
-                {#each question.options as opt, i}
-                    <label
-                        class="rg-q__opt"
-                        class:checked={answer?.type === "multiple_choice" && answer.value.includes(i)}
-                    >
-                        <input
-                            type="checkbox"
-                            checked={answer?.type === "multiple_choice" && answer.value.includes(i)}
-                            on:change={() => toggleMulti(i)}
-                        />
-                        <span>{@html renderLatex(opt)}</span>
-                    </label>
-                {/each}
-            </div>
-        {:else if question.type === "fill_blank"}
-            <div class="rg-q__blanks">
-                {#each question.answer as _opts, i}
+    {#if question.type === "single_choice"}
+        <div class="flex flex-col gap-1.5">
+            {#each question.options as option, i (i)}
+                <label
+                    class={cn(
+                        "hover:bg-accent flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
+                        singleValue === i && "border-primary bg-primary/10"
+                    )}
+                >
                     <input
-                        class={input}
-                        type="text"
-                        placeholder={t("common.blank", String(i + 1))}
-                        value={answer?.type === "fill_blank" ? (answer.value[i] ?? "") : ""}
-                        on:input={(e) => onBlankInput(i, e)}
+                        type="radio"
+                        class="accent-primary size-4 shrink-0"
+                        name={question.id}
+                        checked={singleValue === i}
+                        onchange={() => setSingle(i)}
                     />
-                {/each}
-            </div>
-        {:else if question.type === "true_false"}
-            <div class="rg-q__options">
-                <label class="rg-q__opt" class:checked={answer?.type === "true_false" && answer.value === true}>
+                    <span class="rg-markdown min-w-0">{@html renderMarkdownLatex(option)}</span>
+                </label>
+            {/each}
+        </div>
+    {:else if question.type === "multiple_choice"}
+        <div class="flex flex-col gap-1.5">
+            {#each question.options as option, i (i)}
+                <label
+                    class={cn(
+                        "hover:bg-accent flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
+                        multiValue.includes(i) && "border-primary bg-primary/10"
+                    )}
+                >
+                    <input
+                        type="checkbox"
+                        class="accent-primary size-4 shrink-0"
+                        checked={multiValue.includes(i)}
+                        onchange={() => toggleMulti(i)}
+                    />
+                    <span class="rg-markdown min-w-0">{@html renderMarkdownLatex(option)}</span>
+                </label>
+            {/each}
+        </div>
+    {:else if question.type === "fill_blank"}
+        <div class="flex flex-col gap-2">
+            {#each Array.from({ length: blankCount }, (_, i) => i) as i (i)}
+                <Input
+                    placeholder={t("common.blank", String(i + 1))}
+                    aria-label={t("common.blank", String(i + 1))}
+                    value={blankValues[i] ?? ""}
+                    oninput={(e) => setBlank(i, e.currentTarget.value)}
+                />
+            {/each}
+        </div>
+    {:else if question.type === "true_false"}
+        <div class="flex flex-col gap-1.5">
+            {#each [{ label: t("common.true"), value: true }, { label: t("common.false"), value: false }] as opt (opt.label)}
+                <label
+                    class={cn(
+                        "hover:bg-accent flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
+                        boolValue === opt.value && "border-primary bg-primary/10"
+                    )}
+                >
                     <input
                         type="radio"
+                        class="accent-primary size-4 shrink-0"
                         name={question.id}
-                        checked={answer?.type === "true_false" && answer.value === true}
-                        on:change={() => setBool(true)}
-                    /><span>{t("common.true")}</span>
+                        checked={boolValue === opt.value}
+                        onchange={() => setBool(opt.value)}
+                    />
+                    <span>{opt.label}</span>
                 </label>
-                <label class="rg-q__opt" class:checked={answer?.type === "true_false" && answer.value === false}>
-                    <input
-                        type="radio"
-                        name={question.id}
-                        checked={answer?.type === "true_false" && answer.value === false}
-                        on:change={() => setBool(false)}
-                    /><span>{t("common.false")}</span>
-                </label>
-            </div>
-        {:else if question.type === "subjective"}
-            <div class="rg-q__subjective">
-                <div class="rg-q__md-bar">
-                    <button class="rg-q__md-btn" class:active={!preview} on:click={() => (preview = false)}
-                        >{t("question.edit")}</button
-                    >
-                    <button class="rg-q__md-btn" class:active={preview} on:click={() => (preview = true)}
-                        >{t("question.preview")}</button
-                    >
+            {/each}
+        </div>
+    {:else if question.type === "subjective"}
+        <Tabs.Root value={subjectiveMode} onValueChange={(v) => (subjectiveMode = v as typeof subjectiveMode)}>
+            <Tabs.List class="mb-2">
+                <Tabs.Trigger value="edit">{t("question.edit")}</Tabs.Trigger>
+                <Tabs.Trigger value="preview">{t("question.preview")}</Tabs.Trigger>
+            </Tabs.List>
+            <Tabs.Content value="edit">
+                <Textarea
+                    class="min-h-40"
+                    placeholder={t("question.subjectivePlaceholder")}
+                    value={subjectiveValue}
+                    oninput={(e) => onchange({ type: "subjective", value: e.currentTarget.value })}
+                />
+            </Tabs.Content>
+            <Tabs.Content value="preview">
+                <div class="rg-markdown border-border min-h-40 rounded-md border px-3 py-2 text-sm">
+                    {#if subjectiveValue.trim()}
+                        {@html subjectivePreview}
+                    {:else}
+                        <span class="text-muted-foreground">{t("question.previewEmpty")}</span>
+                    {/if}
                 </div>
-                {#if preview}
-                    <div class="rg-q__md-preview">
-                        {@html renderLatex(answer?.type === "subjective" ? answer.value : "")}
-                    </div>
-                {:else}
-                    <textarea
-                        class={cn(textarea, "rg-q__textarea")}
-                        placeholder={t("question.subjectivePlaceholder")}
-                        on:input={onSubjectiveInput}>{answer?.type === "subjective" ? answer.value : ""}</textarea
-                    >
+            </Tabs.Content>
+        </Tabs.Root>
+    {:else if question.type === "coding"}
+        <div class="flex flex-col gap-2">
+            <div class="text-muted-foreground flex items-center gap-2 text-xs">
+                <span class="bg-muted rounded px-1.5 py-0.5 font-mono">{question.language}</span>
+                {#if question.test_cases?.length}
+                    <span>{t("question.testCaseCount", String(question.test_cases.length))}</span>
                 {/if}
             </div>
-        {:else if question.type === "coding"}
-            <div class="rg-q__code" bind:this={editorEl}></div>
-        {/if}
-    </div>
+            <div class="border-border overflow-hidden rounded-md border" bind:this={editorEl}></div>
+        </div>
+    {/if}
 </div>
-
-<style>
-    .rg-q__title {
-        font-size: 15px;
-        line-height: 1.7;
-        margin: 0 0 12px;
-    }
-    .rg-q__options {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-    .rg-q__opt {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        border-radius: var(--b3-border-radius);
-        cursor: pointer;
-        border: 1px solid transparent;
-        transition:
-            background 0.12s,
-            border-color 0.12s;
-    }
-    .rg-q__opt:hover {
-        background: var(--b3-list-hover);
-    }
-    .rg-q__opt.checked {
-        background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
-        border-color: var(--b3-theme-primary);
-    }
-    .rg-q__blanks {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    :global(.rg-q__textarea) {
-        min-height: 160px;
-    }
-    .rg-q__code {
-        border: 1px solid var(--b3-border-color);
-        border-radius: var(--b3-border-radius);
-        overflow: hidden;
-    }
-    :global(.rg-q__code .cm-editor) {
-        font-size: 13px;
-    }
-    :global(.rg-q__code .cm-scroller) {
-        min-height: 200px;
-    }
-    .rg-q__subjective {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .rg-q__md-bar {
-        display: flex;
-        gap: 4px;
-        border-bottom: 1px solid var(--b3-border-color);
-        padding-bottom: 4px;
-    }
-    .rg-q__md-btn {
-        padding: 2px 12px;
-        font-size: 12px;
-        border: 1px solid transparent;
-        border-radius: var(--b3-border-radius);
-        background: transparent;
-        cursor: pointer;
-        color: var(--b3-theme-on-surface-light);
-    }
-    .rg-q__md-btn.active {
-        border-color: var(--b3-border-color);
-        color: var(--b3-theme-primary);
-        font-weight: 600;
-    }
-    .rg-q__md-preview {
-        min-height: 160px;
-        padding: 8px 12px;
-        border: 1px solid var(--b3-border-color);
-        border-radius: var(--b3-border-radius);
-        font-size: 14px;
-        line-height: 1.7;
-        overflow-y: auto;
-        max-height: 400px;
-    }
-    .rg-q__md-preview :global(p) {
-        margin: 0 0 8px;
-    }
-    .rg-q__md-preview :global(ul),
-    .rg-q__md-preview :global(ol) {
-        padding-left: 20px;
-        margin: 0 0 8px;
-    }
-    .rg-q__md-preview :global(pre) {
-        background: var(--b3-theme-background-light);
-        padding: 8px 12px;
-        border-radius: var(--b3-border-radius);
-        overflow-x: auto;
-    }
-    .rg-q__md-preview :global(code) {
-        font-family: var(--b3-font-family-code, monospace);
-        font-size: 13px;
-    }
-    .rg-q__md-preview :global(h1),
-    .rg-q__md-preview :global(h2),
-    .rg-q__md-preview :global(h3) {
-        margin: 12px 0 8px;
-    }
-</style>
