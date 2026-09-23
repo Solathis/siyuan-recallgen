@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StoragePlugin } from "./store";
 import type { BankItem } from "@/lib/quiz/bank";
-import { applyResult, createBankItem } from "@/lib/quiz/bank";
+import { applyResult, createBankItem, MAX_BANK_HISTORY } from "@/lib/quiz/bank";
 import { monthKey } from "@/lib/quiz/stats";
 import type { Question } from "@/types/quiz";
 import { BankStore, BANK_MASTERED_AT, BANK_PRUNE_AFTER_MS } from "./bank";
@@ -191,6 +191,11 @@ describe("BankStore.mergeQuestions", () => {
         expect(merged?.timesPassed).toBe(2);
         expect(merged?.card.reps).toBe(reviewed.card.reps);
         expect(merged?.updatedAt).toBe(NOW + 10 * DAY);
+        // 复习历史同样不能被重新生成的动作清掉
+        expect(merged?.history).toEqual([
+            { at: NOW, percent: 100 },
+            { at: NOW + DAY, percent: 100 },
+        ]);
     });
 
     it("混合新增与更新", async () => {
@@ -204,6 +209,59 @@ describe("BankStore.mergeQuestions", () => {
         const { plugin, writes } = memoryPlugin();
         expect(await new BankStore(plugin).mergeQuestions([])).toEqual({ added: 0, updated: 0 });
         expect(writes).toEqual([]);
+    });
+});
+
+describe("BankStore 复习历史", () => {
+    it("交卷后的作答记录随条目一起持久化", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        const original = item("历史题");
+        await store.upsert(applyResult(applyResult(original, 70, NOW), 95, NOW + DAY));
+
+        const loaded = await store.get(original.id);
+        expect(loaded?.history).toEqual([
+            { at: NOW, percent: 70 },
+            { at: NOW + DAY, percent: 95 },
+        ]);
+    });
+
+    it("读取旧分片时补齐缺失的 history 字段", async () => {
+        const original = item("旧结构");
+        const legacy = { ...original, timesSeen: 3, timesPassed: 2 } as Partial<BankItem>;
+        delete legacy.history;
+        const { plugin } = memoryPlugin({
+            [INDEX]: { version: 1, months: { [monthKey(NOW)]: [original.id] } },
+            [shardOf(NOW)]: { [original.id]: legacy },
+        });
+
+        const loaded = await new BankStore(plugin).get(original.id);
+        expect(loaded?.history).toEqual([]);
+        expect(loaded?.timesSeen).toBe(3);
+        expect(loaded?.timesPassed).toBe(2);
+    });
+
+    it("历史条数超过上限时只保留最近若干次", async () => {
+        const original = item("长历史");
+        const history = Array.from({ length: MAX_BANK_HISTORY + 3 }, (_, i) => ({ at: NOW + i, percent: 60 }));
+        const { plugin } = memoryPlugin({
+            [INDEX]: { version: 1, months: { [monthKey(NOW)]: [original.id] } },
+            [shardOf(NOW)]: { [original.id]: { ...original, history } },
+        });
+
+        const loaded = await new BankStore(plugin).get(original.id);
+        expect(loaded?.history).toHaveLength(MAX_BANK_HISTORY);
+    });
+
+    it("分片里混入非法条目时跳过而不报错", async () => {
+        const original = item("正常条目");
+        const { plugin } = memoryPlugin({
+            [INDEX]: { version: 1, months: { [monthKey(NOW)]: [original.id] } },
+            [shardOf(NOW)]: { [original.id]: original, "bad-id": null },
+        });
+
+        const list = await new BankStore(plugin).list();
+        expect(list.map((entry) => entry.id)).toEqual([original.id]);
     });
 });
 

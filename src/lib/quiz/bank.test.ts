@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { Rating, State } from "ts-fsrs";
 import type { Question } from "@/types/quiz";
 import {
+    MAX_BANK_HISTORY,
+    appendAttempt,
     applyResult,
+    cardPhase,
     dueState,
     createBankItem,
     fromCardState,
@@ -11,8 +14,10 @@ import {
     isCardDue,
     masteryScore,
     newCardState,
+    normalizeBankItem,
     normalizeText,
     pickDueItems,
+    recentAverage,
     questionFingerprint,
     scheduleReview,
     summarizeBank,
@@ -229,6 +234,111 @@ describe("createBankItem / applyResult", () => {
         const second = applyResult(first, 95, NOW + DAY);
         expect(second.timesSeen).toBe(2);
         expect(second.timesPassed).toBe(1);
+    });
+});
+
+describe("复习历史", () => {
+    const item = createBankItem(question("历史题"), { sourceDocId: "doc-1", sourceTitle: "笔记" }, NOW);
+
+    it("新条目没有历史记录", () => {
+        expect(item.history).toEqual([]);
+        expect(recentAverage(item)).toBeNull();
+    });
+
+    it("每次作答追加一条记录，含时间与得分率", () => {
+        const first = applyResult(item, 80, NOW);
+        const second = applyResult(first, 40, NOW + DAY);
+        expect(second.history).toEqual([
+            { at: NOW, percent: 80 },
+            { at: NOW + DAY, percent: 40 },
+        ]);
+    });
+
+    it("得分率会被收敛到 0-100", () => {
+        expect(applyResult(item, 140, NOW).history?.[0].percent).toBe(100);
+        expect(applyResult(item, -5, NOW).history?.[0].percent).toBe(0);
+    });
+
+    it("超过上限时丢弃最旧的记录", () => {
+        let current = item;
+        for (let i = 0; i < MAX_BANK_HISTORY + 5; i++) {
+            current = applyResult(current, i, NOW + i * DAY);
+        }
+        expect(current.history).toHaveLength(MAX_BANK_HISTORY);
+        // 最早保留下来的应是第 5 次（索引从 0 开始）
+        expect(current.history?.[0].percent).toBe(5);
+        expect(current.timesSeen).toBe(MAX_BANK_HISTORY + 5);
+    });
+
+    it("recentAverage 只取最近 n 次", () => {
+        let current = item;
+        for (const percent of [10, 20, 30, 90, 100]) current = applyResult(current, percent, NOW);
+        expect(recentAverage(current, 2)).toBe(95);
+        expect(recentAverage(current, 5)).toBe(50);
+    });
+});
+
+describe("appendAttempt", () => {
+    it("未提供历史时从空数组开始", () => {
+        expect(appendAttempt(undefined, { at: 1, percent: 50 })).toEqual([{ at: 1, percent: 50 }]);
+    });
+});
+
+describe("normalizeBankItem", () => {
+    const raw = createBankItem(question("旧数据"), { sourceDocId: "d", sourceTitle: "t" }, NOW);
+
+    it("补齐早期数据缺失的 history 字段", () => {
+        const legacy = { ...raw } as Partial<typeof raw>;
+        delete legacy.history;
+        expect(normalizeBankItem(legacy as typeof raw).history).toEqual([]);
+    });
+
+    it("剔除结构不合法的历史项", () => {
+        const messy = {
+            ...raw,
+            history: [
+                { at: NOW, percent: 70 },
+                { at: "yesterday", percent: 10 },
+                { at: NOW + 1, percent: Number.NaN },
+                null,
+                { percent: 50 },
+            ],
+        } as unknown as typeof raw;
+        expect(normalizeBankItem(messy).history).toEqual([{ at: NOW, percent: 70 }]);
+    });
+
+    it("历史项里的越界得分率也会被收敛", () => {
+        const messy = { ...raw, history: [{ at: NOW, percent: 300 }] } as unknown as typeof raw;
+        expect(normalizeBankItem(messy).history).toEqual([{ at: NOW, percent: 100 }]);
+    });
+
+    it("缺失的统计字段按历史长度补齐", () => {
+        const legacy = { ...raw, history: [{ at: NOW, percent: 70 }] } as Partial<typeof raw>;
+        delete legacy.timesSeen;
+        const fixed = normalizeBankItem(legacy as typeof raw);
+        expect(fixed.timesSeen).toBe(1);
+        expect(fixed.timesPassed).toBe(0);
+    });
+
+    it("规范化后仍保留题目与排程", () => {
+        const fixed = normalizeBankItem(raw);
+        expect(fixed.question.question).toBe("旧数据");
+        expect(fixed.card.due).toBe(raw.card.due);
+    });
+});
+
+describe("cardPhase", () => {
+    const card = createBankItem(question("阶段"), { sourceDocId: "d", sourceTitle: "t" }, NOW).card;
+
+    it("映射 FSRS 阶段", () => {
+        expect(cardPhase({ ...card, state: State.New })).toBe("new");
+        expect(cardPhase({ ...card, state: State.Learning })).toBe("learning");
+        expect(cardPhase({ ...card, state: State.Review })).toBe("review");
+        expect(cardPhase({ ...card, state: State.Relearning })).toBe("relearning");
+    });
+
+    it("未知阶段按复习中处理，不抛异常", () => {
+        expect(cardPhase({ ...card, state: 99 as State })).toBe("review");
     });
 });
 

@@ -1,6 +1,6 @@
 import type { StoragePlugin } from "./store";
 import type { BankItem, BankSummary } from "@/lib/quiz/bank";
-import { masteryScore, summarizeBank } from "@/lib/quiz/bank";
+import { masteryScore, normalizeBankItem, summarizeBank } from "@/lib/quiz/bank";
 import { monthKey } from "@/lib/quiz/stats";
 import { AsyncStore } from "./store";
 
@@ -48,9 +48,20 @@ class BankShardStore extends AsyncStore {
         super(plugin, `${SHARD_PREFIX}${month}.json`);
     }
 
+    /**
+     * 读取分片并规范化条目。
+     * 旧版本没有 history 字段，统一在这里补齐，
+     * 这样后续写回（入库、裁剪、删除）会顺带把老数据补成新结构。
+     */
     async readAll(): Promise<Record<string, BankItem>> {
         const data = await this.read<Record<string, BankItem>>({});
-        return data && typeof data === "object" && !Array.isArray(data) ? { ...data } : {};
+        if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+        const out: Record<string, BankItem> = {};
+        for (const [id, item] of Object.entries(data)) {
+            if (!item || typeof item !== "object") continue;
+            out[id] = normalizeBankItem(item);
+        }
+        return out;
     }
 
     async writeAll(map: Record<string, BankItem>): Promise<void> {
@@ -163,7 +174,7 @@ export class BankStore {
             if (!previous) return item;
             return {
                 ...previous,
-                // 保留 card / timesSeen / timesPassed / lastPercent / createdAt
+                // 保留 card / timesSeen / timesPassed / lastPercent / history / createdAt
                 question: item.question,
                 sourceDocId: item.sourceDocId,
                 sourceTitle: item.sourceTitle,

@@ -10,7 +10,8 @@
     import * as Table from "@/lib/components/ui/table";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
-    import { dueState, masteryScore, type BankItem } from "../quiz/bank";
+    import { lineGeometry } from "../quiz/chart-geometry";
+    import { MAX_BANK_HISTORY, cardPhase, dueState, masteryScore, recentAverage, type BankItem } from "../quiz/bank";
     import { nextLimit, PAGE_SIZE } from "../quiz/paging";
     import type { QuizService } from "../quiz/service";
 
@@ -99,6 +100,48 @@
         if (state === "today") return t("bank.dueToday");
         const days = Math.max(1, Math.round((card.due - Date.now()) / 86_400_000));
         return state === "soon" ? t("bank.dueInDays", String(days)) : t("bank.dueLater", String(days));
+    }
+
+    /* ── 展开详情：复习历史 ───────────────────────────────────────── */
+
+    /** 日期格式跟随界面语言 */
+    const lang = $derived(service.getConfig().general.language ?? "zh");
+
+    /** 同时只展开一行，避免长列表里堆出大量 DOM */
+    let expanded = $state<string | null>(null);
+
+    function toggle(id: string) {
+        expanded = expanded === id ? null : id;
+    }
+
+    function fmtDateTime(ts: number): string {
+        return new Date(ts).toLocaleString(lang === "zh" ? "zh-CN" : "en", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    }
+
+    const historyOf = (item: BankItem) => item.history ?? [];
+    const historyNewestFirst = (item: BankItem) => [...historyOf(item)].reverse();
+
+    const SPARK_W = 180;
+    const SPARK_H = 36;
+
+    /** 历史趋势迷你折线（固定 0-100 量程，避免几次波动被放大成剧烈起伏） */
+    function sparkline(item: BankItem) {
+        return lineGeometry(
+            historyOf(item).map((a) => a.percent),
+            SPARK_W,
+            SPARK_H,
+            { top: 4, right: 2, bottom: 4, left: 2 }
+        );
+    }
+
+    function phaseLabel(card: BankItem["card"]): string {
+        return t(`bank.phase_${cardPhase(card)}`);
     }
 
     function typeLabel(type: string): string {
@@ -194,12 +237,20 @@
                     {@const mastery = masteryScore(item)}
                     <Table.Row>
                         <Table.Cell>
-                            <div class="flex flex-col gap-0.5">
+                            <button
+                                type="button"
+                                class="flex w-full flex-col gap-0.5 text-left"
+                                aria-expanded={expanded === item.id}
+                                onclick={() => toggle(item.id)}
+                            >
                                 <span class="line-clamp-2 text-xs" title={item.question.question}
                                     >{item.question.question}</span
                                 >
-                                <span class="text-muted-foreground text-[11px]">{item.sourceTitle}</span>
-                            </div>
+                                <span class="text-muted-foreground text-[11px]">
+                                    {expanded === item.id ? "▾" : "▸"}
+                                    {item.sourceTitle}
+                                </span>
+                            </button>
                         </Table.Cell>
                         <Table.Cell>
                             <Badge variant="outline">{typeLabel(item.question.type)}</Badge>
@@ -251,6 +302,100 @@
                             </AlertDialog.Root>
                         </Table.Cell>
                     </Table.Row>
+                    {#if expanded === item.id}
+                        {@const history = historyOf(item)}
+                        {@const recent = recentAverage(item)}
+                        <Table.Row class="bg-muted/30">
+                            <Table.Cell colspan={6}>
+                                <div class="grid gap-4 py-2 md:grid-cols-2">
+                                    <!-- 复习历史 -->
+                                    <div class="flex flex-col gap-2">
+                                        <span class="text-xs font-medium">
+                                            {t("bank.detailHistory", String(history.length))}
+                                            {#if recent !== null}
+                                                <span class="text-muted-foreground font-normal">
+                                                    {t("bank.detailRecentAvg", recent.toFixed(0))}
+                                                </span>
+                                            {/if}
+                                        </span>
+                                        {#if history.length === 0}
+                                            <p class="text-muted-foreground text-[11px]">
+                                                {item.timesSeen > 0
+                                                    ? t("bank.detailHistoryLegacy", String(item.timesSeen))
+                                                    : t("bank.detailHistoryEmpty")}
+                                            </p>
+                                        {:else}
+                                            <svg
+                                                viewBox="0 0 {SPARK_W} {SPARK_H}"
+                                                class="h-9 w-full max-w-44"
+                                                role="img"
+                                                aria-label={t("bank.detailHistoryChart")}
+                                            >
+                                                <path d={sparkline(item).area} class="fill-primary/15"></path>
+                                                <path
+                                                    d={sparkline(item).line}
+                                                    class="stroke-primary"
+                                                    fill="none"
+                                                    stroke-width="1.5"
+                                                ></path>
+                                            </svg>
+                                            <div class="flex flex-wrap gap-1">
+                                                {#each historyNewestFirst(item) as attempt, index (attempt.at)}
+                                                    <span
+                                                        class={cn(
+                                                            "rounded border px-1.5 py-0.5 text-[11px]",
+                                                            attempt.percent >= 90
+                                                                ? "border-success/40 text-success"
+                                                                : attempt.percent >= 60
+                                                                  ? "border-border text-foreground"
+                                                                  : "border-destructive/40 text-destructive"
+                                                        )}
+                                                        title={fmtDateTime(attempt.at)}
+                                                    >
+                                                        {attempt.percent.toFixed(0)}
+                                                        {#if index === 0}
+                                                            <span class="text-muted-foreground"
+                                                                >· {t("bank.detailLatest")}</span
+                                                            >
+                                                        {/if}
+                                                    </span>
+                                                {/each}
+                                            </div>
+                                            {#if history.length >= MAX_BANK_HISTORY}
+                                                <p class="text-muted-foreground text-[11px]">
+                                                    {t("bank.detailHistoryCap", String(MAX_BANK_HISTORY))}
+                                                </p>
+                                            {/if}
+                                        {/if}
+                                    </div>
+
+                                    <!-- 间隔重复状态 -->
+                                    <div class="flex flex-col gap-2">
+                                        <span class="text-xs font-medium">{t("bank.detailSchedule")}</span>
+                                        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                                            <dt class="text-muted-foreground">{t("bank.detailPhase")}</dt>
+                                            <dd>{phaseLabel(item.card)}</dd>
+                                            <dt class="text-muted-foreground">{t("bank.detailDue")}</dt>
+                                            <dd>{fmtDateTime(item.card.due)}</dd>
+                                            <dt class="text-muted-foreground">{t("bank.detailReps")}</dt>
+                                            <dd>{item.card.reps}</dd>
+                                            <dt class="text-muted-foreground">{t("bank.detailLapses")}</dt>
+                                            <dd>{item.card.lapses}</dd>
+                                            <dt class="text-muted-foreground">{t("bank.detailStability")}</dt>
+                                            <dd>{t("bank.detailStabilityValue", item.card.stability.toFixed(1))}</dd>
+                                            <dt class="text-muted-foreground">{t("bank.detailDifficulty")}</dt>
+                                            <dd>{item.card.difficulty.toFixed(1)}</dd>
+                                            <dt class="text-muted-foreground">{t("bank.detailCreated")}</dt>
+                                            <dd>{fmtDateTime(item.createdAt)}</dd>
+                                        </dl>
+                                        <p class="text-muted-foreground text-[11px]">
+                                            {t("bank.detailSource", item.sourceTitle || item.sourceDocId)}
+                                        </p>
+                                    </div>
+                                </div>
+                            </Table.Cell>
+                        </Table.Row>
+                    {/if}
                 {/each}
             </Table.Body>
         </Table.Root>
