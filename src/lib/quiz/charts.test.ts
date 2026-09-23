@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ScoreIndexEntry } from "@/types/quiz";
 import {
     accuracyByDifficulty,
+    accuracyByTag,
     accuracyByType,
     dayKey,
     filterByRange,
@@ -28,6 +29,7 @@ function entry(timestamp: number, percent: number, over: Partial<ScoreIndexEntry
         duration: 80,
         byType: {},
         byDifficulty: {},
+        byTag: {},
         hasAnalysis: false,
         ...over,
     };
@@ -254,5 +256,42 @@ describe("weakestGroups", () => {
 
     it("空输入返回空数组", () => {
         expect(weakestGroups([])).toEqual([]);
+    });
+});
+
+describe("accuracyByTag", () => {
+    const withTags = (byTag: ScoreIndexEntry["byTag"]) => entry(dayAgo(0), 75, { byTag });
+
+    it("按标签输出正确率，样本多的在前", () => {
+        const groups = accuracyByTag([
+            withTags({
+                "知识点 A": { count: 4, passed: 3, score: 300, maxScore: 400 },
+                "知识点 B": { count: 2, passed: 0, score: 20, maxScore: 200 },
+            }),
+        ]);
+        expect(groups.map((g) => g.key)).toEqual(["知识点 A", "知识点 B"]);
+        expect(groups[0].accuracy).toBe(75);
+        expect(groups[1].accuracy).toBe(0);
+    });
+
+    it("跨记录累加同一标签", () => {
+        const groups = accuracyByTag([
+            withTags({ X: { count: 2, passed: 2, score: 200, maxScore: 200 } }),
+            withTags({ X: { count: 2, passed: 0, score: 0, maxScore: 200 } }),
+        ]);
+        expect(groups[0]).toMatchObject({ key: "X", count: 4, accuracy: 50 });
+    });
+
+    it("没有标签时返回空数组（旧记录兼容）", () => {
+        expect(accuracyByTag([entry(dayAgo(0), 80)])).toEqual([]);
+    });
+
+    it("byTag 缺失时不抛错", () => {
+        const legacy = { ...entry(dayAgo(0), 80), byTag: undefined } as unknown as ScoreIndexEntry;
+        expect(() => accuracyByTag([legacy])).not.toThrow();
+    });
+
+    it("空输入返回空数组", () => {
+        expect(accuracyByTag([])).toEqual([]);
     });
 });

@@ -210,6 +210,7 @@ export function coerceQuestion(raw: unknown, id: string, allowedTypes: QuestionT
         difficulty: toDifficulty(item.difficulty),
         question,
         explanation: item.explanation ? String(item.explanation) : undefined,
+        tags: toTags(item.tags),
     };
     try {
         return { ok: true, question: coerceByType(base, type, item) };
@@ -249,6 +250,32 @@ export function validateQuestions(
         );
     }
     return out;
+}
+
+/** 单题知识点标签数量上限 */
+const MAX_TAGS = 3;
+/** 单个标签长度上限 */
+const MAX_TAG_LENGTH = 24;
+
+/**
+ * 归一化知识点标签：去空白、截断长度、按大小写不敏感去重，最多保留 MAX_TAGS 个。
+ * 全部无效时返回 undefined，避免索引里出现空标签。
+ */
+export function toTags(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of value) {
+        if (typeof raw !== "string" && typeof raw !== "number") continue;
+        const tag = String(raw).trim().replace(/\s+/g, " ").slice(0, MAX_TAG_LENGTH);
+        if (!tag) continue;
+        const key = tag.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(tag);
+        if (out.length >= MAX_TAGS) break;
+    }
+    return out.length > 0 ? out : undefined;
 }
 
 function toDifficulty(value: unknown): Difficulty {

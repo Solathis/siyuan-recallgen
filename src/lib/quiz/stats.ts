@@ -35,10 +35,12 @@ export function aggregateResults(
 ): {
     byType: Partial<Record<QuestionType, ScoreAggregate>>;
     byDifficulty: Partial<Record<Difficulty, ScoreAggregate>>;
+    byTag: Record<string, ScoreAggregate>;
 } {
     const byId = new Map((questions ?? []).map((q) => [q.id, q]));
     const byType: Partial<Record<QuestionType, ScoreAggregate>> = {};
     const byDifficulty: Partial<Record<Difficulty, ScoreAggregate>> = {};
+    const byTag: Record<string, ScoreAggregate> = {};
     const list = Array.isArray(results) ? results : [];
 
     for (const result of list) {
@@ -52,9 +54,15 @@ export function aggregateResults(
             byDifficulty[question.difficulty] ??= emptyAggregate();
             accumulate(byDifficulty[question.difficulty], result);
         }
+
+        // 同一道题可计入多个知识点标签
+        for (const tag of question?.tags ?? []) {
+            byTag[tag] ??= emptyAggregate();
+            accumulate(byTag[tag], result);
+        }
     }
 
-    return { byType, byDifficulty };
+    return { byType, byDifficulty, byTag };
 }
 
 /**
@@ -63,7 +71,7 @@ export function aggregateResults(
  */
 export function buildIndexEntry(record: ScoreRecord): ScoreIndexEntry {
     const results = Array.isArray(record.detail) ? record.detail : [];
-    const { byType, byDifficulty } = aggregateResults(results, record.questions);
+    const { byType, byDifficulty, byTag } = aggregateResults(results, record.questions);
     return {
         id: record.id,
         quizId: record.quizId,
@@ -79,6 +87,7 @@ export function buildIndexEntry(record: ScoreRecord): ScoreIndexEntry {
         sourceTitle: record.sourceTitle,
         byType,
         byDifficulty,
+        byTag,
         hasAnalysis: !!record.analysis,
     };
 }

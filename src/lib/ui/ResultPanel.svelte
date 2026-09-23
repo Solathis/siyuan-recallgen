@@ -242,6 +242,9 @@
                         <div class="flex flex-wrap items-center gap-2">
                             <Badge variant="outline">{t(`type.${activeQuestion.type}`)}</Badge>
                             <Badge variant="secondary">{t(`diff.${activeQuestion.difficulty}`)}</Badge>
+                            {#each activeQuestion.tags ?? [] as tag (tag)}
+                                <Badge variant="outline">{tag}</Badge>
+                            {/each}
                             <span
                                 class={cn(
                                     "ml-auto text-sm font-bold",

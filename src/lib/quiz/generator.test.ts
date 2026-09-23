@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AIError } from "@/lib/ai/client";
 import type { Question, QuestionType } from "@/types/quiz";
-import { coerceQuestion, validateQuestions } from "./generator";
+import { coerceQuestion, toTags, validateQuestions } from "./generator";
 
 const ALL: QuestionType[] = ["single_choice", "multiple_choice", "fill_blank", "true_false", "subjective", "coding"];
 
@@ -272,5 +272,61 @@ describe("validateQuestions - 容错而不是整批作废", () => {
             "subjective",
             "coding",
         ]);
+    });
+});
+
+describe("toTags - 知识点标签归一化", () => {
+    it("保留有效标签", () => {
+        expect(toTags(["二叉树遍历", "递归"])).toEqual(["二叉树遍历", "递归"]);
+    });
+
+    it("去首尾空白并折叠内部空白", () => {
+        expect(toTags(["  HTTP   缓存  "])).toEqual(["HTTP 缓存"]);
+    });
+
+    it("按大小写不敏感去重并保留首次出现的写法", () => {
+        expect(toTags(["HTTP", "http", "Http"])).toEqual(["HTTP"]);
+    });
+
+    it("最多保留 3 个标签", () => {
+        expect(toTags(["a", "b", "c", "d", "e"])).toHaveLength(3);
+    });
+
+    it("单个标签超长时截断", () => {
+        const tag = toTags(["长".repeat(50)])![0];
+        expect(tag.length).toBe(24);
+    });
+
+    it("过滤空串与非字符串非数字项", () => {
+        expect(toTags(["", "  ", null, {}, true, "有效"])).toEqual(["有效"]);
+    });
+
+    it("全部无效时返回 undefined 而不是空数组", () => {
+        expect(toTags([])).toBeUndefined();
+        expect(toTags(["", "   "])).toBeUndefined();
+    });
+
+    it("非数组返回 undefined", () => {
+        expect(toTags("标签")).toBeUndefined();
+        expect(toTags(undefined)).toBeUndefined();
+        expect(toTags(null)).toBeUndefined();
+    });
+
+    it("数字标签被转成字符串", () => {
+        expect(toTags([42])).toEqual(["42"]);
+    });
+
+    it("题库题目携带归一化后的标签", () => {
+        const result = coerceQuestion(
+            { type: "true_false", question: "x", answer: true, tags: [" A ", "a", "B"] },
+            "q-1",
+            ALL
+        );
+        expect(result.question?.tags).toEqual(["A", "B"]);
+    });
+
+    it("没有标签时 tags 为 undefined，不写空数组", () => {
+        const result = coerceQuestion({ type: "true_false", question: "x", answer: true }, "q-1", ALL);
+        expect(result.question?.tags).toBeUndefined();
     });
 });

@@ -25,6 +25,7 @@ export interface PromptScaffold {
     jsonAgain: string;
     fields: string;
     answerFormat: string;
+    tagsInstruction: string;
     langLabel: string;
 
     // ── 判分 ──
@@ -116,6 +117,8 @@ const ZH: PromptScaffold = {
     fields: "各字段：type(题型), difficulty(难度), question(题干), options(选项数组), answer(答案), reference_answer(参考答案), language(编程语言), starter_code(初始代码), test_cases(测试用例), explanation(解析)。",
     answerFormat:
         "single_choice/multiple_choice 的 answer 为选项索引（number 或 number[]）；true_false 为 boolean；fill_blank 的 answer 为每空可接受答案的二维数组；coding 的 answer 为参考答案代码。",
+    tagsInstruction:
+        "每道题额外给出 1-3 个知识点标签（tags 数组），标签要具体可区分，例如「二叉树遍历」「HTTP 缓存」而不是「编程」「网络」。标签用于统计薄弱知识点。",
     langLabel: "中文",
 
     questionLabel: "题目：{0}",
@@ -204,6 +207,8 @@ const EN: PromptScaffold = {
     fields: "Fields: type, difficulty, question, options (array), answer, reference_answer, language (programming language), starter_code, test_cases, explanation.",
     answerFormat:
         "For single_choice/multiple_choice, answer is the option index (number or number[]); for true_false it is a boolean; for fill_blank it is a 2D array of accepted answers per blank; for coding it is the reference code.",
+    tagsInstruction:
+        'Also give each question 1-3 knowledge-point tags (tags array). Tags must be specific and distinguishable, e.g. "binary tree traversal" or "HTTP caching" rather than "programming" or "network". Tags are used to find weak knowledge points.',
     langLabel: "English",
 
     questionLabel: "Question: {0}",

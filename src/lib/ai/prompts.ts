@@ -30,6 +30,7 @@ export function buildGenerateMessages(
         s.jsonAgain,
         s.fields,
         s.answerFormat,
+        s.tagsInstruction,
     ].join("\n");
 
     return [
@@ -262,6 +263,7 @@ export function buildRegenerateMessages(
         fill(s.regenFailedIntro, items.join("\n\n")),
         fill(s.regenKeepTypeDifficulty, failedQuestions.length),
         fill(s.outputLang, s.langLabel),
+        s.tagsInstruction,
         s.jsonAgain,
     ].join("\n");
 

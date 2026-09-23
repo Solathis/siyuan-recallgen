@@ -45,6 +45,11 @@ export const QUIZ_SCHEMA = {
                         },
                     },
                     explanation: { type: "string" },
+                    tags: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "1-3 个知识点标签，用于统计薄弱知识点，如「二叉树遍历」「HTTP 缓存」",
+                    },
                 },
                 required: ["type", "difficulty", "question"],
                 additionalProperties: false,

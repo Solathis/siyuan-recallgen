@@ -28,6 +28,7 @@ const entry = (over: Partial<ScoreIndexEntry> = {}): ScoreIndexEntry => ({
         subjective: { count: 1, passed: 0, score: 20, maxScore: 40 },
     },
     byDifficulty: {},
+    byTag: {},
     hasAnalysis: false,
     ...over,
 });
