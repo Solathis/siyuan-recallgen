@@ -226,6 +226,7 @@
     "settings.heatmap.colorRanges": "Color Ranges",
     "settings.heatmap.addRange": "+ Add Range",
 
+    "settings.saveFailed": "Failed to save settings: {0}",
     "settings.data.title": "Data Management",
     "settings.data.desc": "Clear locally stored records",
     "settings.data.clearScores": "Clear Score Records",

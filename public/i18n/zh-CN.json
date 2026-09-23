@@ -226,6 +226,7 @@
     "settings.heatmap.colorRanges": "配色区间",
     "settings.heatmap.addRange": "+ 添加区间",
 
+    "settings.saveFailed": "保存设置失败：{0}",
     "settings.data.title": "数据管理",
     "settings.data.desc": "清除本地存储的记录",
     "settings.data.clearScores": "清空成绩记录",

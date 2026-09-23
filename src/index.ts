@@ -46,6 +46,14 @@ export default class RecallGenPlugin extends Plugin {
         const loaded = await this.configStore.load();
         this.config = loaded ?? this.config;
 
+        // 清理长期未交卷的废弃进度，避免进度文件无限增长
+        void this.progressStore
+            .pruneExpired()
+            .then((removed) => {
+                if (removed > 0) console.info(`[RecallGen] 已清理 ${removed} 条过期答题进度`);
+            })
+            .catch((e) => console.warn("[RecallGen] 清理过期进度失败", e));
+
         const self = this;
         this.addTab({
             type: QUIZ_TAB,
@@ -113,6 +121,8 @@ export default class RecallGenPlugin extends Plugin {
 
     async onunload() {
         this.selector?.unregister();
+        // 先把合并窗口内待写的配置落盘，避免刚改完设置就退出导致丢失
+        await this.configStore.flushDeferred().catch((e) => console.warn("[RecallGen] 配置落盘失败", e));
         this.quizComp?.$destroy();
         this.settingComp?.$destroy();
         this.historyComp?.$destroy();
@@ -156,7 +166,13 @@ export default class RecallGenPlugin extends Plugin {
             });
             self.settingComp.$on("save", async (e: { detail: RecallGenConfig }) => {
                 self.config = e.detail;
-                await self.configStore.set(self.config);
+                try {
+                    await self.configStore.set(self.config);
+                } catch (err) {
+                    // 写盘失败不能再静默吞掉：否则用户以为设置已保存
+                    console.error("[RecallGen] 保存配置失败", err);
+                    showMessage(t("settings.saveFailed", (err as Error).message), 7000, "error");
+                }
             });
         });
     }
