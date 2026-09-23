@@ -17,7 +17,8 @@
     } from "../quiz/charts";
     import { scorePercent } from "../quiz/stats";
     import type { ScoreIndexEntry } from "@/types/quiz";
-    import EChart from "./EChart.svelte";
+    import DonutChart from "./DonutChart.svelte";
+    import LineChart from "./LineChart.svelte";
 
     let { records = [], loading = false }: { records?: ScoreIndexEntry[]; loading?: boolean } = $props();
 
@@ -32,17 +33,32 @@
     const byTag = $derived(accuracyByTag(inRange));
     const weakTypes = $derived(weakestGroups(byType));
     const weakDifficulties = $derived(weakestGroups(byDifficulty));
-    /** 知识点排行：样本 ≥2 的按正确率升序取前 8 */
+    /** 知识点排行样本阈值与条数都比其他维度更宽，因为标签基数更大 */
     const weakTags = $derived(weakestGroups(byTag, 2, 8));
 
-    /** 时间范围下拉的选项文案由各 range 值拼出 */
+    /** 分布直方图的最大值，用于计算柱高比例 */
+    const distributionMax = $derived(Math.max(1, ...distribution.map((b) => b.count)));
+
+    /** 难度环形图的数据与配色（成功率与难度档位本身绑定，颜色语义固定） */
+    const difficultySlices = $derived(
+        byDifficulty.map((group) => ({
+            label: t(`diff.${group.key}`),
+            value: group.accuracy,
+            color:
+                group.key === "easy"
+                    ? "var(--color-success)"
+                    : group.key === "medium"
+                      ? "var(--color-warning)"
+                      : "var(--color-destructive)",
+        }))
+    );
+
+    const RANGES: RangeDays[] = [7, 30, 90, 0];
+
     function rangeLabel(value: RangeDays): string {
         return value === 0 ? t("stats.rangeAll") : t("stats.rangeDays", String(value));
     }
 
-    const RANGES: RangeDays[] = [7, 30, 90, 0];
-
-    /** 把百分制得分率格式化为统一小数位 */
     function pct(value: number): string {
         return `${value.toFixed(0)}%`;
     }
@@ -52,6 +68,14 @@
     }
     function difficultyLabel(d: string): string {
         return t(`diff.${d}`);
+    }
+
+    /** 达标率对应的语义色，所有图表与列表共用同一口径 */
+    function toneClass(accuracy: number): string {
+        if (accuracy >= 80) return "bg-success";
+        if (accuracy >= 60) return "bg-primary";
+        if (accuracy >= 30) return "bg-warning";
+        return "bg-destructive";
     }
 </script>
 
@@ -101,105 +125,43 @@
                 <Card.Description>{t("stats.trendDesc")}</Card.Description>
             </Card.Header>
             <Card.Content>
-                <EChart
-                    height="220px"
-                    ariaLabel={t("stats.trendAria", String(trend.length), pct(summary.averagePercent))}
-                    build={(c) => ({
-                        grid: { left: 40, right: 12, top: 16, bottom: 28 },
-                        tooltip: {
-                            trigger: "axis",
-                            backgroundColor: c.surface,
-                            borderColor: c.grid,
-                            textStyle: { color: c.text },
-                            formatter: (params: { value: [number, number] }[]) => {
-                                const point = params[0];
-                                const date = new Date(point.value[0]);
-                                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-                                    date.getDate()
-                                ).padStart(2, "0")}<br/>${t("stats.score")}: ${point.value[1].toFixed(0)}`;
-                            },
-                        },
-                        xAxis: {
-                            type: "time",
-                            axisLine: { lineStyle: { color: c.grid } },
-                            axisLabel: { color: c.axis, fontSize: 10 },
-                            splitLine: { show: false },
-                        },
-                        yAxis: {
-                            type: "value",
-                            min: 0,
-                            max: 100,
-                            axisLabel: { color: c.axis, fontSize: 10, formatter: "{value}%" },
-                            splitLine: { lineStyle: { color: c.grid } },
-                        },
-                        series: [
-                            {
-                                type: "line",
-                                smooth: true,
-                                symbolSize: 6,
-                                data: trend.map((p) => [p.timestamp, p.percent]),
-                                lineStyle: { color: c.primary, width: 2 },
-                                itemStyle: { color: c.primary },
-                                areaStyle: { color: c.primary, opacity: 0.12 },
-                            },
-                        ],
-                    })}
-                />
+                {#if trend.length > 1}
+                    <LineChart
+                        data={trend}
+                        ariaLabel={t("stats.trendAria", String(trend.length), pct(summary.averagePercent))}
+                    />
+                {:else}
+                    <!-- 单点画不出趋势，直接给出数值比画一条直线更清楚 -->
+                    <p class="text-muted-foreground py-8 text-center text-sm">
+                        {t("stats.trendSingle", pct(trend[0]?.percent ?? 0))}
+                    </p>
+                {/if}
             </Card.Content>
         </Card.Root>
 
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <!-- 题型正确率 -->
+            <!-- 题型达标率：用 CSS 条形绘制，天然响应式且跟随主题 -->
             <Card.Root>
                 <Card.Header>
                     <Card.Title class="text-sm">{t("stats.byType")}</Card.Title>
                     <Card.Description>{t("stats.byTypeDesc")}</Card.Description>
                 </Card.Header>
-                <Card.Content>
-                    <EChart
-                        height="220px"
-                        ariaLabel={t("stats.byTypeAria")}
-                        build={(c) => ({
-                            grid: { left: 72, right: 24, top: 12, bottom: 24 },
-                            tooltip: {
-                                trigger: "axis",
-                                axisPointer: { type: "shadow" },
-                                backgroundColor: c.surface,
-                                borderColor: c.grid,
-                                textStyle: { color: c.text },
-                            },
-                            xAxis: {
-                                type: "value",
-                                min: 0,
-                                max: 100,
-                                axisLabel: { color: c.axis, fontSize: 10, formatter: "{value}%" },
-                                splitLine: { lineStyle: { color: c.grid } },
-                            },
-                            yAxis: {
-                                type: "category",
-                                data: byType.map((g) => typeLabel(g.key)),
-                                axisLabel: { color: c.axis, fontSize: 10 },
-                                axisLine: { lineStyle: { color: c.grid } },
-                            },
-                            series: [
-                                {
-                                    type: "bar",
-                                    barMaxWidth: 16,
-                                    data: byType.map((g) => ({
-                                        value: Number(g.accuracy.toFixed(1)),
-                                        itemStyle: { color: g.accuracy >= 60 ? c.success : c.destructive },
-                                    })),
-                                    label: {
-                                        show: true,
-                                        position: "right",
-                                        color: c.axis,
-                                        fontSize: 10,
-                                        formatter: "{c}%",
-                                    },
-                                },
-                            ],
-                        })}
-                    />
+                <Card.Content class="flex flex-col gap-2">
+                    {#each byType as group (group.key)}
+                        <div class="flex items-center gap-2">
+                            <span class="w-14 shrink-0 text-xs">{typeLabel(group.key)}</span>
+                            <!-- 条形本身是装饰：达标率与样本量已作为文本渲染，读屏无需重复播报 -->
+                            <span class="bg-muted h-2.5 flex-1 overflow-hidden rounded-full" aria-hidden="true">
+                                <span
+                                    class={cn("block h-full rounded-full", toneClass(group.accuracy))}
+                                    style="width: {Math.max(2, Math.min(100, group.accuracy))}%"
+                                ></span>
+                            </span>
+                            <span class="text-muted-foreground w-20 shrink-0 text-right text-xs">
+                                {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
+                            </span>
+                        </div>
+                    {/each}
                 </Card.Content>
             </Card.Root>
 
@@ -210,81 +172,34 @@
                     <Card.Description>{t("stats.distributionDesc")}</Card.Description>
                 </Card.Header>
                 <Card.Content>
-                    <EChart
-                        height="220px"
-                        ariaLabel={t("stats.distributionAria")}
-                        build={(c) => ({
-                            grid: { left: 40, right: 16, top: 12, bottom: 24 },
-                            tooltip: {
-                                trigger: "axis",
-                                axisPointer: { type: "shadow" },
-                                backgroundColor: c.surface,
-                                borderColor: c.grid,
-                                textStyle: { color: c.text },
-                            },
-                            xAxis: {
-                                type: "category",
-                                data: distribution.map((b) => b.key),
-                                axisLabel: { color: c.axis, fontSize: 10 },
-                                axisLine: { lineStyle: { color: c.grid } },
-                            },
-                            yAxis: {
-                                type: "value",
-                                minInterval: 1,
-                                axisLabel: { color: c.axis, fontSize: 10 },
-                                splitLine: { lineStyle: { color: c.grid } },
-                            },
-                            series: [
-                                {
-                                    type: "bar",
-                                    barMaxWidth: 32,
-                                    data: distribution.map((b, i) => ({
-                                        value: b.count,
-                                        itemStyle: { color: i < 1 ? c.destructive : i < 3 ? c.warning : c.success },
-                                    })),
-                                },
-                            ],
-                        })}
-                    />
+                    <div class="flex h-40 items-end justify-between gap-2">
+                        {#each distribution as bucket, i (bucket.key)}
+                            <div class="flex h-full flex-1 flex-col items-center justify-end gap-1">
+                                <span class="text-muted-foreground text-[11px]">{bucket.count}</span>
+                                <div
+                                    class={cn(
+                                        "w-full rounded-t",
+                                        i === 0 ? "bg-destructive" : i < 3 ? "bg-warning" : "bg-success"
+                                    )}
+                                    style="height: {Math.max(2, (bucket.count / distributionMax) * 100)}%"
+                                    title="{bucket.key}: {bucket.count}"
+                                    aria-hidden="true"
+                                ></div>
+                                <span class="text-muted-foreground text-[10px]">{bucket.key}</span>
+                            </div>
+                        {/each}
+                    </div>
                 </Card.Content>
             </Card.Root>
 
-            <!-- 难度正确率 -->
+            <!-- 难度达标率 -->
             <Card.Root>
                 <Card.Header>
                     <Card.Title class="text-sm">{t("stats.byDifficulty")}</Card.Title>
                     <Card.Description>{t("stats.byDifficultyDesc")}</Card.Description>
                 </Card.Header>
                 <Card.Content>
-                    <EChart
-                        height="220px"
-                        ariaLabel={t("stats.byDifficultyAria")}
-                        build={(c) => ({
-                            tooltip: {
-                                trigger: "item",
-                                backgroundColor: c.surface,
-                                borderColor: c.grid,
-                                textStyle: { color: c.text },
-                            },
-                            legend: { bottom: 0, textStyle: { color: c.axis, fontSize: 10 } },
-                            series: [
-                                {
-                                    type: "pie",
-                                    radius: ["42%", "68%"],
-                                    avoidLabelOverlap: true,
-                                    itemStyle: { borderColor: c.surface, borderWidth: 2 },
-                                    label: { color: c.text, fontSize: 10, formatter: "{b} {d}%" },
-                                    data: byDifficulty.map((g, i) => ({
-                                        name: difficultyLabel(g.key),
-                                        value: Number(g.accuracy.toFixed(1)),
-                                        itemStyle: {
-                                            color: [c.success, c.warning, c.destructive][i % 3],
-                                        },
-                                    })),
-                                },
-                            ],
-                        })}
-                    />
+                    <DonutChart slices={difficultySlices} ariaLabel={t("stats.byDifficultyAria")} />
                 </Card.Content>
             </Card.Root>
 
@@ -295,77 +210,34 @@
                     <Card.Description>{t("stats.weakDesc")}</Card.Description>
                 </Card.Header>
                 <Card.Content class="flex flex-col gap-3">
-                    {#if weakTags.length > 0}
-                        <div class="flex flex-col gap-1.5">
-                            <span class="text-muted-foreground text-xs font-semibold">{t("stats.weakByTag")}</span>
-                            {#each weakTags as group (group.key)}
-                                <div class="flex items-center gap-2">
-                                    <span class="w-24 shrink-0 truncate text-xs" title={group.key}>{group.key}</span>
-                                    <span class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
-                                        <span
-                                            class={cn(
-                                                "block h-full rounded-full",
-                                                group.accuracy >= 60 ? "bg-success" : "bg-destructive"
-                                            )}
-                                            style="width: {Math.max(2, Math.min(100, group.accuracy))}%"
-                                        ></span>
-                                    </span>
-                                    <span class="text-muted-foreground w-16 shrink-0 text-right text-xs">
-                                        {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
-                                    </span>
-                                </div>
-                            {/each}
-                        </div>
-                    {/if}
                     {#if weakTypes.length === 0 && weakDifficulties.length === 0 && weakTags.length === 0}
                         <p class="text-muted-foreground text-xs">{t("stats.weakEmpty")}</p>
                     {:else}
-                        {#if weakTypes.length > 0}
-                            <div class="flex flex-col gap-1.5">
-                                <span class="text-muted-foreground text-xs font-semibold">{t("stats.weakByType")}</span>
-                                {#each weakTypes as group (group.key)}
-                                    <div class="flex items-center gap-2">
-                                        <span class="w-20 shrink-0 text-xs">{typeLabel(group.key)}</span>
-                                        <span class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+                        {#each [{ title: t("stats.weakByTag"), groups: weakTags, label: (key: string) => key, wrap: true }, { title: t("stats.weakByType"), groups: weakTypes, label: typeLabel, wrap: false }, { title: t("stats.weakByDifficulty"), groups: weakDifficulties, label: difficultyLabel, wrap: false }] as section (section.title)}
+                            {#if section.groups.length > 0}
+                                <div class="flex flex-col gap-1.5">
+                                    <span class="text-muted-foreground text-xs font-semibold">{section.title}</span>
+                                    {#each section.groups as group (group.key)}
+                                        <div class="flex items-center gap-2">
                                             <span
-                                                class={cn(
-                                                    "block h-full rounded-full",
-                                                    group.accuracy >= 60 ? "bg-success" : "bg-destructive"
-                                                )}
-                                                style="width: {Math.max(2, Math.min(100, group.accuracy))}%"
-                                            ></span>
-                                        </span>
-                                        <span class="text-muted-foreground w-16 shrink-0 text-right text-xs">
-                                            {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
-                                        </span>
-                                    </div>
-                                {/each}
-                            </div>
-                        {/if}
-                        {#if weakDifficulties.length > 0}
-                            <div class="flex flex-col gap-1.5">
-                                <span class="text-muted-foreground text-xs font-semibold"
-                                    >{t("stats.weakByDifficulty")}</span
-                                >
-                                {#each weakDifficulties as group (group.key)}
-                                    <div class="flex items-center gap-2">
-                                        <span class="w-20 shrink-0 text-xs">{difficultyLabel(group.key)}</span>
-                                        <span class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
-                                            <span
-                                                class={cn(
-                                                    "block h-full rounded-full",
-                                                    group.accuracy >= 60 ? "bg-success" : "bg-destructive"
-                                                )}
-                                                style="width: {Math.max(2, Math.min(100, group.accuracy))}%"
-                                            ></span>
-                                        </span>
-                                        <span class="text-muted-foreground w-16 shrink-0 text-right text-xs">
-                                            {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
-                                        </span>
-                                    </div>
-                                {/each}
-                            </div>
-                        {/if}
+                                                class={cn("w-24 shrink-0 text-xs", section.wrap && "truncate")}
+                                                title={section.wrap ? group.key : undefined}
+                                                >{section.label(group.key)}</span
+                                            >
+                                            <span class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+                                                <span
+                                                    class={cn("block h-full rounded-full", toneClass(group.accuracy))}
+                                                    style="width: {Math.max(2, Math.min(100, group.accuracy))}%"
+                                                ></span>
+                                            </span>
+                                            <span class="text-muted-foreground w-20 shrink-0 text-right text-xs">
+                                                {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
+                                            </span>
+                                        </div>
+                                    {/each}
+                                </div>
+                            {/if}
+                        {/each}
                         <p class="text-muted-foreground text-[11px]">{t("stats.weakNote")}</p>
                     {/if}
                 </Card.Content>
