@@ -163,12 +163,12 @@
         progressValue = null;
         progressLabel = t("bank.loadingDue");
         try {
-            const due = await service.dueBankQuestions(0, tabData.dueSourceDocId);
+            const due = await service.dueBankQuestions(0, tabData.dueSourceDocId, tabData.dueTag);
             if (cancelled) return;
             if (due.length === 0) {
                 error = {
                     title: t("bank.noDueTitle"),
-                    hint: t("bank.noDueHint"),
+                    hint: tabData.dueTag ? t("bank.noDueTagHint", tabData.dueTag) : t("bank.noDueHint"),
                     detail: t("bank.noDueDetail"),
                 };
                 panelState = "answering";
@@ -177,7 +177,9 @@
             session = {
                 id: genId(),
                 sourceDocId: tabData.sourceDocId,
-                sourceTitle: t("bank.sessionTitle", String(due.length)),
+                sourceTitle: tabData.dueTag
+                    ? t("bank.sessionTitleTag", tabData.dueTag, String(due.length))
+                    : t("bank.sessionTitle", String(due.length)),
                 questions: due,
                 createdAt: Date.now(),
                 answers: {},

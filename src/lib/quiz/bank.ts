@@ -242,6 +242,41 @@ export function pickDueItems(items: BankItem[], now = Date.now(), limit = 0): Ba
     return limit > 0 ? due.slice(0, limit) : due;
 }
 
+/**
+ * 复习选题：先按来源文档与知识点标签限定范围，再取到期题目（到期时间升序）。
+ * limit 为 0 表示不限。抽成纯函数便于单测，也让 index.ts 的实现保持一行。
+ */
+export function selectReviewItems(
+    items: BankItem[],
+    {
+        now = Date.now(),
+        limit = 0,
+        tag,
+        sourceDocId,
+    }: { now?: number; limit?: number; tag?: string; sourceDocId?: string } = {}
+): BankItem[] {
+    const scoped = items.filter((item) => {
+        if (sourceDocId && item.sourceDocId !== sourceDocId) return false;
+        if (tag && !(item.question.tags ?? []).includes(tag)) return false;
+        return true;
+    });
+    return pickDueItems(scoped, now, limit);
+}
+
+/** 题库里出现过的知识点标签及题数，按题数倒序；用于题库的标签筛选 */
+export function bankTags(items: BankItem[]): { tag: string; count: number }[] {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+        // 同一道题的重复标签只计一次，否则筛选下拉里的题数会虚高
+        for (const tag of new Set(item.question.tags ?? [])) {
+            counts.set(tag, (counts.get(tag) ?? 0) + 1);
+        }
+    }
+    return [...counts.entries()]
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+}
+
 /** 把一次作答的结果并入题库条目 */
 export function applyResult(item: BankItem, percent: number, now = Date.now()): BankItem {
     return {

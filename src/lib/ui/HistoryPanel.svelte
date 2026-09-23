@@ -20,7 +20,16 @@
     import type { QuizService } from "../quiz/service";
     import type { ScoreIndexEntry } from "@/types/quiz";
 
-    let { service, onOpenReview }: { service: QuizService; onOpenReview: (entry: ScoreIndexEntry) => void } = $props();
+    let {
+        service,
+        onOpenReview,
+        onStartReview = () => {},
+    }: {
+        service: QuizService;
+        onOpenReview: (entry: ScoreIndexEntry) => void;
+        /** 按知识点开始一次到期复习；由插件层打开新的答题 Tab */
+        onStartReview?: (scope: { tag?: string }) => void;
+    } = $props();
 
     let records = $state<ScoreIndexEntry[]>([]);
     let loading = $state(true);
@@ -178,7 +187,7 @@
     {#if topView === "stats"}
         <StatsPanel {records} {loading} heatmapConfig={config.heatmap} lang={config.general.language} />
     {:else if topView === "bank"}
-        <BankPanel {service} />
+        <BankPanel {service} {onStartReview} />
     {:else}
         <header class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-lg font-semibold">{t("history.title")}</h2>

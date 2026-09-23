@@ -8,7 +8,7 @@ import HistoryPanel from "@/lib/ui/HistoryPanel.svelte";
 import SettingPanel from "@/lib/ui/SettingPanel.svelte";
 import { lsNotebooks } from "@/api";
 import { BankStore, ConfigStore, ScoreStore, ProgressStore } from "@/lib/storage";
-import { applyResult, createBankItem, pickDueItems, questionFingerprint } from "@/lib/quiz/bank";
+import { applyResult, createBankItem, questionFingerprint, selectReviewItems } from "@/lib/quiz/bank";
 import { QuizSelector } from "@/lib/quiz/selector";
 import { generateQuestions, type GenProgressCallback } from "@/lib/quiz/generator";
 import { gradeAll } from "@/lib/quiz/grader";
@@ -121,6 +121,13 @@ export default class RecallGenPlugin extends Plugin {
                     props: {
                         service: self.buildService(),
                         onOpenReview: (entry: ScoreIndexEntry) => void self.openReviewTab(entry),
+                        onStartReview: (scope: { tag?: string; label?: string }) =>
+                            self.openQuizTab({
+                                mode: "reviewDue",
+                                sourceDocId: "",
+                                sourceTitle: scope.tag ?? t("bank.reviewDue"),
+                                dueTag: scope.tag,
+                            }),
                     },
                 });
             },
@@ -289,10 +296,9 @@ export default class RecallGenPlugin extends Plugin {
                 const after = await this.scoreStore.listIndex();
                 return { added: after.length - before.length, skipped: items.length - (after.length - before.length) };
             },
-            dueBankQuestions: async (limit = 0, sourceDocId) => {
+            dueBankQuestions: async (limit = 0, sourceDocId, tag) => {
                 const items = await this.bankStore.list();
-                const scoped = sourceDocId ? items.filter((item) => item.sourceDocId === sourceDocId) : items;
-                return pickDueItems(scoped, Date.now(), limit).map((item) => item.question);
+                return selectReviewItems(items, { limit, sourceDocId, tag }).map((item) => item.question);
             },
             bankSummary: () => this.bankStore.summary(),
             listBank: () => this.bankStore.list(),
