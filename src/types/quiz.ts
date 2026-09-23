@@ -19,7 +19,10 @@ export interface DifficultyDistribution {
 
 /** 编程题测试用例 */
 export interface TestCase {
+    /** 人类可读的输入描述，用于展示 */
     input?: string;
+    /** 实际调用入口函数时传入的参数（JSON 可表达的值） */
+    args?: unknown[];
     expected: string;
     description?: string;
 }
@@ -70,6 +73,8 @@ export interface SubjectiveQuestion extends QuestionBase {
 export interface CodingQuestion extends QuestionBase {
     type: "coding";
     language: string;
+    /** 入口函数名，用于执行测试用例时调用 */
+    entry_point?: string;
     starter_code?: string;
     test_cases?: TestCase[];
     /** 参考答案代码 */

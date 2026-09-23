@@ -1,10 +1,12 @@
 <script lang="ts">
     import { untrack } from "svelte";
+    import { Button } from "@/lib/components/ui/button";
     import { Input } from "@/lib/components/ui/input";
     import { Textarea } from "@/lib/components/ui/textarea";
     import * as Tabs from "@/lib/components/ui/tabs";
     import { cn } from "@/lib/utils";
     import { CodeEditor } from "../editor/codemirror";
+    import { isRunSupported, resolveEntryPoint, runCodingTests, type RunOutcome } from "../quiz/code-runner";
     import { t } from "../i18n";
     import { renderMarkdownLatex } from "./latex";
     import type { Question, UserAnswer } from "@/types/quiz";
@@ -97,6 +99,48 @@
             instance.destroy();
         };
     });
+
+    /* ── 运行测试用例 ────────────────────────────────────────────── */
+
+    let running = $state(false);
+    let runOutcome = $state<RunOutcome | null>(null);
+
+    /**
+     * 用当前编辑器内容跑一遍测试用例。
+     * 执行在 Web Worker 中并有超时，避免死循环卡住思源界面；
+     * 环境不支持时把原因展示出来，而不是静默失败。
+     */
+    async function runTests() {
+        if (question.type !== "coding") return;
+        const code = untrack(() => codingValue) || question.starter_code || "";
+        const entryPoint = resolveEntryPoint(question) ?? "";
+        running = true;
+        runOutcome = null;
+        try {
+            runOutcome = await runCodingTests({
+                language: question.language,
+                code,
+                entryPoint,
+                cases: question.test_cases ?? [],
+            });
+        } finally {
+            running = false;
+        }
+    }
+
+    // 用派生值收窄联合类型，避免模板里无法判定 supported 分支
+    const runCases = $derived(isRunSupported(runOutcome) ? runOutcome.results : null);
+    const runFailure = $derived(runOutcome && !isRunSupported(runOutcome) ? runOutcome.reason : null);
+    const passedCount = $derived(runCases ? runCases.filter((r) => r.passed).length : 0);
+
+    function formatValue(value: unknown): string {
+        if (value === undefined) return "undefined";
+        try {
+            return typeof value === "string" ? value : JSON.stringify(value);
+        } catch {
+            return String(value);
+        }
+    }
 
     /** 题目或语言变化时把编辑器内容切换到当前题 */
     $effect(() => {
@@ -207,13 +251,45 @@
         </Tabs.Root>
     {:else if question.type === "coding"}
         <div class="flex flex-col gap-2">
-            <div class="text-muted-foreground flex items-center gap-2 text-xs">
+            <div class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
                 <span class="bg-muted rounded px-1.5 py-0.5 font-mono">{question.language}</span>
                 {#if question.test_cases?.length}
                     <span>{t("question.testCaseCount", String(question.test_cases.length))}</span>
+                    <Button size="xs" variant="outline" onclick={() => void runTests()} disabled={running}>
+                        {running ? t("question.running") : t("question.runTests")}
+                    </Button>
                 {/if}
             </div>
             <div class="border-border overflow-hidden rounded-md border" bind:this={editorEl}></div>
+
+            {#if runCases}
+                <div class="bg-muted/50 flex flex-col gap-1.5 rounded-md p-2 text-xs">
+                    <span class="font-semibold">
+                        {t("question.runSummary", String(passedCount), String(runCases.length))}
+                    </span>
+                    {#each runCases as outcome (outcome.index)}
+                        <div class="flex flex-col gap-0.5">
+                            <span class={outcome.passed ? "text-success" : "text-destructive"}>
+                                {outcome.passed ? "✓" : "✗"}
+                                {t("question.caseLabel", String(outcome.index + 1))}
+                            </span>
+                            {#if outcome.error}
+                                <span class="text-destructive font-mono break-all">{outcome.error}</span>
+                            {:else if !outcome.passed}
+                                <span class="text-muted-foreground font-mono break-all">
+                                    {t(
+                                        "question.caseExpected",
+                                        formatValue(outcome.expected),
+                                        formatValue(outcome.actual)
+                                    )}
+                                </span>
+                            {/if}
+                        </div>
+                    {/each}
+                </div>
+            {:else if runFailure}
+                <p class="text-muted-foreground text-xs">{runFailure}</p>
+            {/if}
         </div>
     {/if}
 </div>

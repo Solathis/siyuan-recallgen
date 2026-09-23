@@ -226,6 +226,11 @@
 
     "question.previewEmpty": "Nothing written yet",
     "question.testCaseCount": "{0} test case(s)",
+    "question.runTests": "Run tests",
+    "question.running": "Running…",
+    "question.runSummary": "{0}/{1} test cases passed",
+    "question.caseLabel": "Case {0}",
+    "question.caseExpected": "expected {0}, got {1}",
     "question.edit": "Edit",
     "question.preview": "Preview",
     "question.subjectivePlaceholder": "Type your answer (Markdown and LaTeX supported)",

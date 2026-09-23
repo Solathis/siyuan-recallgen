@@ -359,17 +359,16 @@ function coerceByType(base: Omit<Question, never>, type: QuestionType, item: Rec
             const language = String(item.language ?? "python");
             const answer = String(item.answer ?? "");
             const test_cases = Array.isArray(item.test_cases)
-                ? item.test_cases.map((t) => ({
-                      input:
-                          (t as { input?: unknown })?.input !== undefined
-                              ? String((t as { input: unknown }).input)
-                              : undefined,
-                      expected: String((t as { expected: unknown }).expected ?? ""),
-                      description:
-                          (t as { description?: unknown })?.description !== undefined
-                              ? String((t as { description: unknown }).description)
-                              : undefined,
-                  }))
+                ? item.test_cases.map((t) => {
+                      const raw = t as { input?: unknown; args?: unknown; expected?: unknown; description?: unknown };
+                      return {
+                          input: raw.input !== undefined ? String(raw.input) : undefined,
+                          // args 保持原样：它要被当作实参调用入口函数，不能转成字符串
+                          args: Array.isArray(raw.args) ? raw.args : undefined,
+                          expected: String(raw.expected ?? ""),
+                          description: raw.description !== undefined ? String(raw.description) : undefined,
+                      };
+                  })
                 : undefined;
             // 编程题至少要能对照参考答案或测试用例，否则无从判分
             if (!answer.trim() && !test_cases?.length) {
@@ -379,6 +378,7 @@ function coerceByType(base: Omit<Question, never>, type: QuestionType, item: Rec
                 ...base,
                 type,
                 language,
+                entry_point: item.entry_point !== undefined ? String(item.entry_point).trim() || undefined : undefined,
                 starter_code: item.starter_code !== undefined ? String(item.starter_code) : undefined,
                 test_cases,
                 answer,

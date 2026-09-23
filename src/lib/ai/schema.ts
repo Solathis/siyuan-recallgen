@@ -31,13 +31,18 @@ export const QUIZ_SCHEMA = {
                     reference_answer: { type: "string", description: "主观题参考答案要点 / 编程题参考说明" },
                     language: { type: "string", description: "编程题语言：python/javascript/go 等" },
                     starter_code: { type: "string", description: "编程题初始代码模板" },
+                    entry_point: { type: "string", description: "编程题的入口函数名（用于自动运行测试用例）" },
                     test_cases: {
                         type: "array",
                         items: {
                             type: "object",
                             properties: {
-                                input: { type: "string" },
-                                expected: { type: "string" },
+                                input: { type: "string", description: "输入的可读描述" },
+                                args: {
+                                    type: "array",
+                                    description: "调用入口函数时传入的参数列表，例如 [3, 4]",
+                                },
+                                expected: { type: "string", description: "期望的返回值（JSON 或字符串）" },
                                 description: { type: "string" },
                             },
                             required: ["input", "expected"],
