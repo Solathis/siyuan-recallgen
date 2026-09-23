@@ -293,6 +293,8 @@ export default class RecallGenPlugin extends Plugin {
                 return pickDueItems(scoped, Date.now(), limit).map((item) => item.question);
             },
             bankSummary: () => this.bankStore.summary(),
+            listBank: () => this.bankStore.list(),
+            removeBankItem: (id) => this.bankStore.remove(id),
             recordBankOutcomes: async (questions, source, results) => {
                 const scoreById = new Map(results.map((r) => [r.questionId, r.score]));
                 const existing = await this.bankStore.findMany(questions.map((q) => questionFingerprint(q)));

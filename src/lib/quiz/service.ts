@@ -1,5 +1,5 @@
 import type { RecallGenConfig } from "@/types/config";
-import type { BankSummary } from "./bank";
+import type { BankItem, BankSummary } from "./bank";
 import type {
     GradingResult,
     Question,
@@ -85,6 +85,10 @@ export interface QuizService {
     dueBankQuestions(limit?: number, sourceDocId?: string): Promise<Question[]>;
     /** 题库规模概览 */
     bankSummary(): Promise<BankSummary>;
+    /** 题库全部条目，用于题库浏览界面 */
+    listBank(): Promise<BankItem[]>;
+    /** 从题库中删除单条题目 */
+    removeBankItem(id: string): Promise<void>;
     /**
      * 交卷后把作答结果写回题库：新题目入库，已有题目推进排程并累计统计。
      * 返回新增与复用（已存在）的题数。

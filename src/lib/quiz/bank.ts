@@ -139,6 +139,24 @@ export function isCardDue(card: BankCardState, now = Date.now()): boolean {
     return card.due <= now;
 }
 
+/**
+ * 到期状态，用于题库列表的展示与排序文案。
+ * - overdue：已过期（到期时间在过去）
+ * - today：今天到期
+ * - soon：7 天内到期
+ * - later：更晚
+ */
+export type DueState = "overdue" | "today" | "soon" | "later";
+
+export function dueState(card: BankCardState, now = Date.now()): DueState {
+    if (card.due <= now) return "overdue";
+    const endOfToday = new Date(now);
+    endOfToday.setHours(23, 59, 59, 999);
+    if (card.due <= endOfToday.getTime()) return "today";
+    if (card.due - now <= 7 * 86_400_000) return "soon";
+    return "later";
+}
+
 /** 掌握度评分（0-100）：由稳定性与正确率共同决定，用于界面展示 */
 export function masteryScore(item: BankItem): number {
     const accuracy = item.timesSeen > 0 ? (item.timesPassed / item.timesSeen) * 100 : 0;

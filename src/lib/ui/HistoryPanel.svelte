@@ -8,6 +8,7 @@
     import { Input } from "@/lib/components/ui/input";
     import * as Select from "@/lib/components/ui/select";
     import { Skeleton } from "@/lib/components/ui/skeleton";
+    import BankPanel from "./BankPanel.svelte";
     import StatsPanel from "./StatsPanel.svelte";
     import * as Table from "@/lib/components/ui/table";
     import * as Tabs from "@/lib/components/ui/tabs";
@@ -37,7 +38,7 @@
     /** 分数区间筛选 */
     let scoreFilter = $state<"all" | "high" | "mid" | "low">("all");
     /** 顶层视图：记录列表 / 学习统计 */
-    let topView = $state<"records" | "stats">("records");
+    let topView = $state<"records" | "stats" | "bank">("records");
     /**
      * 已渲染条数上界。
      * 记录很多时一次性渲染全部条目会创建大量 DOM，这里分段渲染并触底加载。
@@ -170,11 +171,14 @@
         <Tabs.List>
             <Tabs.Trigger value="records">{t("history.tabRecords")}</Tabs.Trigger>
             <Tabs.Trigger value="stats">{t("history.tabStats")}</Tabs.Trigger>
+            <Tabs.Trigger value="bank">{t("history.tabBank")}</Tabs.Trigger>
         </Tabs.List>
     </Tabs.Root>
 
     {#if topView === "stats"}
         <StatsPanel {records} {loading} heatmapConfig={config.heatmap} lang={config.general.language} />
+    {:else if topView === "bank"}
+        <BankPanel {service} />
     {:else}
         <header class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-lg font-semibold">{t("history.title")}</h2>
