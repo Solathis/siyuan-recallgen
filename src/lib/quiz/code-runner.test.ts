@@ -5,6 +5,7 @@ import {
     evaluateCases,
     inferEntryPoint,
     isRunSupported,
+    isValidIdentifier,
     isRunnableLanguage,
     looseEqual,
     normalizeExpected,
@@ -252,5 +253,44 @@ describe("runCodingTests 的环境判断", () => {
             cases: [testCase({ expected: "1" })],
         });
         expect(isRunSupported(outcome) ? "" : outcome.reason).toContain("Worker");
+    });
+});
+
+describe("isValidIdentifier", () => {
+    it("接受常规函数名", () => {
+        for (const name of ["add", "_run", "$el", "a1", "solve2"]) {
+            expect(isValidIdentifier(name)).toBe(true);
+        }
+    });
+
+    it("拒绝会被拼进脚本的非法名字", () => {
+        for (const name of ["a b", "a.b", "f()", "f;g", "1abc", "", "f\ng"]) {
+            expect(isValidIdentifier(name)).toBe(false);
+        }
+    });
+});
+
+describe("resolveEntryPoint - 非法入口函数名", () => {
+    it("显式字段是非法标识符时回落到推断，避免拼出语法错误的脚本", () => {
+        const question = coding({ entry_point: "a b", starter_code: "function good() {}" } as never);
+        expect(resolveEntryPoint(question)).toBe("good");
+    });
+
+    it("显式字段合法时优先使用", () => {
+        expect(resolveEntryPoint(coding({ entry_point: "pick", starter_code: "function other() {}" } as never))).toBe(
+            "pick"
+        );
+    });
+});
+
+describe("runCodingTests - 非法入口函数名", () => {
+    it("非法标识符返回不支持并说明原因", async () => {
+        const outcome = await runCodingTests({
+            language: "javascript",
+            code: "const f = 1",
+            entryPoint: "a b",
+            cases: [testCase()],
+        });
+        expect(isRunSupported(outcome) ? "" : outcome.reason).toContain("合法标识符");
     });
 });

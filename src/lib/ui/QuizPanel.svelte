@@ -9,7 +9,7 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
-    import { PASS_SCORE } from "../quiz/grader";
+    import { PASS_SCORE } from "@/types/quiz";
     import type { GradingResult, PanelState, QuizSession, UserAnswer } from "@/types/quiz";
     import ProgressBar from "./ProgressBar.svelte";
     import QuestionView from "./QuestionView.svelte";
@@ -212,7 +212,11 @@
             saveTimer = null;
         }
         stopCountdown();
-        if (session && panelState === "answering") void service.saveProgress(session);
+        if (session && panelState === "answering") {
+            // 先结算最后一段计时，否则这段作答时间不会被计入
+            flushTiming(null);
+            void service.saveProgress(session);
+        }
     }
 
     /* ── 生成 ────────────────────────────────────────────────────── */

@@ -58,8 +58,15 @@ export function isRunnableLanguage(language: string): boolean {
 /** 取题目的入口函数名：优先显式字段，其次从初始代码里推断 */
 export function resolveEntryPoint(question: Question): string | null {
     if (question.type !== "coding") return null;
-    if (question.entry_point && question.entry_point.trim()) return question.entry_point.trim();
+    const explicit = question.entry_point?.trim();
+    // 非法标识符（含空格、点号、括号等）不能拼进脚本，回落到推断
+    if (explicit && isValidIdentifier(explicit)) return explicit;
     return inferEntryPoint(question.starter_code ?? "") ?? inferEntryPoint(question.answer ?? "");
+}
+
+/** 是否是合法的 JavaScript 标识符（入口函数名会被拼进执行脚本，必须先校验） */
+export function isValidIdentifier(name: string): boolean {
+    return /^[A-Za-z_$][\w$]*$/.test(name);
 }
 
 /** 从代码里推断第一个函数声明或箭头函数赋值的名字 */
@@ -207,6 +214,9 @@ export async function runCodingTests(options: RunOptions): Promise<RunOutcome> {
     }
     if (!entryPoint) {
         return { supported: false, reason: "没有识别到入口函数名，无法调用" };
+    }
+    if (!isValidIdentifier(entryPoint)) {
+        return { supported: false, reason: `入口函数名不是合法标识符：${entryPoint}` };
     }
     if (cases.length === 0) {
         return { supported: false, reason: "这道题没有测试用例" };

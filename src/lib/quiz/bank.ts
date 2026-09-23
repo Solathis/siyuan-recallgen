@@ -1,4 +1,5 @@
 import { createEmptyCard, fsrs, Rating, State, type Card } from "ts-fsrs";
+import { PASS_SCORE } from "@/types/quiz";
 import type { Question, QuestionType } from "@/types/quiz";
 
 /**
@@ -159,7 +160,7 @@ export function applyResult(item: BankItem, percent: number, now = Date.now()): 
         updatedAt: now,
         card: scheduleReview(item.card, percent, now),
         timesSeen: item.timesSeen + 1,
-        timesPassed: item.timesPassed + (percent >= 60 ? 1 : 0),
+        timesPassed: item.timesPassed + (percent >= PASS_SCORE ? 1 : 0),
         lastPercent: percent,
     };
 }

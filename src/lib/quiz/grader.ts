@@ -73,9 +73,6 @@ export function isObjective(type: Question["type"]): boolean {
     return type === "single_choice" || type === "multiple_choice" || type === "fill_blank" || type === "true_false";
 }
 
-/** 判定「算作通过」的分数线，与界面上的统计口径保持一致 */
-export const PASS_SCORE = 60;
-
 /**
  * 客观题本地判分。
  *
@@ -134,17 +131,9 @@ export function scoreFillBlank(accepted: string[][], user: string[]): number {
     if (accepted.length === 0) return 0;
     let hits = 0;
     for (let i = 0; i < accepted.length; i++) {
-        const u = (user[i] ?? "").trim().toLowerCase();
-        if (u && accepted[i].some((o) => o.trim().toLowerCase() === u)) hits++;
+        if (blankMatches(accepted[i], user[i])) hits++;
     }
     return Math.round((hits / accepted.length) * 100);
-}
-
-export function setEqual(a: number[], b: number[]): boolean {
-    if (a.length !== b.length) return false;
-    const sa = [...a].sort((x, y) => x - y);
-    const sb = [...b].sort((x, y) => x - y);
-    return sa.every((v, i) => v === sb[i]);
 }
 
 /** 填空题某一空是否答对（大小写与空白不敏感） */

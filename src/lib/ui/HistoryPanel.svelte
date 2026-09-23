@@ -15,7 +15,7 @@
     import { t } from "../i18n";
     import { EXPORT_EXTENSION, EXPORT_MIME, buildExport, type ExportFormat } from "../quiz/export";
     import { PAGE_SIZE, limitGroups, nextLimit } from "../quiz/paging";
-    import { scorePercent } from "../quiz/stats";
+    import { PASS_SCORE, scorePercent } from "../quiz/stats";
     import type { QuizService } from "../quiz/service";
     import type { ScoreIndexEntry } from "@/types/quiz";
 
@@ -285,7 +285,7 @@
                                             <div
                                                 class={cn(
                                                     "h-full rounded-full",
-                                                    p >= 60 ? "bg-success" : "bg-destructive"
+                                                    p >= PASS_SCORE ? "bg-success" : "bg-destructive"
                                                 )}
                                                 style="width: {Math.min(100, Math.max(0, p))}%"
                                             ></div>

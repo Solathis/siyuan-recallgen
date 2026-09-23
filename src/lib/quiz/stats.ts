@@ -1,3 +1,4 @@
+import { PASS_SCORE } from "@/types/quiz";
 import type {
     Difficulty,
     GradingResult,
@@ -9,8 +10,7 @@ import type {
     UserAnswer,
 } from "@/types/quiz";
 
-/** 判定「算作通过/正确」的分数门槛，与界面上的「正确」口径保持一致 */
-export const PASS_SCORE = 60;
+export { PASS_SCORE } from "@/types/quiz";
 
 /** 成绩索引与统计共用的空聚合 */
 function emptyAggregate(): ScoreAggregate {

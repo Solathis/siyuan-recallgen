@@ -112,7 +112,8 @@
      */
     async function runTests() {
         if (question.type !== "coding") return;
-        const code = untrack(() => codingValue) || question.starter_code || "";
+        // 事件处理器不在响应式上下文中，直接读取即可
+        const code = codingValue || question.starter_code || "";
         const entryPoint = resolveEntryPoint(question) ?? "";
         running = true;
         runOutcome = null;

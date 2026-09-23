@@ -136,6 +136,8 @@
     "result.status_wrong": "wrong",
     "result.status_unanswered": "unanswered",
     "result.questionMissing": "The question text was not saved for this item; only the grading result is available",
+    "result.partial": "Partial ({0})",
+    "result.status_partial": "partially correct",
     "result.noAnalysis": "No weakness analysis available",
     "result.retryWrong": "Retry wrong",
     "result.discard": "Discard",

@@ -1,5 +1,6 @@
 import type { AIConfig, GeneralConfig, PromptConfig } from "@/types/config";
 import type { DifficultyDistribution, GradingResult, Question, QuestionType, UserAnswer } from "@/types/quiz";
+import { PASS_SCORE } from "@/types/quiz";
 import { fill, scaffoldOf, type PromptLang, type PromptScaffold } from "./scaffold";
 
 export type { AIConfig };
@@ -131,7 +132,10 @@ export function buildAnalysisMessages(
 ): Array<{ role: "system" | "user"; content: string }> {
     const s = scaffoldOf(lang);
     const byId = new Map(questions.map((q) => [q.id, q]));
-    const wrong = results.filter((r) => r.correct === false || (r.method === "ai" && r.score < 60));
+    // 用统一的通过线筛选，而不是看 correct 字段：
+    // 客观题支持部分得分后，correct 表示「完全正确」，
+    // 若按它筛选会把「多数选对的题」也报成薄弱点，与统计口径不一致。
+    const wrong = results.filter((r) => r.score < PASS_SCORE);
 
     if (wrong.length === 0) {
         return [

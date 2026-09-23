@@ -70,7 +70,11 @@
                     : t("settings.data.configImported"),
                 result.warnings.length > 0 ? 8000 : 4000
             );
-            for (const warning of result.warnings) showMessage(warning, 8000);
+            // 逐条提示最多 3 条，其余仅计数，避免一次导入刷出一屏通知
+            for (const warning of result.warnings.slice(0, 3)) showMessage(warning, 8000);
+            if (result.warnings.length > 3) {
+                console.info("[RecallGen] 导入配置的其余提示", result.warnings.slice(3));
+            }
         } catch (e) {
             showMessage(t("settings.data.configImportFailed", (e as Error).message), 7000, "error");
         }

@@ -9,6 +9,7 @@
     import { t } from "../i18n";
     import type { ChatTurn, QuizService } from "../quiz/service";
     import { renderMarkdownLatex } from "./latex";
+    import { PASS_SCORE } from "@/types/quiz";
     import type { GradingResult, Question } from "@/types/quiz";
 
     let {
@@ -39,8 +40,9 @@
     const total = $derived(results.reduce((s, r) => s + r.score, 0));
     const max = $derived(results.reduce((s, r) => s + r.maxScore, 0));
     const pct = $derived(max > 0 ? (total / max) * 100 : 0);
-    const correctCount = $derived(results.filter((r) => r.score >= 60).length);
-    const wrongCount = $derived(results.length - correctCount);
+    const correctCount = $derived(results.filter((r) => r.score >= PASS_SCORE).length);
+    const partialCount = $derived(results.filter((r) => r.score > 0 && r.score < 100).length);
+    const wrongCount = $derived(results.filter((r) => r.score === 0 && !!r.userAnswer).length);
     const unanswered = $derived(results.filter((r) => !r.userAnswer).length);
     const accuracy = $derived(results.length > 0 ? (correctCount / results.length) * 100 : 0);
 
@@ -68,9 +70,15 @@
     const activeResult = $derived(results[activeQ]);
     const activeQuestion = $derived(questions[activeQ]);
 
-    function qStatus(r: GradingResult): "correct" | "wrong" | "unanswered" {
+    /**
+     * 题目状态：客观题支持部分得分后，「正确」表示完全正确（100 分），
+     * 部分得分单独成一类，避免把 75 分的多选题显示成绿色「正确」。
+     */
+    function qStatus(r: GradingResult): "correct" | "partial" | "wrong" | "unanswered" {
         if (!r.userAnswer) return "unanswered";
-        return r.score >= 60 ? "correct" : "wrong";
+        if (r.score >= 100) return "correct";
+        if (r.score > 0) return "partial";
+        return "wrong";
     }
 
     function correctText(q: Question): string {
@@ -210,6 +218,7 @@
                         class={cn(
                             "size-8 rounded-full border text-xs font-semibold transition-transform hover:scale-110 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
                             qStatus(r) === "correct" && "bg-success text-success-foreground border-transparent",
+                            qStatus(r) === "partial" && "bg-warning text-warning-foreground border-transparent",
                             qStatus(r) === "wrong" && "bg-destructive text-destructive-foreground border-transparent",
                             qStatus(r) === "unanswered" && "bg-muted text-muted-foreground border-transparent",
                             i === activeQ && "ring-ring ring-2"
@@ -222,13 +231,14 @@
             </div>
 
             <div class="text-muted-foreground flex flex-wrap gap-4 text-xs">
-                {#each [["all", t("result.all", String(results.length))], ["correct", t("result.correct", String(correctCount))], ["wrong", t("result.wrong", String(wrongCount))], ["unanswered", t("result.unanswered", String(unanswered))]] as [key, label] (key)}
+                {#each [["all", t("result.all", String(results.length))], ["correct", t("result.correct", String(correctCount))], ["partial", t("result.partial", String(partialCount))], ["wrong", t("result.wrong", String(wrongCount))], ["unanswered", t("result.unanswered", String(unanswered))]] as [key, label] (key)}
                     <span class="flex items-center gap-1.5">
                         <span
                             class={cn(
                                 "size-2.5 rounded-full",
                                 key === "all" && "bg-muted-foreground",
                                 key === "correct" && "bg-success",
+                                key === "partial" && "bg-warning",
                                 key === "wrong" && "bg-destructive",
                                 key === "unanswered" && "bg-muted"
                             )}

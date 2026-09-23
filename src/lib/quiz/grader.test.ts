@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { AIError } from "@/lib/ai/client";
 import type { Question } from "@/types/quiz";
+import { PASS_SCORE } from "@/types/quiz";
 import {
     blankMatches,
     clampScore,
     gradeObjective,
     isObjective,
-    PASS_SCORE,
     scoreFillBlank,
     scoreMultipleChoice,
     scoreObjective,
-    setEqual,
 } from "./grader";
 
 const single = (answer: number): Question =>
@@ -50,32 +49,6 @@ describe("isObjective", () => {
     it("主观题与编程题不是客观题", () => {
         expect(isObjective("subjective")).toBe(false);
         expect(isObjective("coding")).toBe(false);
-    });
-});
-
-describe("setEqual", () => {
-    it("与顺序无关", () => {
-        expect(setEqual([2, 0, 1], [0, 1, 2])).toBe(true);
-    });
-
-    it("长度不同即不相等", () => {
-        expect(setEqual([1], [1, 2])).toBe(false);
-    });
-
-    it("元素不同即不相等", () => {
-        expect(setEqual([0, 1], [0, 2])).toBe(false);
-    });
-
-    it("重复元素按多重集比较", () => {
-        expect(setEqual([1, 1], [1, 2])).toBe(false);
-    });
-
-    it("不修改入参数组", () => {
-        const a = [2, 0];
-        const b = [0, 2];
-        setEqual(a, b);
-        expect(a).toEqual([2, 0]);
-        expect(b).toEqual([0, 2]);
     });
 });
 
@@ -270,7 +243,7 @@ describe("clampScore", () => {
 });
 
 describe("PASS_SCORE", () => {
-    it("通过线为 60，与统计口径一致", () => {
+    it("通过线为 60，且统计、历史、错题筛选共用同一个来源", () => {
         expect(PASS_SCORE).toBe(60);
     });
 });
