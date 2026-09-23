@@ -185,7 +185,7 @@
     </Tabs.Root>
 
     {#if topView === "stats"}
-        <StatsPanel {records} {loading} heatmapConfig={config.heatmap} lang={config.general.language} />
+        <StatsPanel {records} {loading} heatmapConfig={config.heatmap} lang={config.general.language} {onStartReview} />
     {:else if topView === "bank"}
         <BankPanel {service} {onStartReview} />
     {:else}

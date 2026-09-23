@@ -296,9 +296,9 @@ export default class RecallGenPlugin extends Plugin {
                 const after = await this.scoreStore.listIndex();
                 return { added: after.length - before.length, skipped: items.length - (after.length - before.length) };
             },
-            dueBankQuestions: async (limit = 0, sourceDocId, tag) => {
+            dueBankQuestions: async (scope = {}) => {
                 const items = await this.bankStore.list();
-                return selectReviewItems(items, { limit, sourceDocId, tag }).map((item) => item.question);
+                return selectReviewItems(items, scope).map((item) => item.question);
             },
             bankSummary: () => this.bankStore.summary(),
             listBank: () => this.bankStore.list(),

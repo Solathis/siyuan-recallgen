@@ -163,12 +163,20 @@
         progressValue = null;
         progressLabel = t("bank.loadingDue");
         try {
-            const due = await service.dueBankQuestions(0, tabData.dueSourceDocId, tabData.dueTag);
+            // 按知识点复习时允许提前复习：用户是想练这个点，不该被排程挡住，
+            // 因此只有题库里根本没有该知识点的题目时才会走到空态
+            const tag = tabData.dueTag;
+            const due = await service.dueBankQuestions({
+                limit: 0,
+                sourceDocId: tabData.dueSourceDocId,
+                tag,
+                ahead: Boolean(tag),
+            });
             if (cancelled) return;
             if (due.length === 0) {
                 error = {
                     title: t("bank.noDueTitle"),
-                    hint: tabData.dueTag ? t("bank.noDueTagHint", tabData.dueTag) : t("bank.noDueHint"),
+                    hint: tag ? t("bank.noTagQuestions", tag) : t("bank.noDueHint"),
                     detail: t("bank.noDueDetail"),
                 };
                 panelState = "answering";
@@ -177,8 +185,8 @@
             session = {
                 id: genId(),
                 sourceDocId: tabData.sourceDocId,
-                sourceTitle: tabData.dueTag
-                    ? t("bank.sessionTitleTag", tabData.dueTag, String(due.length))
+                sourceTitle: tag
+                    ? t("bank.sessionTitleTag", tag, String(due.length))
                     : t("bank.sessionTitle", String(due.length)),
                 questions: due,
                 createdAt: Date.now(),

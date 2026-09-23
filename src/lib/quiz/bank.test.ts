@@ -392,6 +392,34 @@ describe("selectReviewItems", () => {
         const out = selectReviewItems(bank, { now: NOW, tag: "代数", limit: 1 });
         expect(out).toHaveLength(1);
     });
+
+    it("默认不补题：全部未到期时返回空", () => {
+        const future = bank.map((entry) => ({ ...entry, card: { ...entry.card, due: NOW + DAY } }));
+        expect(selectReviewItems(future, { now: NOW, tag: "代数" })).toHaveLength(0);
+    });
+
+    it("ahead 在没有到期题目时按掌握度从低到高补题", () => {
+        const future = bank.map((entry) => ({ ...entry, card: { ...entry.card, due: NOW + DAY } }));
+        // 稳定性都还是初始值，于是掌握度完全由正确率决定：
+        // 「甲」一直答对，「乙」一直答错，乙应当排在前面
+        future[0] = { ...future[0], timesSeen: 4, timesPassed: 4 };
+        future[1] = { ...future[1], timesSeen: 4, timesPassed: 0 };
+        const out = selectReviewItems(future, { now: NOW, tag: "代数", ahead: true });
+        expect(out.map((i) => i.question.question)).toEqual(["乙", "甲"]);
+    });
+
+    it("ahead 在有到期题目时仍然只给到期题目", () => {
+        const mixed = [
+            { ...bank[0], card: { ...bank[0].card, due: NOW - DAY } },
+            { ...bank[1], card: { ...bank[1].card, due: NOW + DAY } },
+        ];
+        const out = selectReviewItems(mixed, { now: NOW, tag: "代数", ahead: true });
+        expect(out.map((i) => i.question.question)).toEqual(["甲"]);
+    });
+
+    it("ahead 且该范围题库为空时仍返回空", () => {
+        expect(selectReviewItems(bank, { now: NOW, tag: "不存在的知识点", ahead: true })).toHaveLength(0);
+    });
 });
 
 describe("bankTags", () => {
