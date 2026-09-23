@@ -8,6 +8,7 @@ import type {
     ScoreIndexEntry,
     ScoreRecord,
     UserAnswer,
+    QuestionType,
 } from "@/types/quiz";
 import type { GenProgressCallback } from "../quiz/generator";
 
@@ -135,6 +136,8 @@ export interface QuizTabData {
     dueSourceDocId?: string;
     /** reviewDue 模式下限定知识点标签，只复习该标签的到期题目 */
     dueTag?: string;
+    /** reviewDue 模式下限定题型，只复习该题型的到期题目 */
+    dueType?: QuestionType;
     /** review 模式的成绩数据 */
     review?: ReviewPayload;
 }

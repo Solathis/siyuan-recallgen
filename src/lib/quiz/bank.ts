@@ -248,6 +248,8 @@ export interface ReviewScope {
     /** 0 表示不限题数 */
     limit?: number;
     tag?: string;
+    /** 限定题型，用于「只练编程题」这类复习方式 */
+    type?: QuestionType;
     sourceDocId?: string;
     /**
      * 没有到期题目时是否按掌握度从低到高补题（提前复习）。
@@ -262,10 +264,11 @@ export interface ReviewScope {
  * 抽成纯函数便于单测，也让 index.ts 的实现保持一行。
  */
 export function selectReviewItems(items: BankItem[], scope: ReviewScope = {}): BankItem[] {
-    const { now = Date.now(), limit = 0, tag, sourceDocId, ahead = false } = scope;
+    const { now = Date.now(), limit = 0, tag, type, sourceDocId, ahead = false } = scope;
     const scoped = items.filter((item) => {
         if (sourceDocId && item.sourceDocId !== sourceDocId) return false;
         if (tag && !(item.question.tags ?? []).includes(tag)) return false;
+        if (type && item.question.type !== type) return false;
         return true;
     });
 

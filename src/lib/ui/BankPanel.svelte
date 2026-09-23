@@ -22,14 +22,18 @@
     } from "../quiz/bank";
     import { nextLimit, PAGE_SIZE } from "../quiz/paging";
     import type { QuizService } from "../quiz/service";
+    import type { QuestionType } from "@/types/quiz";
 
     let {
         service,
         onStartReview = () => {},
+        lang = "zh",
     }: {
         service: QuizService;
-        /** 按知识点开始一次到期复习；由插件层打开新的答题 Tab */
-        onStartReview?: (scope: { tag?: string }) => void;
+        /** 按知识点或题型开始一次复习；由插件层打开新的答题 Tab */
+        onStartReview?: (scope: { tag?: string; type?: QuestionType }) => void;
+        /** 界面语言；由外层传入，service.getConfig() 本身不是响应式的 */
+        lang?: "zh" | "en";
     } = $props();
 
     let items = $state<BankItem[]>([]);
@@ -81,14 +85,29 @@
     /** 题库里出现过的知识点标签（按题数倒序），用于筛选与「按知识点复习」 */
     const tagOptions = $derived(bankTags(items));
 
-    /** 当前标签筛选下已到期的题数，用于复习按钮的可用状态与人数提示 */
-    const tagDueCount = $derived(
-        tagFilter === "all"
-            ? 0
-            : items.filter(
-                  (item) => (item.question.tags ?? []).includes(tagFilter) && dueState(item.card) === "overdue"
-              ).length
-    );
+    /**
+     * 当前筛选能否直接拿去开一次复习：
+     * 知识点与题型都是题库的筛选键，而「掌握度」不是。
+     */
+    const reviewScope = $derived.by<{ tag?: string; type?: QuestionType; label: string } | null>(() => {
+        if (tagFilter !== "all") return { tag: tagFilter, label: t("bank.scopeTag", tagFilter) };
+        if (typeFilter !== "all") {
+            return { type: typeFilter as QuestionType, label: t("bank.scopeType", typeLabel(typeFilter)) };
+        }
+        return null;
+    });
+
+    /** 当前筛选范围内的题目与其中的到期题数 */
+    const scopeItems = $derived.by(() => {
+        const scope = reviewScope;
+        if (!scope) return [];
+        return items.filter((item) => {
+            if (scope.tag && !(item.question.tags ?? []).includes(scope.tag)) return false;
+            if (scope.type && item.question.type !== scope.type) return false;
+            return true;
+        });
+    });
+    const scopeDueCount = $derived(scopeItems.filter((item) => item.card.due <= Date.now()).length);
 
     const filtered = $derived.by(() => {
         const keyword = query.trim().toLowerCase();
@@ -133,9 +152,6 @@
     }
 
     /* ── 展开详情：复习历史 ───────────────────────────────────────── */
-
-    /** 日期格式跟随界面语言 */
-    const lang = $derived(service.getConfig().general.language ?? "zh");
 
     /** 同时只展开一行，避免长列表里堆出大量 DOM */
     let expanded = $state<string | null>(null);
@@ -250,18 +266,22 @@
     </div>
 
     <!-- 按知识点筛选时给出一条可执行的复习入口，而不是只能看列表 -->
-    {#if tagFilter !== "all" && !loading && items.length > 0}
+    {#if reviewScope && !loading && items.length > 0}
         <div class="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2">
             <span class="text-xs">
-                {t("bank.tagScope", tagFilter, String(filtered.length))}
-                {#if tagDueCount > 0}
-                    <span class="text-muted-foreground">{t("bank.tagDue", String(tagDueCount))}</span>
+                {t("bank.scopeLine", reviewScope.label, String(scopeItems.length))}
+                {#if scopeDueCount > 0}
+                    <span class="text-muted-foreground">{t("bank.tagDue", String(scopeDueCount))}</span>
                 {:else}
                     <span class="text-muted-foreground">{t("bank.tagAhead")}</span>
                 {/if}
             </span>
-            <Button size="sm" variant="outline" onclick={() => onStartReview({ tag: tagFilter })}>
-                {t("bank.reviewTag")}
+            <Button
+                size="sm"
+                variant="outline"
+                onclick={() => onStartReview({ tag: reviewScope?.tag, type: reviewScope?.type })}
+            >
+                {t("bank.reviewScope")}
             </Button>
         </div>
     {/if}
@@ -368,6 +388,7 @@
                     {#if expanded === item.id}
                         {@const history = historyOf(item)}
                         {@const recent = recentAverage(item)}
+                        {@const spark = sparkline(item)}
                         <Table.Row class="bg-muted/30">
                             <Table.Cell colspan={6}>
                                 <div class="grid gap-4 py-2 md:grid-cols-2">
@@ -394,9 +415,9 @@
                                                 role="img"
                                                 aria-label={t("bank.detailHistoryChart")}
                                             >
-                                                <path d={sparkline(item).area} class="fill-primary/15"></path>
+                                                <path d={spark.area} class="fill-primary/15"></path>
                                                 <path
-                                                    d={sparkline(item).line}
+                                                    d={spark.line}
                                                     class="stroke-primary"
                                                     fill="none"
                                                     stroke-width="1.5"

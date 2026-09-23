@@ -165,18 +165,25 @@
         try {
             // 按知识点复习时允许提前复习：用户是想练这个点，不该被排程挡住，
             // 因此只有题库里根本没有该知识点的题目时才会走到空态
-            const tag = tabData.dueTag;
+            const { dueTag: tag, dueType: type } = tabData;
+            // 按知识点/题型复习时允许提前复习：用户是想练这一类题，不该被排程挡住，
+            // 因此只有题库里根本没有这类题目时才会走到空态
             const due = await service.dueBankQuestions({
                 limit: 0,
                 sourceDocId: tabData.dueSourceDocId,
                 tag,
-                ahead: Boolean(tag),
+                type,
+                ahead: Boolean(tag || type),
             });
             if (cancelled) return;
             if (due.length === 0) {
                 error = {
                     title: t("bank.noDueTitle"),
-                    hint: tag ? t("bank.noTagQuestions", tag) : t("bank.noDueHint"),
+                    hint: tag
+                        ? t("bank.noTagQuestions", tag)
+                        : type
+                          ? t("bank.noTypeQuestions", t(`type.${type}`))
+                          : t("bank.noDueHint"),
                     detail: t("bank.noDueDetail"),
                 };
                 panelState = "answering";
@@ -187,7 +194,9 @@
                 sourceDocId: tabData.sourceDocId,
                 sourceTitle: tag
                     ? t("bank.sessionTitleTag", tag, String(due.length))
-                    : t("bank.sessionTitle", String(due.length)),
+                    : type
+                      ? t("bank.sessionTitleType", t(`type.${type}`), String(due.length))
+                      : t("bank.sessionTitle", String(due.length)),
                 questions: due,
                 createdAt: Date.now(),
                 answers: {},

@@ -18,7 +18,7 @@
     import { PAGE_SIZE, limitGroups, nextLimit } from "../quiz/paging";
     import { PASS_SCORE, scorePercent } from "../quiz/stats";
     import type { QuizService } from "../quiz/service";
-    import type { ScoreIndexEntry } from "@/types/quiz";
+    import type { QuestionType, ScoreIndexEntry } from "@/types/quiz";
 
     let {
         service,
@@ -27,8 +27,8 @@
     }: {
         service: QuizService;
         onOpenReview: (entry: ScoreIndexEntry) => void;
-        /** 按知识点开始一次到期复习；由插件层打开新的答题 Tab */
-        onStartReview?: (scope: { tag?: string }) => void;
+        /** 按知识点或题型开始一次到期复习；由插件层打开新的答题 Tab */
+        onStartReview?: (scope: { tag?: string; type?: QuestionType }) => void;
     } = $props();
 
     let records = $state<ScoreIndexEntry[]>([]);
@@ -187,7 +187,7 @@
     {#if topView === "stats"}
         <StatsPanel {records} {loading} heatmapConfig={config.heatmap} lang={config.general.language} {onStartReview} />
     {:else if topView === "bank"}
-        <BankPanel {service} {onStartReview} />
+        <BankPanel {service} {onStartReview} lang={config.general.language} />
     {:else}
         <header class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-lg font-semibold">{t("history.title")}</h2>
