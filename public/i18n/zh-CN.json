@@ -248,6 +248,9 @@
     "selector.loadingNotebook": "正在加载笔记本「{0}」的内容…",
     "selector.noDocs": "笔记本中没有文档",
     "selector.emptyContent": "笔记本中的文档内容为空",
+    "selector.docsTruncated": "文档数量过多，仅处理前 {0} 篇，请缩小选取范围",
+    "selector.contentLimited": "内容较多，已纳入 {0} 篇文档，其余因超出长度上限被跳过",
+    "selector.actionFailed": "操作失败：{0}",
     "selector.noNotebook": "没有打开的笔记本",
     "selector.notebook": "笔记本",
     "selector.confirmShortTitle": "⚠️",
@@ -263,6 +266,7 @@
     "tab.quizDefault": "复习题",
     "tab.history": "复习记录",
 
+    "doc.answerSummary": "查看答案与解析",
     "doc.answerLabel": "**答案：** ",
     "doc.explanationLabel": "**解析：** ",
     "doc.seeCode": "见参考代码",

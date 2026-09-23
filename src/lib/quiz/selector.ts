@@ -1,7 +1,8 @@
 import type { Plugin } from "siyuan";
 import { getAllEditor, confirm, showMessage, Menu } from "siyuan";
-import { getBlockKramdown, exportMdContent, getHPathByID, lsNotebooks, sql, listDocTree } from "@/api";
+import { getBlockKramdown, exportMdContent, getHPathByID, lsNotebooks, sql, listDocTree, quoteSqlLiteral } from "@/api";
 import { t } from "../i18n";
+import { exportDocsMarkdown } from "./content";
 import type { QuizTabData } from "./service";
 
 const MIN_LEN = 50;
@@ -51,7 +52,7 @@ export class QuizSelector {
         detail.menu.addItem({
             icon: "iconSparkles",
             label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
-            click: () => void this.fromBlocks(detail),
+            click: () => void this.run(() => this.fromBlocks(detail)),
         });
     }
 
@@ -64,7 +65,7 @@ export class QuizSelector {
             icon: "iconSparkles",
             label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
             click: () => {
-                if (rootId) void this.fromDoc(rootId);
+                if (rootId) void this.run(() => this.fromDoc(rootId));
             },
         });
         detail.menu.addItem({
@@ -109,7 +110,7 @@ export class QuizSelector {
             detail.menu.addItem({
                 icon: "iconSparkles",
                 label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
-                click: () => void this.fromDoc(docId),
+                click: () => void this.run(() => this.fromDoc(docId)),
             });
             detail.menu.addItem({
                 icon: "iconCalendar",
@@ -148,7 +149,7 @@ export class QuizSelector {
             detail.menu.addItem({
                 icon: "iconFiles",
                 label: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
-                click: () => void this.fromNotebook(nbId, nbName),
+                click: () => void this.run(() => this.fromNotebook(nbId, nbName)),
             });
             detail.menu.addItem({
                 icon: "iconCalendar",
@@ -185,31 +186,46 @@ export class QuizSelector {
             return;
         }
         const rootId = editors[0].protyle.block.rootID;
-        await this.fromDoc(rootId);
+        await this.run(() => this.fromDoc(rootId));
     }
 
     /** 命令面板/标题菜单：从笔记本生成 */
     private async onNotebookCommand() {
-        const res = await lsNotebooks().catch(() => null);
-        const notebooks = res?.notebooks?.filter((n: Notebook) => !n.closed) ?? [];
-        if (notebooks.length === 0) {
-            showMessage(t("selector.noNotebook"));
-            return;
+        await this.run(async () => {
+            const res = await lsNotebooks().catch(() => null);
+            const notebooks = res?.notebooks?.filter((n: Notebook) => !n.closed) ?? [];
+            if (notebooks.length === 0) {
+                showMessage(t("selector.noNotebook"));
+                return;
+            }
+            if (notebooks.length === 1) {
+                await this.fromNotebook(notebooks[0].id, notebooks[0].name);
+                return;
+            }
+            const menu = new Menu("rg-notebook");
+            for (const nb of notebooks) {
+                menu.addItem({
+                    icon: "iconFiles",
+                    label: nb.name,
+                    click: () => void this.run(() => this.fromNotebook(nb.id, nb.name)),
+                });
+            }
+            const rect = document.body.getBoundingClientRect();
+            menu.open({ x: rect.width / 2 - 100, y: rect.height / 2 - 50 });
+        });
+    }
+
+    /**
+     * 统一入口包装：所有以 `void` 触发的异步入口都必须经过这里，
+     * 否则失败会变成无人处理的 Promise 拒绝，用户看不到任何提示。
+     */
+    private async run(action: () => Promise<void>): Promise<void> {
+        try {
+            await action();
+        } catch (e) {
+            console.error("[RecallGen] 生成复习题失败", e);
+            showMessage(t("selector.actionFailed", (e as Error).message ?? String(e)), 7000, "error");
         }
-        if (notebooks.length === 1) {
-            await this.fromNotebook(notebooks[0].id, notebooks[0].name);
-            return;
-        }
-        const menu = new Menu("rg-notebook");
-        for (const nb of notebooks) {
-            menu.addItem({
-                icon: "iconFiles",
-                label: nb.name,
-                click: () => void this.fromNotebook(nb.id, nb.name),
-            });
-        }
-        const rect = document.body.getBoundingClientRect();
-        menu.open({ x: rect.width / 2 - 100, y: rect.height / 2 - 50 });
     }
 
     private async fromBlocks(detail: any) {
@@ -217,13 +233,14 @@ export class QuizSelector {
         const rootId: string = detail.protyle?.block?.rootID;
         const ids = elements.map((el: HTMLElement) => el?.dataset?.nodeId).filter((id: string): id is string => !!id);
         if (ids.length === 0) return;
-        let content = "";
+
+        const parts: string[] = [];
         for (const id of ids) {
             const kr = await getBlockKramdown(id).catch(() => null);
-            if (kr?.kramdown) content += kr.kramdown + "\n\n";
+            if (kr?.kramdown) parts.push(kr.kramdown);
         }
         const title = await safeTitle(rootId);
-        await this.launch(content, rootId, title);
+        await this.launch(parts.join("\n\n"), rootId, title);
     }
 
     private async fromDoc(rootId: string) {
@@ -235,23 +252,32 @@ export class QuizSelector {
 
     private async fromNotebook(notebookId: string, notebookName: string) {
         showMessage(t("selector.loadingNotebook", notebookName));
-        const docIds = await collectDocIds(notebookId);
-        if (docIds.length === 0) {
-            showMessage(t("selector.noDocs"));
+        const { ids, truncated } = await collectDocIds(notebookId);
+        if (ids.length === 0) {
+            showMessage(t("selector.noDocs"), 7000, "error");
             return;
         }
-        const content = await collectContent(docIds);
-        if (!content.trim()) {
-            showMessage(t("selector.emptyContent"));
+        if (truncated) {
+            showMessage(t("selector.docsTruncated", String(ids.length)), 7000, "error");
+        }
+
+        const result = await exportDocsMarkdown(ids);
+        if (!result.content.trim()) {
+            showMessage(t("selector.emptyContent"), 7000, "error");
             return;
         }
-        await this.launch(content, notebookId, t("selector.notebookPrefix", notebookName));
+        if (result.skipped > 0 || result.truncated) {
+            showMessage(t("selector.contentLimited", String(result.exported)));
+        }
+        await this.launch(result.content, notebookId, t("selector.notebookPrefix", notebookName));
     }
 
     private async launch(content: string, rootId: string, title: string) {
         const text = content.trim();
         if (text.length < MIN_LEN) {
-            await this.confirmShort(text.length);
+            // 内容过短时先确认；用户取消则不再打开答题面板
+            const ok = await this.confirmShort(text.length);
+            if (!ok) return;
         }
         this.open({
             mode: "generate",
@@ -261,44 +287,43 @@ export class QuizSelector {
         });
     }
 
-    private confirmShort(len: number): Promise<void> {
+    /** 内容过短时的二次确认，返回用户是否选择继续 */
+    private confirmShort(len: number): Promise<boolean> {
         return new Promise((resolve) => {
             confirm(
                 t("selector.confirmShortTitle"),
                 t("selector.confirmShortMsg", String(len)),
-                () => resolve(),
-                () => resolve()
+                () => resolve(true),
+                () => resolve(false)
             );
         });
     }
 }
 
-/** 递归收集笔记本下所有文档 ID */
-async function collectDocIds(notebookId: string): Promise<string[]> {
+/** 文档数量上限，超过则截断并提示用户缩小范围 */
+const MAX_DOCS = 200;
+
+/** 收集笔记本下所有文档 ID；truncated 表示命中了数量上限 */
+async function collectDocIds(notebookId: string): Promise<{ ids: string[]; truncated: boolean }> {
     const rows = await sql(
-        `SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' ORDER BY hpath ASC LIMIT 200`
-    );
-    if (rows && rows.length > 0) return rows.map((r: any) => r.id as string);
+        `SELECT id FROM blocks WHERE box = ${quoteSqlLiteral(notebookId)} AND type = ${quoteSqlLiteral("d")} ORDER BY hpath ASC LIMIT ${MAX_DOCS + 1}`
+    ).catch(() => null);
+
+    if (rows && rows.length > 0) {
+        return { ids: rows.slice(0, MAX_DOCS).map((r: any) => r.id as string), truncated: rows.length > MAX_DOCS };
+    }
+
     const tree = await listDocTree(notebookId as NotebookId, "/").catch(() => [] as IDocTreeNode[]);
     const ids: string[] = [];
-    function walk(nodes: IDocTreeNode[]) {
+    const walk = (nodes: IDocTreeNode[]) => {
         for (const n of nodes) {
+            if (ids.length >= MAX_DOCS) return;
             if (n.id) ids.push(n.id);
             if (n.children) walk(n.children);
         }
-    }
+    };
     walk(tree);
-    return ids;
-}
-
-/** 批量导出文档内容，用 --- 分隔 */
-async function collectContent(docIds: string[]): Promise<string> {
-    let content = "";
-    for (const id of docIds) {
-        const exp = await exportMdContent(id).catch(() => null);
-        if (exp?.content) content += exp.content + "\n\n---\n\n";
-    }
-    return content;
+    return { ids, truncated: false };
 }
 
 async function safeTitle(rootId?: string): Promise<string> {

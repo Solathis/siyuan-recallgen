@@ -227,7 +227,11 @@ export default class RecallGenPlugin extends Plugin {
         results: GradingResult[],
         wrongOnly?: boolean
     ): Promise<string> {
-        const questions = wrongOnly ? session.questions.filter((_, i) => results[i].score < 60) : session.questions;
+        // 按 questionId 对齐而不是按下标，避免题序不一致时筛错题目
+        const scoreById = new Map(results.map((r) => [r.questionId, r.score]));
+        const questions = wrongOnly
+            ? session.questions.filter((q) => (scoreById.get(q.id) ?? 100) < 60)
+            : session.questions;
         if (questions.length === 0) {
             showMessage(t("quiz.noWrongToSave"));
             return "";

@@ -1,5 +1,6 @@
-import { sql, exportMdContent, lsNotebooks } from "@/api";
+import { sql, lsNotebooks, quoteSqlLiteral } from "@/api";
 import type { DateGenConfig } from "@/lib/quiz/service";
+import { exportDocsMarkdown } from "./content";
 
 /** 日期范围类型 */
 export type DateRange = "today" | "beforeToday";
@@ -41,7 +42,7 @@ export function dateClause(cfg: DateGenConfig, range: DateRange, now: Date = new
 async function collectDocIdsByDate(notebookId: string, cfg: DateGenConfig, range: DateRange): Promise<string[]> {
     const clause = dateClause(cfg, range);
     const rows = await sql(
-        `SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' AND ${clause} ORDER BY hpath ASC LIMIT 200`
+        `SELECT id FROM blocks WHERE box = ${quoteSqlLiteral(notebookId)} AND type = ${quoteSqlLiteral("d")} AND ${clause} ORDER BY hpath ASC LIMIT 200`
     );
     return rows?.map((r: { id: string }) => r.id) ?? [];
 }
@@ -77,17 +78,12 @@ export async function loadDateRangeNotes(
         throw new Error(`${label}没有笔记，请调整日期范围或基点时间后重试`);
     }
 
-    let content = "";
-    for (const id of docIds) {
-        const exp = await exportMdContent(id).catch(() => null);
-        if (exp?.content) content += exp.content + "\n\n---\n\n";
-    }
-
-    if (!content.trim()) {
+    const result = await exportDocsMarkdown(docIds);
+    if (!result.content.trim()) {
         throw new Error(`${label}笔记内容为空，请检查文档是否有实际内容`);
     }
 
     const title = notebookId ? `笔记本·${label}笔记（${docIds.length} 篇）` : `${label}笔记（${docIds.length} 篇）`;
 
-    return { content, title };
+    return { content: result.content, title };
 }

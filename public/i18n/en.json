@@ -248,6 +248,9 @@
     "selector.loadingNotebook": "Loading notebook \"{0}\" content…",
     "selector.noDocs": "No documents in notebook",
     "selector.emptyContent": "Notebook documents are empty",
+    "selector.docsTruncated": "Too many documents; only the first {0} were processed. Please narrow the scope.",
+    "selector.contentLimited": "Content is large; {0} document(s) included, the rest were skipped for exceeding the length limit.",
+    "selector.actionFailed": "Action failed: {0}",
     "selector.noNotebook": "No open notebooks",
     "selector.notebook": "Notebook",
     "selector.confirmShortTitle": "⚠️",
@@ -263,6 +266,7 @@
     "tab.quizDefault": "Quiz",
     "tab.history": "Quiz History",
 
+    "doc.answerSummary": "Show answer and explanation",
     "doc.answerLabel": "**Answer:** ",
     "doc.explanationLabel": "**Explanation:** ",
     "doc.seeCode": "See reference code",
