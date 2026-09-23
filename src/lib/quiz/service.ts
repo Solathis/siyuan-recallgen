@@ -13,6 +13,11 @@ import type { GenProgressCallback } from "../quiz/generator";
 /** QuizPanel 与插件后端交互的接口，由 index.ts 实现 */
 export interface QuizService {
     getConfig(): RecallGenConfig;
+    /**
+     * 订阅配置变化，返回取消订阅函数。
+     * 面板打开期间修改设置需要立即生效，而 getConfig() 单独调用无法被响应式追踪。
+     */
+    subscribeConfig(listener: (config: RecallGenConfig) => void): () => void;
     generate(content: string, onProgress?: GenProgressCallback): Promise<Question[]>;
     /** 加载日期范围内的笔记内容 */
     loadDateRangeContent(

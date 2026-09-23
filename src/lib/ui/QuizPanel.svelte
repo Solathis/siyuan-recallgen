@@ -1,85 +1,123 @@
 <script lang="ts">
-    import { onMount, onDestroy } from "svelte";
+    import { onDestroy, onMount } from "svelte";
+    import { showMessage } from "siyuan";
+    import * as AlertDialog from "@/lib/components/ui/alert-dialog";
+    import { Badge } from "@/lib/components/ui/badge";
+    import { Button } from "@/lib/components/ui/button";
+    import * as Card from "@/lib/components/ui/card";
+    import { describeError, type ErrorDescription } from "../ai/errors";
+    import { t } from "../i18n";
+    import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
+    import type { GradingResult, PanelState, QuizSession, UserAnswer } from "@/types/quiz";
     import ProgressBar from "./ProgressBar.svelte";
     import QuestionView from "./QuestionView.svelte";
     import ResultPanel from "./ResultPanel.svelte";
-    import { showMessage, Dialog } from "siyuan";
-    import { button, badge, card, cn } from "./components";
-    import { t } from "../i18n";
-    import type { QuizService, QuizTabData, DateGenConfig } from "../quiz/service";
-    import type { GradingResult, PanelState, Question, QuizSession, UserAnswer } from "@/types/quiz";
 
-    export let service: QuizService;
-    export let tabData: QuizTabData;
-    export let closeTab: () => void = () => {};
+    let {
+        service,
+        tabData,
+        closeTab = () => {},
+    }: { service: QuizService; tabData: QuizTabData; closeTab?: () => void } = $props();
 
-    let panelState: PanelState = "loading_generating";
-    let dateCfg: DateGenConfig = { days: 7, baseHour: 0, baseMinute: 0 };
-    let session: QuizSession | null = null;
-    let error: string | null = null;
-    let results: GradingResult[] | null = null;
-    let analysis: string | null = null;
-    let progressValue: number | null = null;
-    let progressLabel = "";
-    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    /* ── 状态机 ──────────────────────────────────────────────────── */
+
+    let panelState = $state<PanelState>("loading_generating");
+    let session = $state<QuizSession | null>(null);
+    let results = $state<GradingResult[] | null>(null);
+    let analysis = $state<string | null>(null);
+    let error = $state<ErrorDescription | null>(null);
+    let progressValue = $state<number | null>(null);
+    let progressLabel = $state("");
+    let duration = $state(0);
     let cancelled = false;
 
-    const config = service.getConfig();
-    $: countdownEnabled = config.general.countdownEnabled && config.general.countdownMinutes > 0;
-    $: countdownSec = config.general.countdownMinutes * 60;
-    let countdownLeft = 0;
-
-    $: questions = session?.questions ?? [];
-    $: hasError = !!error && questions.length === 0;
-
-    /** 解析错误类型与建议 */
-    function parseError(msg: string): { title: string; detail: string; hint: string } {
-        const httpMatch = msg.match(/HTTP (\d+)/);
-        if (httpMatch) {
-            const code = parseInt(httpMatch[1]);
-            if (code === 400) return { title: t("err.400.title"), detail: msg, hint: t("err.400.hint") };
-            if (code === 401 || code === 403)
-                return { title: t("err.401.title", String(code)), detail: msg, hint: t("err.401.hint") };
-            if (code === 429) return { title: t("err.429.title"), detail: msg, hint: t("err.429.hint") };
-            if (code >= 500) return { title: t("err.5xx.title", String(code)), detail: msg, hint: t("err.5xx.hint") };
-            return { title: t("err.network.title", String(code)), detail: msg, hint: t("err.network.hint") };
-        }
-        if (msg.includes("未配置") || msg.includes("未设置") || msg.includes("not configured"))
-            return { title: t("err.config.title"), detail: msg, hint: t("err.config.hint") };
-        if (msg.includes("timeout") || msg.includes("超时"))
-            return { title: t("err.timeout.title"), detail: msg, hint: t("err.timeout.hint") };
-        if (msg.includes("JSON") || msg.includes("解析") || msg.includes("parse"))
-            return { title: t("err.json.title"), detail: msg, hint: t("err.json.hint") };
-        return { title: t("err.generic.title"), detail: msg, hint: t("err.generic.hint") };
+    /**
+     * 配置必须响应式：原实现只在组件初始化时读一次，
+     * 导致答题过程中改面板宽度 / 倒计时时长完全不生效。
+     */
+    /**
+     * 配置：先取一次当前值，再订阅后续变化。
+     * 读取放在函数里，避免在响应式上下文之外直接引用 service 触发 Svelte 警告。
+     */
+    function currentConfig() {
+        return service.getConfig();
     }
-    $: errorInfo = error ? parseError(error) : null;
+    let config = $state(currentConfig());
+    $effect(() => service.subscribeConfig((next) => (config = next)));
 
-    onMount(async () => {
+    const questions = $derived(session?.questions ?? []);
+    const answeredCount = $derived(questions.filter((q) => !!session?.answers[q.id]).length);
+
+    /* ── 日期范围配置 ────────────────────────────────────────────── */
+
+    let dateCfg = $state<DateGenConfig>({ days: 7, baseHour: 0, baseMinute: 0 });
+    /** 时间输入需要可写状态；dateCfg 才是真正的配置来源 */
+    function fmtBaseTime(cfg: DateGenConfig): string {
+        return `${String(cfg.baseHour).padStart(2, "0")}:${String(cfg.baseMinute).padStart(2, "0")}`;
+    }
+    let dateBaseTime = $state(fmtBaseTime({ days: 7, baseHour: 0, baseMinute: 0 }));
+
+    function onBaseTimeChange(e: Event) {
+        const value = (e.target as HTMLInputElement).value;
+        dateBaseTime = value;
+        const [h, m] = value.split(":").map((x) => parseInt(x, 10));
+        dateCfg = { ...dateCfg, baseHour: h ?? 0, baseMinute: m ?? 0 };
+    }
+
+    /* ── 倒计时 ──────────────────────────────────────────────────── */
+
+    let countdownLeft = $state(0);
+    let countdownTimer: ReturnType<typeof setInterval> | null = null;
+    const countdownEnabled = $derived(config.general.countdownEnabled && config.general.countdownMinutes > 0);
+    const countdownSec = $derived(config.general.countdownMinutes * 60);
+
+    function startCountdown() {
+        if (countdownTimer) clearInterval(countdownTimer);
+        countdownLeft = countdownSec;
+        countdownTimer = setInterval(() => {
+            countdownLeft -= 1;
+            if (countdownLeft <= 0) {
+                stopCountdown();
+                void submit();
+            }
+        }, 1000);
+    }
+
+    function stopCountdown() {
+        if (countdownTimer) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
+    }
+
+    const countdownText = $derived(`${Math.floor(countdownLeft / 60)}:${String(countdownLeft % 60).padStart(2, "0")}`);
+
+    /* ── 生命周期 ────────────────────────────────────────────────── */
+
+    onDestroy(() => {
+        if (saveTimer) clearTimeout(saveTimer);
+        stopCountdown();
+    });
+
+    onMount(() => {
+        void init();
+    });
+
+    async function init() {
         if (tabData.mode === "resume" && tabData.quizId) {
             await resume();
         } else if (tabData.mode === "generate") {
-            // SiYuan 重启后可能恢复 tab，先检查是否有已保存的进度避免重新生成
+            // 思源重启后可能恢复 tab，先检查是否有已保存的进度，避免重新生成
             const existing = await service.findProgressBySourceDocId(tabData.sourceDocId);
             if (existing && existing.questions.length > 0) {
-                session = existing;
-                panelState = "answering";
-                if (countdownEnabled) {
-                    countdownLeft = countdownSec;
-                    startCountdown();
-                }
+                adoptSession(existing);
             } else {
                 await startGenerate();
             }
         } else if (tabData.mode === "dateGenerate") {
-            // 先检查是否有已保存的进度
             const existing = await service.findProgressBySourceDocId(tabData.sourceDocId);
             if (existing && existing.questions.length > 0) {
-                session = existing;
-                panelState = "answering";
-                if (countdownEnabled) {
-                    countdownLeft = countdownSec;
-                    startCountdown();
-                }
+                adoptSession(existing);
             } else {
                 panelState = "configuring";
             }
@@ -95,60 +133,56 @@
             };
             results = detail.detail;
             analysis = detail.analysis ?? "";
-            // 回看时也要显示当时的答题耗时
-            durationVar = entry.duration ?? 0;
+            duration = entry.duration ?? 0;
             panelState = "result";
         } else {
-            error = t("quiz.invalidTab");
+            error = { title: t("err.generic.title"), hint: t("err.generic.hint"), detail: t("quiz.invalidTab") };
             panelState = "answering";
         }
-    });
+    }
 
-    onDestroy(() => {
-        if (saveTimer) clearTimeout(saveTimer);
-        if (countdownTimer) clearInterval(countdownTimer);
-    });
+    function adoptSession(existing: QuizSession) {
+        session = existing;
+        panelState = "answering";
+        if (countdownEnabled) startCountdown();
+    }
 
-    /** tab 销毁前调用：中止生成 + 强制保存进度 */
+    /** tab 销毁前由插件调用：中止生成并强制保存进度 */
     export function beforeDestroy() {
         cancelled = true;
         if (saveTimer) {
             clearTimeout(saveTimer);
             saveTimer = null;
         }
-        if (countdownTimer) {
-            clearInterval(countdownTimer);
-            countdownTimer = null;
-        }
-        if (session && panelState === "answering") {
-            void service.saveProgress(session);
-        }
+        stopCountdown();
+        if (session && panelState === "answering") void service.saveProgress(session);
     }
+
+    /* ── 生成 ────────────────────────────────────────────────────── */
 
     function checkAiConfig(): boolean {
         const ai = config.ai;
         if (!ai.models || ai.models.length === 0) {
-            error = t("quiz.aiNoModel");
+            error = { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoModel") };
             return false;
         }
         const genModel = ai.models.find((m) => m.id === ai.roles.generator);
         if (!genModel) {
-            error = t("quiz.aiNoGenModel");
+            error = { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoGenModel") };
             return false;
         }
         const ep = ai.endpoints.find((e) => e.id === genModel.endpointId);
         if (!ep) {
-            error = t("quiz.aiNoEndpoint");
+            error = { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoEndpoint") };
             return false;
         }
         if (ep.provider !== "ollama" && !ep.apiKey) {
-            error = t("quiz.aiNoApiKey");
+            error = { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoApiKey") };
             return false;
         }
         return true;
     }
 
-    /** 从日期范围配置加载笔记后生成 */
     async function startDateGenerate() {
         error = null;
         cancelled = false;
@@ -171,7 +205,7 @@
             await startGenerate();
         } catch (e) {
             if (cancelled) return;
-            error = (e as Error).message;
+            error = describeError(e);
             panelState = "configuring";
         }
     }
@@ -187,14 +221,13 @@
         progressValue = null;
         progressLabel = t("quiz.generating");
         try {
-            const qs = await service.generate(tabData.content ?? "", (phase, round, detail) => {
+            const generated = await service.generate(tabData.content ?? "", (phase, round, detail) => {
                 progressLabel = detail;
-                if (phase === "generating") progressValue = null;
-                else progressValue = round * 30;
+                progressValue = phase === "generating" ? null : round * 30;
             });
             if (cancelled) return;
-            if (qs.length === 0) {
-                error = t("quiz.noQuestions");
+            if (generated.length === 0) {
+                error = { title: t("err.generic.title"), hint: t("err.generic.hint"), detail: t("quiz.noQuestions") };
                 panelState = "answering";
                 return;
             }
@@ -203,7 +236,7 @@
                 id,
                 sourceDocId: tabData.sourceDocId,
                 sourceTitle: tabData.sourceTitle,
-                questions: qs,
+                questions: generated,
                 createdAt: Date.now(),
                 answers: {},
             };
@@ -211,13 +244,10 @@
             if (cancelled) return;
             if (prev) session.answers = prev.answers;
             panelState = "answering";
-            if (countdownEnabled) {
-                countdownLeft = countdownSec;
-                startCountdown();
-            }
+            if (countdownEnabled) startCountdown();
         } catch (e) {
             if (cancelled) return;
-            error = (e as Error).message;
+            error = describeError(e);
             panelState = "answering";
         }
     }
@@ -225,36 +255,35 @@
     async function resume() {
         const prev = await service.loadProgress(tabData.quizId ?? "");
         if (!prev) {
-            error = t("quiz.progressNotFound");
+            error = { title: t("err.generic.title"), hint: t("err.generic.hint"), detail: t("quiz.progressNotFound") };
             panelState = "answering";
             return;
         }
-        session = prev;
-        panelState = "answering";
-        if (countdownEnabled) {
-            countdownLeft = countdownSec;
-            startCountdown();
-        }
+        adoptSession(prev);
     }
 
-    function onAnswer(qid: string, a: UserAnswer) {
+    /* ── 作答与进度保存 ──────────────────────────────────────────── */
+
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function onAnswer(questionId: string, value: UserAnswer) {
         if (!session) return;
-        session.answers[qid] = a;
+        session.answers[questionId] = value;
         scheduleSave();
     }
+
     function scheduleSave() {
         if (saveTimer) clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
             if (session) void service.saveProgress(session);
         }, 800);
     }
-    function isAnswered(q: Question): boolean {
-        return !!session?.answers[q.id];
-    }
-    $: answeredCount = questions.filter(isAnswered).length;
+
+    /* ── 交卷 ────────────────────────────────────────────────────── */
 
     async function submit() {
         if (!session) return;
+        stopCountdown();
         panelState = "loading_grading";
         progressValue = 0;
         progressLabel = t("quiz.grading");
@@ -263,19 +292,17 @@
                 progressValue = total ? (done / total) * 100 : null;
                 progressLabel = t("quiz.gradingProgress", String(done), String(total));
             });
-            // 判分完成后立即保存成绩（含题目），不受后续分析影响
-            const totalScore = results.reduce((s, r) => s + r.score, 0);
-            const maxScore = results.reduce((s, r) => s + r.maxScore, 0);
-            const duration = Math.round((Date.now() - session.createdAt) / 1000);
-            durationVar = duration;
+
+            duration = Math.round((Date.now() - session.createdAt) / 1000);
             const scoreId = genId();
+            // 成绩先落盘，不受后续分析成败影响
             await service.saveScore({
                 id: scoreId,
                 quizId: session.id,
                 title: session.sourceTitle,
                 timestamp: Date.now(),
-                totalScore,
-                maxScore,
+                totalScore: results.reduce((s, r) => s + r.score, 0),
+                maxScore: results.reduce((s, r) => s + r.maxScore, 0),
                 questionCount: session.questions.length,
                 detail: results,
                 questions: session.questions,
@@ -285,7 +312,7 @@
                 duration,
             });
             await service.clearProgress(session.id);
-            // 薄弱点分析失败不影响成绩记录
+
             progressLabel = t("quiz.analyzing");
             progressValue = null;
             try {
@@ -296,229 +323,197 @@
             }
             panelState = "result";
         } catch (e) {
-            error = (e as Error).message;
+            error = describeError(e);
             panelState = "result";
         }
     }
 
-    let durationVar = 0;
-    let countdownTimer: ReturnType<typeof setInterval> | null = null;
-    function startCountdown() {
-        countdownTimer = setInterval(() => {
-            countdownLeft--;
-            if (countdownLeft <= 0) {
-                clearInterval(countdownTimer!);
-                void submit();
-            }
-        }, 1000);
-    }
     function genId(): string {
         if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
         return `rg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
+
+    async function regenerate() {
+        if (session) await service.clearProgress(session.id);
+        session = null;
+        error = null;
+        await startGenerate();
+    }
+
     async function saveToDoc(wrongOnly: boolean) {
         if (!session || !results) return;
         try {
             await service.saveResultToDoc(session, analysis ?? "", results, wrongOnly);
             showMessage(wrongOnly ? t("quiz.savedWrongDoc") : t("quiz.savedDoc"));
         } catch (e) {
-            error = (e as Error).message;
+            error = describeError(e);
         }
-    }
-    async function retryGenerate() {
-        error = null;
-        await startGenerate();
-    }
-    async function confirmRegenerate() {
-        const ok = await confirmAction(t("quiz.confirmRegenTitle"), t("quiz.confirmRegenMsg"));
-        if (ok) await regenerate();
-    }
-    async function confirmSubmit() {
-        const ok = await confirmAction(t("quiz.confirmSubmitTitle"), t("quiz.confirmSubmitMsg"));
-        if (ok) await submit();
-    }
-    async function regenerate() {
-        if (session) {
-            await service.clearProgress(session.id);
-        }
-        session = null;
-        error = null;
-        await startGenerate();
-    }
-    async function retryGrade() {
-        error = null;
-        await submit();
-    }
-    /** 二次确认弹窗 */
-    function confirmAction(title: string, msg: string): Promise<boolean> {
-        return new Promise((resolve) => {
-            const dialog = new Dialog({
-                title,
-                content: `<div class="b3-dialog__content"><div class="ft__breakword">${msg}</div></div>
-<div class="b3-dialog__action"><button class="b3-button b3-button--cancel">${window.siyuan.languages.cancel}</button><div class="fn__space"></div><button class="b3-button b3-button--text">${window.siyuan.languages.confirm}</button></div>`,
-            });
-            const btns = dialog.element.querySelectorAll(".b3-button");
-            btns[0].addEventListener("click", () => {
-                resolve(false);
-                dialog.destroy();
-            });
-            btns[1].addEventListener("click", () => {
-                resolve(true);
-                dialog.destroy();
-            });
-        });
-    }
-    function typeLabel(ty: string): string {
-        const m: Record<string, string> = {
-            single_choice: t("type.single_choice_short"),
-            multiple_choice: t("type.multiple_choice_short"),
-            fill_blank: t("type.fill_blank_short"),
-            true_false: t("type.true_false_short"),
-            subjective: t("type.subjective_short"),
-            coding: t("type.coding_short"),
-        };
-        return m[ty] ?? ty;
-    }
-    function diffLabel(d: string): string {
-        const m: Record<string, string> = { easy: t("diff.easy"), medium: t("diff.medium"), hard: t("diff.hard") };
-        return m[d] ?? d;
-    }
-    function diffBadge(d: string): "secondary" | "warning" | "destructive" {
-        if (d === "easy") return "secondary";
-        if (d === "medium") return "warning";
-        return "destructive";
     }
 
-    /** dateBaseTime 计算与同步 */
-    $: dateBaseTime = `${String(dateCfg.baseHour).padStart(2, "0")}:${String(dateCfg.baseMinute).padStart(2, "0")}`;
-    function onBaseTimeChange(e: Event) {
-        const v = (e.target as HTMLInputElement).value;
-        const [h, m] = v.split(":").map((x) => parseInt(x, 10));
-        dateCfg = { ...dateCfg, baseHour: h ?? 0, baseMinute: m ?? 0 };
+    /* ── 确认对话框（替换原先自建且会泄漏的弹窗） ────────────────── */
+
+    type PendingAction = { title: string; description: string; confirmLabel: string; run: () => void };
+    let pending = $state<PendingAction | null>(null);
+
+    function askRegenerate() {
+        pending = {
+            title: t("quiz.confirmRegenTitle"),
+            description: t("quiz.confirmRegenMsg"),
+            confirmLabel: t("quiz.regenerate"),
+            run: () => void regenerate(),
+        };
     }
+
+    function askSubmit() {
+        const unanswered = questions.length - answeredCount;
+        pending = {
+            title: t("quiz.confirmSubmitTitle"),
+            description:
+                unanswered > 0 ? t("quiz.confirmSubmitUnanswered", String(unanswered)) : t("quiz.confirmSubmitMsg"),
+            confirmLabel: t("quiz.submit"),
+            run: () => void submit(),
+        };
+    }
+
+    /* ── 展示辅助 ────────────────────────────────────────────────── */
+
+    const answeredText = $derived(`${answeredCount} / ${questions.length}`);
+    const progressPct = $derived(questions.length > 0 ? (answeredCount / questions.length) * 100 : 0);
 </script>
 
-<div class="rg-scope rg-panel" style="--rg-panel-width: {config.general.panelWidth}px">
-    <div class="rg-panel__inner">
+<div class="flex h-full flex-col" style="--rg-panel-width: {config.general.panelWidth}px">
+    <div class="mx-auto flex h-full w-full flex-col px-4" style="max-width: var(--rg-panel-width, 1100px)">
         {#if panelState === "configuring"}
-            <div class="rg-config">
-                <div class={cn(card.root, "rg-config__card")}>
-                    <div class={card.content}>
-                        <h3 class="rg-config__title">{t("quiz.dateConfigTitle")}</h3>
-                        <p class="rg-config__desc">
+            <div class="flex justify-center px-2 py-12">
+                <Card.Root class="w-full max-w-lg">
+                    <Card.Header>
+                        <Card.Title>{t("quiz.dateConfigTitle")}</Card.Title>
+                        <Card.Description>
                             {tabData.dateRange === "today"
                                 ? t("quiz.dateConfigTodayDesc")
                                 : t("quiz.dateConfigBeforeDesc")}
-                        </p>
+                        </Card.Description>
+                    </Card.Header>
+                    <Card.Content class="flex flex-col gap-4">
                         {#if tabData.dateRange === "beforeToday"}
-                            <div class="rg-config__row">
-                                <label for="rg-date-days">{t("quiz.dateDaysLabel")}</label>
-                                <span class="rg-config__val"
-                                    >{dateCfg.days === 0
-                                        ? t("quiz.dateDaysAll")
-                                        : t("quiz.dateDaysVal", String(dateCfg.days))}</span
-                                >
+                            <div class="flex flex-col gap-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium" for="rg-date-days"
+                                        >{t("quiz.dateDaysLabel")}</label
+                                    >
+                                    <span class="text-primary text-sm font-semibold">
+                                        {dateCfg.days === 0
+                                            ? t("quiz.dateDaysAll")
+                                            : t("quiz.dateDaysVal", String(dateCfg.days))}
+                                    </span>
+                                </div>
+                                <input
+                                    id="rg-date-days"
+                                    class="accent-primary w-full"
+                                    type="range"
+                                    min="0"
+                                    max="90"
+                                    step="1"
+                                    bind:value={dateCfg.days}
+                                />
+                                <p class="text-muted-foreground text-xs">{t("quiz.dateDaysHint")}</p>
                             </div>
-                            <input
-                                id="rg-date-days"
-                                class="rg-slider"
-                                type="range"
-                                min="0"
-                                max="90"
-                                step="1"
-                                bind:value={dateCfg.days}
-                            />
-                            <p class="rg-config__hint">{t("quiz.dateDaysHint")}</p>
                         {/if}
-                        <div class="rg-config__row">
-                            <label for="rg-date-base">{t("quiz.dateBaseLabel")}</label>
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="text-sm font-medium" for="rg-date-base">{t("quiz.dateBaseLabel")}</label>
                             <input
                                 id="rg-date-base"
-                                class="rg-time-input"
+                                class="border-input bg-background rounded-md border px-2 py-1 text-sm"
                                 type="time"
                                 bind:value={dateBaseTime}
-                                on:change={onBaseTimeChange}
+                                onchange={onBaseTimeChange}
                             />
                         </div>
-                        <p class="rg-config__hint">{t("quiz.dateBaseHint")}</p>
-                        <div class="rg-config__actions">
-                            <button class={button({ variant: "default" })} on:click={startDateGenerate}
-                                >{t("quiz.dateGenerate")}</button
-                            >
-                            <button class={button({ variant: "ghost", size: "sm" })} on:click={closeTab}
-                                >{t("common.cancel")}</button
-                            >
-                        </div>
+                        <p class="text-muted-foreground text-xs">{t("quiz.dateBaseHint")}</p>
                         {#if error}
-                            <div class="rg-config__error">⚠ {error}</div>
+                            <p class="text-destructive text-sm">{error.detail}</p>
                         {/if}
-                    </div>
-                </div>
+                    </Card.Content>
+                    <Card.Footer class="flex gap-2">
+                        <Button onclick={startDateGenerate}>{t("quiz.dateGenerate")}</Button>
+                        <Button variant="ghost" onclick={closeTab}>{t("common.cancel")}</Button>
+                    </Card.Footer>
+                </Card.Root>
             </div>
         {:else if panelState === "loading_generating" || panelState === "loading_grading"}
-            <div class="rg-panel__loading">
+            <div class="flex flex-col items-center justify-center gap-4 px-6 py-20">
                 <ProgressBar value={progressValue} label={progressLabel} />
                 {#if panelState === "loading_generating"}
-                    <button
-                        class={button({ variant: "outline", size: "sm" })}
-                        on:click={() => {
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onclick={() => {
                             cancelled = true;
                             closeTab();
-                        }}>{t("quiz.cancelGenerate")}</button
+                        }}
                     >
+                        {t("quiz.cancelGenerate")}
+                    </Button>
                 {/if}
             </div>
         {:else if panelState === "answering"}
-            {#if hasError && errorInfo}
-                <div class="rg-error">
-                    <div class="rg-error__icon">⚠</div>
-                    <h3 class="rg-error__title">{errorInfo.title}</h3>
-                    <div class="rg-error__detail">{errorInfo.detail}</div>
-                    <div class="rg-error__hint">💡 {errorInfo.hint}</div>
-                    <div class="rg-error__actions">
-                        <button class={button({ variant: "default" })} on:click={retryGenerate}
-                            >{t("common.retry")}</button
-                        >
-                    </div>
+            {#if error && questions.length === 0}
+                <div class="mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-20 text-center">
+                    <h3 class="text-destructive text-lg font-semibold">{error.title}</h3>
+                    <pre
+                        class="bg-muted text-muted-foreground max-h-32 w-full overflow-auto rounded-md p-3 text-left text-xs">{error.detail}</pre>
+                    <p class="text-muted-foreground text-sm">{error.hint}</p>
+                    <Button onclick={() => void startGenerate()}>{t("common.retry")}</Button>
                 </div>
-            {:else if questions.length > 0}
-                <header class="rg-panel__topbar">
-                    <div class="rg-panel__topbar-left">
-                        <span class={badge("secondary")}
-                            >{t("quiz.answered", String(answeredCount), String(questions.length))}</span
+            {:else if questions.length === 0}
+                <!-- 补齐空态：恢复到一个空会话时原实现会整屏空白 -->
+                <div class="text-muted-foreground py-20 text-center text-sm">{t("quiz.emptySession")}</div>
+            {:else}
+                <header class="border-border flex shrink-0 flex-wrap items-center justify-between gap-2 border-b py-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary"
+                            >{t("quiz.answered", String(answeredCount), String(questions.length))}</Badge
                         >
-                    </div>
-                    <div class="rg-panel__topbar-right">
                         {#if countdownEnabled}
-                            <span class={badge("warning")}
-                                >⏱ {Math.floor(countdownLeft / 60)}:{(countdownLeft % 60)
-                                    .toString()
-                                    .padStart(2, "0")}</span
-                            >
+                            <Badge variant={countdownLeft <= 60 ? "destructive" : "warning"}>
+                                {countdownText}
+                            </Badge>
                         {/if}
-                        <button class={button({ variant: "outline", size: "sm" })} on:click={confirmRegenerate}
-                            >{t("quiz.regenerate")}</button
-                        >
-                        <button class={button({ variant: "destructive" })} on:click={confirmSubmit}
-                            >{t("quiz.submit")}</button
-                        >
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onclick={askRegenerate}>{t("quiz.regenerate")}</Button>
+                        <Button variant="destructive" size="sm" onclick={askSubmit}>{t("quiz.submit")}</Button>
                     </div>
                 </header>
-                <div class="rg-panel__scroll">
-                    <div class="rg-panel__list">
-                        {#each questions as q, i}
-                            <div class="rg-panel__q-item">
-                                <div class="rg-panel__q-header">
-                                    <span class={badge("secondary")}>{t("quiz.questionNum", String(i + 1))}</span>
-                                    <span class={badge(diffBadge(q.difficulty))}>{diffLabel(q.difficulty)}</span>
-                                    <span class={badge("outline")}>{typeLabel(q.type)}</span>
-                                    {#if isAnswered(q)}<span class={badge("success")}>{t("quiz.answeredTag")}</span
-                                        >{/if}
+
+                <div class="px-1 py-2">
+                    <ProgressBar value={progressPct} label={t("quiz.progress", answeredText)} />
+                </div>
+
+                <div class="min-h-0 flex-1 overflow-y-auto">
+                    <div class="flex flex-col gap-4 py-2">
+                        {#each questions as q, i (q.id)}
+                            <div class="flex flex-col gap-2">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <Badge variant="secondary">{t("quiz.questionNum", String(i + 1))}</Badge>
+                                    <Badge
+                                        variant={q.difficulty === "hard"
+                                            ? "destructive"
+                                            : q.difficulty === "medium"
+                                              ? "warning"
+                                              : "outline"}
+                                    >
+                                        {t(`diff.${q.difficulty}`)}
+                                    </Badge>
+                                    <Badge variant="outline">{t(`type.${q.type}_short`)}</Badge>
+                                    {#if session?.answers[q.id]}
+                                        <Badge variant="success">{t("quiz.answeredTag")}</Badge>
+                                    {/if}
                                 </div>
                                 <QuestionView
                                     question={q}
                                     answer={session?.answers[q.id]}
-                                    on:change={(e) => onAnswer(q.id, e.detail)}
+                                    onchange={(a) => onAnswer(q.id, a)}
                                 />
                             </div>
                         {/each}
@@ -526,17 +521,13 @@
                 </div>
             {/if}
         {:else if panelState === "result"}
-            {#if hasError && errorInfo}
-                <div class="rg-error">
-                    <div class="rg-error__icon">⚠</div>
-                    <h3 class="rg-error__title">{errorInfo.title}</h3>
-                    <div class="rg-error__detail">{errorInfo.detail}</div>
-                    <div class="rg-error__hint">💡 {errorInfo.hint}</div>
-                    <div class="rg-error__actions">
-                        <button class={button({ variant: "default" })} on:click={retryGrade}
-                            >{t("err.retryGrade")}</button
-                        >
-                    </div>
+            {#if error && !results}
+                <div class="mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-20 text-center">
+                    <h3 class="text-destructive text-lg font-semibold">{error.title}</h3>
+                    <pre
+                        class="bg-muted text-muted-foreground max-h-32 w-full overflow-auto rounded-md p-3 text-left text-xs">{error.detail}</pre>
+                    <p class="text-muted-foreground text-sm">{error.hint}</p>
+                    <Button onclick={() => void submit()}>{t("err.retryGrade")}</Button>
                 </div>
             {:else if results && session}
                 <ResultPanel
@@ -544,197 +535,34 @@
                     {results}
                     questions={session.questions}
                     {analysis}
-                    duration={durationVar}
-                    on:save={() => saveToDoc(false)}
-                    on:saveWrong={() => saveToDoc(true)}
-                    on:discard={() => closeTab()}
+                    {duration}
+                    onsave={() => void saveToDoc(false)}
+                    onsavewrong={() => void saveToDoc(true)}
+                    ondiscard={closeTab}
                 />
             {/if}
         {/if}
     </div>
 </div>
 
-<style>
-    .rg-panel {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
-    .rg-panel__inner {
-        max-width: var(--rg-panel-width, 1100px);
-        margin: 0 auto;
-        width: 100%;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-        padding: 0 16px;
-        box-sizing: border-box;
-    }
-    .rg-panel__loading {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 48px 24px;
-        gap: 16px;
-    }
-    .rg-panel__topbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--b3-border-color);
-        flex-shrink: 0;
-    }
-    .rg-panel__topbar-left {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .rg-panel__topbar-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: nowrap;
-    }
-    .rg-panel__scroll {
-        flex: 1;
-        overflow-y: auto;
-        min-height: 0;
-    }
-    .rg-panel__list {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        padding: 12px 0 16px;
-    }
-    .rg-panel__q-item {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .rg-panel__q-header {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
-    .rg-panel__footer {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 12px;
-        padding: 8px 0;
-        border-top: 1px solid var(--b3-border-color);
-        flex-shrink: 0;
-    }
-    .rg-error {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-        gap: 12px;
-        padding: 48px 24px;
-        max-width: 480px;
-        margin: 0 auto;
-    }
-    .rg-error__icon {
-        font-size: 48px;
-        line-height: 1;
-    }
-    .rg-error__title {
-        font-size: 18px;
-        font-weight: 600;
-        margin: 0;
-        color: var(--b3-card-error);
-    }
-    .rg-error__detail {
-        font-size: 13px;
-        color: var(--b3-theme-on-surface-light);
-        word-break: break-all;
-        max-height: 120px;
-        overflow-y: auto;
-        font-family: var(--b3-font-family-code, monospace);
-        background: var(--b3-theme-surface);
-        padding: 8px 12px;
-        border-radius: 6px;
-        width: 100%;
-        box-sizing: border-box;
-    }
-    .rg-error__hint {
-        font-size: 13px;
-        color: var(--b3-theme-on-surface-light);
-    }
-    .rg-error__actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 4px;
-    }
-    .rg-config {
-        display: flex;
-        justify-content: center;
-        padding: 48px 24px;
-    }
-    .rg-config__card {
-        max-width: 520px;
-        width: 100%;
-    }
-    .rg-config__title {
-        font-size: 18px;
-        font-weight: 600;
-        margin: 0 0 8px;
-    }
-    .rg-config__desc {
-        font-size: 13px;
-        color: var(--b3-theme-on-surface-light);
-        line-height: 1.6;
-        margin: 0 0 16px;
-    }
-    .rg-config__row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin: 12px 0 4px;
-    }
-    .rg-config__row label {
-        font-size: 14px;
-        font-weight: 500;
-    }
-    .rg-config__val {
-        font-size: 14px;
-        color: var(--b3-theme-primary);
-        font-weight: 600;
-    }
-    .rg-config__hint {
-        font-size: 12px;
-        color: var(--b3-theme-on-surface-light);
-        margin: 4px 0 12px;
-    }
-    .rg-slider {
-        width: 100%;
-    }
-    .rg-time-input {
-        font-size: 14px;
-        padding: 4px 8px;
-        border: 1px solid var(--b3-border-color);
-        border-radius: var(--b3-border-radius);
-        background: var(--b3-theme-background);
-        color: var(--b3-theme-on-background);
-    }
-    .rg-config__actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 16px;
-    }
-    .rg-config__error {
-        font-size: 13px;
-        color: var(--b3-card-error, #d23f31);
-        margin-top: 12px;
-        padding: 8px 12px;
-        background: color-mix(in srgb, var(--b3-card-error, #d23f31) 8%, transparent);
-        border-radius: var(--b3-border-radius);
-    }
-</style>
+<!-- 统一的二次确认对话框：ESCAPE 关闭安全，也不会像原自建弹窗那样泄漏未决 Promise -->
+<AlertDialog.Root open={pending !== null} onOpenChange={(open) => !open && (pending = null)}>
+    <AlertDialog.Content>
+        <AlertDialog.Header>
+            <AlertDialog.Title>{pending?.title ?? ""}</AlertDialog.Title>
+            <AlertDialog.Description>{pending?.description ?? ""}</AlertDialog.Description>
+        </AlertDialog.Header>
+        <AlertDialog.Footer>
+            <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+            <AlertDialog.Action
+                onclick={() => {
+                    const action = pending?.run;
+                    pending = null;
+                    action?.();
+                }}
+            >
+                {pending?.confirmLabel ?? t("common.confirm")}
+            </AlertDialog.Action>
+        </AlertDialog.Footer>
+    </AlertDialog.Content>
+</AlertDialog.Root>

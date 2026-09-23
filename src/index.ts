@@ -33,6 +33,8 @@ export default class RecallGenPlugin extends Plugin {
     private scoreStore!: ScoreStore;
     private progressStore!: ProgressStore;
     private selector: QuizSelector | null = null;
+    /** 配置变化订阅者（答题面板等），保存配置后统一通知 */
+    private readonly configListeners = new Set<(config: RecallGenConfig) => void>();
     /** mount() 返回的是组件的导出成员（含 beforeDestroy 等），不是组件实例 */
     private quizComp: { beforeDestroy?: () => void } | null = null;
     private settingComp: Record<string, unknown> | null = null;
@@ -194,6 +196,7 @@ export default class RecallGenPlugin extends Plugin {
                     },
                     onSave: async (next: RecallGenConfig) => {
                         self.config = next;
+                        for (const listener of self.configListeners) listener(next);
                         try {
                             await self.configStore.set(self.config);
                         } catch (err) {
@@ -210,6 +213,10 @@ export default class RecallGenPlugin extends Plugin {
     private buildService(): QuizService {
         return {
             getConfig: () => this.config,
+            subscribeConfig: (listener) => {
+                this.configListeners.add(listener);
+                return () => this.configListeners.delete(listener);
+            },
             generate: (content: string, onProgress?: GenProgressCallback) =>
                 generateQuestions(this.config, content, onProgress),
             loadDateRangeContent: (cfg, range, notebookId) => loadDateRangeNotes(cfg, range, notebookId),
