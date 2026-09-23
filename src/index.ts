@@ -1,6 +1,7 @@
 import { mount, unmount, type Component } from "svelte";
 import { Plugin, showMessage, openTab, Setting, Dialog } from "siyuan";
 import type { Custom } from "siyuan";
+import "./app.css";
 import "./index.scss";
 
 import QuizPanel from "@/lib/ui/QuizPanel.svelte";

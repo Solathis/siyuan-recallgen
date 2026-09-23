@@ -4,6 +4,7 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import livereload from "rollup-plugin-livereload";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import tailwindcss from "@tailwindcss/vite";
 import zipPack from "vite-plugin-zip-pack";
 import fg from "fast-glob";
 
@@ -25,6 +26,9 @@ export default defineConfig({
 
     plugins: [
         svelte(),
+
+        // Tailwind v4 走 Vite 插件，不再需要 postcss/tailwind 配置文件
+        tailwindcss(),
 
         katexLocalAssets(),
 
@@ -127,10 +131,11 @@ function katexLocalAssets(): Plugin {
         name: "recallgen-katex-local-assets",
         enforce: "post",
         generateBundle(_options, bundle) {
-            const css = readFileSync(join(katexDist, "katex.min.css"), "utf8").replace(
-                /,url\(fonts\/[^)]+\.(?:woff|ttf)\)\s*format\("(?:woff|truetype)"\)/g,
-                ""
-            );
+            const css = readFileSync(join(katexDist, "katex.min.css"), "utf8")
+                // 去掉 woff/ttf 引用，只保留 woff2
+                .replace(/,url\(fonts\/[^)]+\.(?:woff|ttf)\)\s*format\("(?:woff|truetype)"\)/g, "")
+                // KaTeX 自带一条写入 body 的规则，改为限定在插件容器内，避免影响思源本体
+                .replace(/body\{counter-reset:katexEqnNo mmlEqnNo\}/g, ".rg-scope{counter-reset:katexEqnNo mmlEqnNo}");
 
             let appended = false;
             for (const file of Object.values(bundle)) {

@@ -1,0 +1,248 @@
+/*
+ * RecallGen 全局样式入口。
+ *
+ * 重要：这里刻意不引入 Tailwind 的 preflight。
+ * 思源的界面样式与插件样式共享同一个文档，preflight 的全局重置会破坏思源本体外观；
+ * 因此只引入 theme 与 utilities 两个 layer，并把 utilities 依赖的那部分重置
+ * 收窄到插件自己的容器 `.rg-scope` 内（见文件末尾）。
+ *
+ * shadcn 的语义变量全部映射到思源的 --b3-* 变量，
+ * 而 --b3-* 本身会随明暗主题变化，所以这里不需要再为 dark 单独定义一套值。
+ */
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* 思源用 .theme-dark 标记暗色主题，把它接到 Tailwind 的 dark: 变体上 */
+@custom-variant dark (&:where(.theme-dark, .theme-dark *));
+
+:root {
+    /* 基础表面与文字 */
+    --background: var(--b3-theme-background);
+    --foreground: var(--b3-theme-on-background);
+
+    /* 卡片：与背景同色，用边框区分层次 */
+    --card: var(--b3-theme-background);
+    --card-foreground: var(--b3-theme-on-background);
+
+    /* 浮层（对话框、下拉菜单）：思源用 surface 表示抬升表面 */
+    --popover: var(--b3-theme-surface, var(--b3-theme-background));
+    --popover-foreground: var(--b3-theme-on-surface, var(--b3-theme-on-background));
+
+    /* 主色：思源主题色 */
+    --primary: var(--b3-theme-primary);
+    --primary-foreground: var(--b3-theme-on-primary);
+
+    /* 次级：用浅背景表达「弱化的按钮/标签」 */
+    --secondary: var(--b3-theme-background-light);
+    --secondary-foreground: var(--b3-theme-on-background);
+
+    --muted: var(--b3-theme-background-light);
+    --muted-foreground: var(--b3-theme-on-surface-light);
+
+    --accent: var(--b3-list-hover, var(--b3-theme-background-light));
+    --accent-foreground: var(--b3-theme-on-background);
+
+    --destructive: var(--b3-card-error);
+    --destructive-foreground: #ffffff;
+
+    /* 语义色：shadcn 默认没有，供成绩/难度等场景使用 */
+    --success: var(--b3-card-success);
+    --success-foreground: #ffffff;
+    --warning: var(--b3-card-warning);
+    --warning-foreground: #ffffff;
+
+    --border: var(--b3-border-color);
+    --input: var(--b3-border-color);
+    --ring: var(--b3-theme-primary);
+
+    --radius: var(--b3-border-radius, 4px);
+}
+
+/*
+ * 注册为 Tailwind 主题令牌，这样 bg-background / text-muted-foreground /
+ * border-border / rounded-lg 这类工具类才会被生成。
+ * 用 inline 是因为值本身是 var()，需要在使用处展开。
+ */
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --radius-sm: calc(var(--radius) - 2px);
+    --radius-md: var(--radius);
+    --radius-lg: calc(var(--radius) * 1.5);
+}
+
+/*
+ * 收窄版 preflight：只做 Tailwind 工具类真正依赖的重置，且限定在插件容器内。
+ * - box-sizing：Tailwind 的 p-*/
+size-*
+    都假定
+    border-box
+    *
+    -
+    border-width/style：`border`
+    工具类只设宽度，样式与颜色需要基线
+    *
+    -
+    表单控件继承字体：否则浏览器默认字体/尺寸会让按钮与输入框对不齐
+    */
+    @layer
+    base {
+    .rg-scope,
+    .rg-scope *,
+    .rg-scope *::before,
+    .rg-scope *::after {
+        box-sizing: border-box;
+        border-width: 0;
+        border-style: solid;
+        border-color: var(--color-border);
+    }
+
+    .rg-scope {
+        font-family: var(--b3-font-family, inherit);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--color-foreground);
+        background-color: var(--color-background);
+    }
+
+    .rg-scope button,
+    .rg-scope input,
+    .rg-scope select,
+    .rg-scope textarea {
+        font: inherit;
+        color: inherit;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+    }
+
+    .rg-scope button {
+        cursor: pointer;
+    }
+
+    .rg-scope button:disabled {
+        cursor: not-allowed;
+    }
+
+    /* 思源自身的 markdown 内容样式依赖 h1-h6 / ul / ol 的浏览器默认，
+       因此这里刻意不重置标题与列表，保证题目与解析的排版正常 */
+}
+
+/* ── 插件自定义的少量补充样式 ─────────────────────────────────────── */
+
+/* KaTeX 行间公式在面板里居中且可横向滚动，避免窄屏溢出 */
+.rg-scope .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 0;
+}
+
+/* markdown 渲染内容的默认排版（题目、解析、答疑消息） */
+.rg-markdown > :first-child {
+    margin-top: 0;
+}
+.rg-markdown > :last-child {
+    margin-bottom: 0;
+}
+.rg-markdown p {
+    margin: 0 0 8px;
+}
+.rg-markdown ul,
+.rg-markdown ol {
+    margin: 0 0 8px;
+    padding-left: 22px;
+}
+.rg-markdown ul {
+    list-style: disc;
+}
+.rg-markdown ol {
+    list-style: decimal;
+}
+.rg-markdown li {
+    margin: 2px 0;
+}
+.rg-markdown h1,
+.rg-markdown h2,
+.rg-markdown h3,
+.rg-markdown h4 {
+    margin: 12px 0 6px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+.rg-markdown h1 {
+    font-size: 18px;
+}
+.rg-markdown h2 {
+    font-size: 16px;
+}
+.rg-markdown h3 {
+    font-size: 15px;
+}
+.rg-markdown h4 {
+    font-size: 14px;
+}
+.rg-markdown code {
+    font-family: var(--b3-font-family-code, monospace);
+    font-size: 0.92em;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: var(--b3-theme-background-light);
+}
+.rg-markdown pre {
+    margin: 0 0 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    background: var(--b3-theme-background-light);
+    overflow-x: auto;
+}
+.rg-markdown pre code {
+    padding: 0;
+    background: transparent;
+}
+.rg-markdown blockquote {
+    margin: 0 0 8px;
+    padding: 2px 0 2px 10px;
+    border-left: 3px solid var(--b3-border-color);
+    color: var(--b3-theme-on-surface-light);
+}
+.rg-markdown table {
+    border-collapse: collapse;
+    margin: 0 0 8px;
+}
+.rg-markdown th,
+.rg-markdown td {
+    border: 1px solid var(--b3-border-color);
+    padding: 4px 8px;
+}
+.rg-markdown a {
+    color: var(--b3-theme-primary);
+    text-decoration: underline;
+}
+.rg-markdown img {
+    max-width: 100%;
+}
