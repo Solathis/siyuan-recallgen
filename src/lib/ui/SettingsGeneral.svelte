@@ -1,62 +1,42 @@
 <script lang="ts">
-    import {
-        card,
-        field,
-        input,
-        select,
-        switchCls,
-        checkbox,
-        slider,
-        alert,
-        alertTitle,
-        alertDescription,
-        cn,
-    } from "./components";
+    import { onMount } from "svelte";
     import { showMessage } from "siyuan";
+    import * as Card from "@/lib/components/ui/card";
+    import { Checkbox } from "@/lib/components/ui/checkbox";
+    import { Input } from "@/lib/components/ui/input";
+    import { Label } from "@/lib/components/ui/label";
+    import * as Select from "@/lib/components/ui/select";
+    import { Switch } from "@/lib/components/ui/switch";
     import { t } from "../i18n";
+    import type { QuizService } from "../quiz/service";
     import type { RecallGenConfig, StorageLocation } from "@/types/config";
     import type { QuestionType } from "@/types/quiz";
 
-    export let config: RecallGenConfig;
-    /** 保存回调：Svelte 5 挂载方式下不再使用事件派发 */
-    export let onsave: (config: RecallGenConfig) => void = () => {};
+    let {
+        config,
+        onsave,
+        service,
+    }: {
+        config: RecallGenConfig;
+        onsave: (config: RecallGenConfig) => void;
+        /** 用于拉取笔记本列表；缺省时退化为手填 ID */
+        service?: QuizService;
+    } = $props();
 
-    const TYPE_OPTIONS: { key: QuestionType; label: string }[] = [
-        { key: "single_choice", label: t("type.single_choice") },
-        { key: "multiple_choice", label: t("type.multiple_choice") },
-        { key: "fill_blank", label: t("type.fill_blank") },
-        { key: "true_false", label: t("type.true_false") },
-        { key: "subjective", label: t("type.subjective") },
-        { key: "coding", label: t("type.coding") },
+    const TYPE_OPTIONS: QuestionType[] = [
+        "single_choice",
+        "multiple_choice",
+        "fill_blank",
+        "true_false",
+        "subjective",
+        "coding",
     ];
 
-    function v(e: Event): string {
-        return (e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
-    }
-    function vn(e: Event): number {
-        return parseInt(v(e)) || 0;
-    }
-    function checked(e: Event): boolean {
-        return (e.target as HTMLInputElement).checked;
-    }
+    /* ── 配置写入 ────────────────────────────────────────────────── */
 
-    /**
-     * 滑块的本地镜像值：拖动过程只更新镜像，松开时才写回配置。
-     * 取值包在函数里，避免在响应式上下文之外直接引用 config。
-     */
-    function initialExtraScope() {
-        return config.general.extraScopePct;
+    function patchGeneral(patch: Partial<RecallGenConfig["general"]>) {
+        onsave({ ...config, general: { ...config.general, ...patch } });
     }
-    function initialPanelWidth() {
-        return config.general.panelWidth;
-    }
-    let _extraScope = initialExtraScope();
-    let _panelWidth = initialPanelWidth();
-
-    $: diffOk =
-        config.general.difficulty.easy + config.general.difficulty.medium + config.general.difficulty.hard ===
-        config.general.difficulty.total;
-    $: totalValid = config.general.difficulty.total >= 1 && config.general.difficulty.total <= 50;
 
     function toggleType(type: QuestionType) {
         const current = config.general.allowedTypes;
@@ -68,212 +48,226 @@
         }
         patchGeneral({ allowedTypes: next });
     }
-    function patchGeneral(patch: Partial<typeof config.general>) {
-        onsave({ ...config, general: { ...config.general, ...patch } });
-    }
-    /** 难度分档统一收敛到 0-50 的整数，避免写入负数或超大值 */
+
+    /** 难度分档收敛到 0-50 的整数，避免写入负数或超大值 */
     function clampCount(value: number): number {
         return Math.max(0, Math.min(50, Math.round(value)));
     }
-    function patchDifficulty(patch: Partial<typeof config.general.difficulty>) {
+
+    function patchDifficulty(patch: Partial<RecallGenConfig["general"]["difficulty"]>) {
         const merged = { ...config.general.difficulty, ...patch };
         for (const key of ["total", "easy", "medium", "hard"] as const) {
             merged[key] = clampCount(merged[key]);
         }
         patchGeneral({ difficulty: merged });
     }
-    function onLangChange(e: Event) {
-        patchGeneral({ language: v(e) as "zh" | "en" });
-    }
-    function onStorageChange(e: Event) {
-        patchGeneral({ storageLocation: v(e) as StorageLocation });
-    }
+
+    const diffSum = $derived(
+        config.general.difficulty.easy + config.general.difficulty.medium + config.general.difficulty.hard
+    );
+    const diffOk = $derived(diffSum === config.general.difficulty.total);
+
+    /* ── 笔记本列表 ──────────────────────────────────────────────── */
+
+    let notebooks = $state<{ id: string; name: string }[]>([]);
+    let notebooksLoaded = $state(false);
+
+    onMount(async () => {
+        if (!service) return;
+        notebooks = await service.listNotebooks().catch(() => []);
+        notebooksLoaded = true;
+    });
+
+    const selectedNotebookName = $derived(
+        notebooks.find((n) => n.id === config.general.notebookId)?.name ?? config.general.notebookId
+    );
 </script>
 
-<div class={card.root}>
-    <div class={card.header}>
-        <h3 class={card.title}>{t("settings.general.title")}</h3>
-        <p class={card.description}>{t("settings.general.desc")}</p>
-    </div>
-    <div class={cn(card.content, field.group)}>
-        <div class={field.field}>
-            <span class={field.label}>{t("settings.general.allowedTypes")}</span>
-            <div class="rg-checks">
-                {#each TYPE_OPTIONS as opt}
-                    <label class="rg-check-item">
-                        <input
-                            class={checkbox}
-                            type="checkbox"
-                            checked={config.general.allowedTypes.includes(opt.key)}
-                            on:change={() => toggleType(opt.key)}
+<Card.Root>
+    <Card.Header>
+        <Card.Title>{t("settings.general.title")}</Card.Title>
+        <Card.Description>{t("settings.general.desc")}</Card.Description>
+    </Card.Header>
+    <Card.Content class="flex flex-col gap-5">
+        <!-- 题型 -->
+        <div class="flex flex-col gap-2">
+            <span class="text-sm font-medium">{t("settings.general.allowedTypes")}</span>
+            <div class="flex flex-wrap gap-x-5 gap-y-2">
+                {#each TYPE_OPTIONS as type (type)}
+                    <label class="flex items-center gap-2 text-sm">
+                        <Checkbox
+                            checked={config.general.allowedTypes.includes(type)}
+                            onCheckedChange={() => toggleType(type)}
+                            aria-label={t(`type.${type}`)}
                         />
-                        {opt.label}
+                        <span>{t(`type.${type}`)}</span>
                     </label>
                 {/each}
             </div>
         </div>
-        <div class={field.field}>
-            <label class={field.label} for="rg-total">{t("settings.general.totalCount")}</label>
-            <input
-                id="rg-total"
-                class={cn(input, !totalValid && "rg-input--invalid")}
-                type="number"
-                min="1"
-                max="50"
-                value={config.general.difficulty.total}
-                on:input={(e) => patchDifficulty({ total: vn(e) })}
-            />
-        </div>
-        <div class="rg-row-3">
-            <div class={field.field}>
-                <label class={field.label} for="rg-easy">{t("diff.easy")}</label>
-                <input
-                    id="rg-easy"
-                    class={input}
-                    type="number"
-                    value={config.general.difficulty.easy}
-                    on:input={(e) => patchDifficulty({ easy: vn(e) })}
-                />
+
+        <!-- 难度分布 -->
+        <div class="flex flex-col gap-2">
+            <span class="text-sm font-medium">{t("settings.general.difficulty")}</span>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {#each [["total", t("settings.general.totalCount")], ["easy", t("diff.easy")], ["medium", t("diff.medium")], ["hard", t("diff.hard")]] as [key, label] (key)}
+                    <div class="flex flex-col gap-1.5">
+                        <Label for={`rg-diff-${key}`}>{label}</Label>
+                        <Input
+                            id={`rg-diff-${key}`}
+                            type="number"
+                            min="0"
+                            max="50"
+                            value={config.general.difficulty[key as "total"]}
+                            onchange={(e) => patchDifficulty({ [key]: Number(e.currentTarget.value) })}
+                        />
+                    </div>
+                {/each}
             </div>
-            <div class={field.field}>
-                <label class={field.label} for="rg-med">{t("diff.medium")}</label>
-                <input
-                    id="rg-med"
-                    class={input}
-                    type="number"
-                    value={config.general.difficulty.medium}
-                    on:input={(e) => patchDifficulty({ medium: vn(e) })}
-                />
-            </div>
-            <div class={field.field}>
-                <label class={field.label} for="rg-hard">{t("diff.hard")}</label>
-                <input
-                    id="rg-hard"
-                    class={input}
-                    type="number"
-                    value={config.general.difficulty.hard}
-                    on:input={(e) => patchDifficulty({ hard: vn(e) })}
-                />
-            </div>
-        </div>
-        {#if !diffOk}
-            <div class={alert("warning")}>
-                <p class={alertTitle}>{t("settings.general.diffInvalid")}</p>
-                <p class={alertDescription}>
+            {#if !diffOk}
+                <p class="text-warning text-xs">
                     {t("settings.general.diffInvalidDesc", String(config.general.difficulty.total))}
+                    {t("settings.general.diffSumNow", String(diffSum))}
                 </p>
+            {/if}
+        </div>
+
+        <!-- 超纲比例 -->
+        <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+                <Label for="rg-extra-scope"
+                    >{t("settings.general.extraScope", String(config.general.extraScopePct))}</Label
+                >
             </div>
-        {/if}
-        <div class={field.field}>
-            <span class={field.label}>{t("settings.general.extraScope", String(_extraScope))}</span>
-            <span class={field.description}>{t("settings.general.extraScopeDesc")}</span>
             <input
-                class={slider}
+                id="rg-extra-scope"
+                class="accent-primary w-full"
                 type="range"
                 min="0"
                 max="50"
                 step="5"
-                bind:value={_extraScope}
-                on:change={() => patchGeneral({ extraScopePct: _extraScope })}
+                value={config.general.extraScopePct}
+                onchange={(e) => patchGeneral({ extraScopePct: Number(e.currentTarget.value) })}
             />
+            <p class="text-muted-foreground text-xs">{t("settings.general.extraScopeDesc")}</p>
         </div>
-        <div class={field.field}>
-            <span class={field.label}>{t("settings.general.panelWidth", String(_panelWidth))}</span>
-            <span class={field.description}>{t("settings.general.panelWidthDesc")}</span>
+
+        <!-- 面板宽度 -->
+        <div class="flex flex-col gap-2">
+            <Label for="rg-panel-width">{t("settings.general.panelWidth", String(config.general.panelWidth))}</Label>
             <input
-                class={slider}
+                id="rg-panel-width"
+                class="accent-primary w-full"
                 type="range"
                 min="600"
                 max="1600"
                 step="50"
-                bind:value={_panelWidth}
-                on:change={() => patchGeneral({ panelWidth: _panelWidth })}
+                value={config.general.panelWidth}
+                onchange={(e) => patchGeneral({ panelWidth: Number(e.currentTarget.value) })}
             />
+            <p class="text-muted-foreground text-xs">{t("settings.general.panelWidthDesc")}</p>
         </div>
-        <label class="rg-check-item">
-            <input
-                class={switchCls}
-                type="checkbox"
-                checked={config.general.countdownEnabled}
-                on:change={(e) => patchGeneral({ countdownEnabled: checked(e) })}
-            />
-            {t("settings.general.countdown")}
-        </label>
-        {#if config.general.countdownEnabled}
-            <div class={field.field}>
-                <label class={field.label} for="rg-cd">{t("settings.general.countdownMinutes")}</label>
-                <input
-                    id="rg-cd"
-                    class={cn(input, config.general.countdownMinutes <= 0 && "rg-input--invalid")}
-                    type="number"
-                    min="1"
-                    value={config.general.countdownMinutes}
-                    on:input={(e) => patchGeneral({ countdownMinutes: Math.max(0, vn(e)) })}
-                />
-                {#if config.general.countdownMinutes <= 0}
-                    <span class={field.description} style="color:var(--b3-card-error)"
-                        >{t("settings.general.countdownHint")}</span
-                    >
-                {/if}
-            </div>
-        {/if}
-        <div class={field.field}>
-            <label class={field.label} for="rg-loc">{t("settings.general.storageLocation")}</label>
-            <select id="rg-loc" class={select} value={config.general.storageLocation} on:change={onStorageChange}>
-                <option value="sibling">{t("settings.general.storageSibling")}</option>
-                <option value="notebook">{t("settings.general.storageNotebook")}</option>
-            </select>
-        </div>
-        {#if config.general.storageLocation === "notebook"}
-            <div class={field.field}>
-                <label class={field.label} for="rg-nb">{t("settings.general.notebookId")}</label>
-                <input
-                    id="rg-nb"
-                    class={input}
-                    type="text"
-                    value={config.general.notebookId}
-                    on:input={(e) => patchGeneral({ notebookId: v(e) })}
-                />
-            </div>
-        {/if}
-        <div class={field.field}>
-            <label class={field.label} for="rg-lang">{t("settings.general.language")}</label>
-            <select id="rg-lang" class={select} value={config.general.language} on:change={onLangChange}>
-                <option value="zh">中文</option>
-                <option value="en">English</option>
-            </select>
-        </div>
-    </div>
-</div>
 
-<style>
-    .rg-row-3 {
-        display: flex;
-        gap: 12px;
-    }
-    .rg-row-3 > * {
-        flex: 1;
-        min-width: 0;
-    }
-    .rg-checks {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-    }
-    .rg-check-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 13px;
-        cursor: pointer;
-        color: var(--b3-theme-on-background);
-    }
-    :global(.rg-input--invalid) {
-        border-color: var(--b3-card-error);
-    }
-    @media (max-width: 640px) {
-        .rg-row-3 {
-            flex-direction: column;
-        }
-    }
-</style>
+        <!-- 倒计时 -->
+        <div class="flex flex-col gap-2">
+            <label class="flex items-center gap-2 text-sm">
+                <Switch
+                    checked={config.general.countdownEnabled}
+                    onCheckedChange={(checked) => patchGeneral({ countdownEnabled: checked })}
+                    aria-label={t("settings.general.countdown")}
+                />
+                <span>{t("settings.general.countdown")}</span>
+            </label>
+            {#if config.general.countdownEnabled}
+                <div class="flex flex-col gap-1.5">
+                    <Label for="rg-countdown">{t("settings.general.countdownMinutes")}</Label>
+                    <Input
+                        id="rg-countdown"
+                        type="number"
+                        min="1"
+                        class="w-32"
+                        value={config.general.countdownMinutes}
+                        onchange={(e) =>
+                            patchGeneral({ countdownMinutes: Math.max(1, Number(e.currentTarget.value) || 1) })}
+                    />
+                    <p class="text-muted-foreground text-xs">{t("settings.general.countdownHint")}</p>
+                </div>
+            {/if}
+        </div>
+
+        <!-- 存储位置 -->
+        <div class="flex flex-col gap-2">
+            <Label for="rg-storage">{t("settings.general.storageLocation")}</Label>
+            <Select.Root
+                type="single"
+                value={config.general.storageLocation}
+                onValueChange={(v) => patchGeneral({ storageLocation: v as StorageLocation })}
+            >
+                <Select.Trigger id="rg-storage" class="w-full sm:w-72">
+                    {config.general.storageLocation === "sibling"
+                        ? t("settings.general.storageSibling")
+                        : t("settings.general.storageNotebook")}
+                </Select.Trigger>
+                <Select.Content>
+                    <Select.Item value="sibling">{t("settings.general.storageSibling")}</Select.Item>
+                    <Select.Item value="notebook">{t("settings.general.storageNotebook")}</Select.Item>
+                </Select.Content>
+            </Select.Root>
+            {#if config.general.storageLocation === "notebook"}
+                <div class="flex flex-col gap-1.5">
+                    <Label for="rg-notebook">{t("settings.general.notebook")}</Label>
+                    <!-- 原先要求用户手填笔记本 ID，现改为下拉选择 -->
+                    {#if notebooks.length > 0}
+                        <Select.Root
+                            type="single"
+                            value={config.general.notebookId}
+                            onValueChange={(v) => patchGeneral({ notebookId: v })}
+                        >
+                            <Select.Trigger id="rg-notebook" class="w-full sm:w-72"
+                                >{selectedNotebookName}</Select.Trigger
+                            >
+                            <Select.Content>
+                                {#each notebooks as notebook (notebook.id)}
+                                    <Select.Item value={notebook.id}>{notebook.name}</Select.Item>
+                                {/each}
+                            </Select.Content>
+                        </Select.Root>
+                    {:else}
+                        <Input
+                            id="rg-notebook"
+                            placeholder={t("settings.general.notebookIdPlaceholder")}
+                            value={config.general.notebookId}
+                            oninput={(e) => patchGeneral({ notebookId: e.currentTarget.value })}
+                        />
+                        <p class="text-muted-foreground text-xs">
+                            {notebooksLoaded
+                                ? t("settings.general.noNotebook")
+                                : t("settings.general.loadingNotebooks")}
+                        </p>
+                    {/if}
+                </div>
+            {/if}
+        </div>
+
+        <!-- 输出语言 -->
+        <div class="flex flex-col gap-2">
+            <Label for="rg-language">{t("settings.general.language")}</Label>
+            <Select.Root
+                type="single"
+                value={config.general.language}
+                onValueChange={(v) => patchGeneral({ language: v as "zh" | "en" })}
+            >
+                <Select.Trigger id="rg-language" class="w-full sm:w-72">
+                    {config.general.language === "zh"
+                        ? t("settings.general.languageZh")
+                        : t("settings.general.languageEn")}
+                </Select.Trigger>
+                <Select.Content>
+                    <Select.Item value="zh">{t("settings.general.languageZh")}</Select.Item>
+                    <Select.Item value="en">{t("settings.general.languageEn")}</Select.Item>
+                </Select.Content>
+            </Select.Root>
+            <p class="text-muted-foreground text-xs">{t("settings.general.languageDesc")}</p>
+        </div>
+    </Card.Content>
+</Card.Root>

@@ -1,65 +1,60 @@
 <script lang="ts">
-    import { button, card, field, textarea, cn } from "./components";
+    import { Button } from "@/lib/components/ui/button";
+    import * as Card from "@/lib/components/ui/card";
+    import { Textarea } from "@/lib/components/ui/textarea";
     import { t } from "../i18n";
-    import type { RecallGenConfig } from "@/types/config";
-    import { getDefaultPrompts } from "@/types/config";
+    import { getDefaultPrompts, type RecallGenConfig } from "@/types/config";
 
-    export let config: RecallGenConfig;
-    /** 保存回调：Svelte 5 挂载方式下不再使用事件派发 */
-    export let onsave: (config: RecallGenConfig) => void = () => {};
+    let { config, onsave }: { config: RecallGenConfig; onsave: (config: RecallGenConfig) => void } = $props();
 
     const PROMPT_KEYS = ["generate", "review", "gradeSubjective", "analysis"] as const;
-    const PROMPT_LABELS: Record<string, string> = {
-        generate: t("settings.prompts.generate"),
-        review: t("settings.prompts.review"),
-        gradeSubjective: t("settings.prompts.gradeSubjective"),
-        analysis: t("settings.prompts.analysis"),
-    };
 
-    function v(e: Event): string {
-        return (e.target as HTMLTextAreaElement).value;
+    function labelOf(key: (typeof PROMPT_KEYS)[number]): string {
+        return t(`settings.prompts.${key}`);
     }
-    function onPromptInput(key: keyof typeof config.prompts, e: Event) {
-        onsave({ ...config, prompts: { ...config.prompts, [key]: v(e) } });
+
+    function patchPrompt(key: (typeof PROMPT_KEYS)[number], value: string) {
+        onsave({ ...config, prompts: { ...config.prompts, [key]: value } });
     }
-    function resetPrompt(key: keyof typeof config.prompts) {
+
+    function resetPrompt(key: (typeof PROMPT_KEYS)[number]) {
         // 按「输出语言」取对应语言的默认提示词，而不是固定用中文
         const defaults = getDefaultPrompts(config.general.language);
-        onsave({ ...config, prompts: { ...config.prompts, [key]: defaults[key] } });
+        patchPrompt(key, defaults[key]);
+    }
+
+    function resetAll() {
+        const defaults = getDefaultPrompts(config.general.language);
+        onsave({ ...config, prompts: { ...defaults } });
     }
 </script>
 
-<div class={card.root}>
-    <div class={card.header}>
-        <h3 class={card.title}>{t("settings.prompts.title")}</h3>
-        <p class={card.description}>{t("settings.prompts.desc")}</p>
-    </div>
-    <div class={cn(card.content, field.group)}>
-        {#each PROMPT_KEYS as key}
-            <div class={field.field}>
-                <div class="rg-prompt-head">
-                    <span class={field.label}>{PROMPT_LABELS[key]}</span>
-                    <button class={button({ variant: "ghost", size: "sm" })} on:click={() => resetPrompt(key)}
-                        >{t("settings.prompts.reset")}</button
-                    >
+<Card.Root>
+    <Card.Header>
+        <div class="flex flex-wrap items-start justify-between gap-2">
+            <div>
+                <Card.Title>{t("settings.prompts.title")}</Card.Title>
+                <Card.Description>{t("settings.prompts.desc")}</Card.Description>
+            </div>
+            <Button variant="outline" size="sm" onclick={resetAll}>{t("settings.prompts.resetAll")}</Button>
+        </div>
+    </Card.Header>
+    <Card.Content class="flex flex-col gap-4">
+        {#each PROMPT_KEYS as key (key)}
+            <div class="flex flex-col gap-1.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium">{labelOf(key)}</span>
+                    <Button variant="ghost" size="sm" onclick={() => resetPrompt(key)}>
+                        {t("settings.prompts.reset")}
+                    </Button>
                 </div>
-                <textarea class={cn(textarea, "rg-prompt-ta")} on:input={(e) => onPromptInput(key, e)}
-                    >{config.prompts[key]}</textarea
-                >
+                <Textarea
+                    class="min-h-28 font-mono text-xs"
+                    aria-label={labelOf(key)}
+                    value={config.prompts[key]}
+                    oninput={(e) => patchPrompt(key, e.currentTarget.value)}
+                />
             </div>
         {/each}
-    </div>
-</div>
-
-<style>
-    .rg-prompt-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    :global(.rg-prompt-ta) {
-        min-height: 100px;
-        font-family: var(--b3-font-family-code, monospace);
-        font-size: 12px;
-    }
-</style>
+    </Card.Content>
+</Card.Root>

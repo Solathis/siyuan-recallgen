@@ -225,6 +225,15 @@
     "settings.roles.model": "Model",
     "settings.roles.hint": "💡 Using different models for generator and reviewer is recommended for better results. The grader can use the same model. Review loop retries up to 3 rounds; failed questions are sent back to the generator for regeneration.",
 
+    "settings.general.difficulty": "Difficulty distribution",
+    "settings.general.diffSumNow": "Current sum across levels: {0}",
+    "settings.general.notebook": "Target notebook",
+    "settings.general.notebookIdPlaceholder": "Enter notebook ID",
+    "settings.general.noNotebook": "No notebook available",
+    "settings.general.loadingNotebooks": "Loading notebooks…",
+    "settings.general.languageZh": "中文",
+    "settings.general.languageEn": "English",
+    "settings.general.languageDesc": "Affects the output language of questions, explanations and prompt scaffolding",
     "settings.general.title": "Quiz & Answer",
     "settings.general.desc": "Question types, difficulty, answer behavior",
     "settings.general.atLeastOneType": "Keep at least one question type, otherwise generation cannot run",
@@ -240,8 +249,6 @@
     "settings.general.storageLocation": "Question Save Location",
     "settings.general.storageSibling": "Sibling of source doc",
     "settings.general.storageNotebook": "Fixed notebook",
-    "settings.general.notebookId": "Notebook ID",
-    "settings.general.diffInvalid": "Invalid difficulty distribution",
     "settings.general.diffInvalidDesc": "Easy + Medium + Hard must equal total ({0})",
     "settings.general.language": "AI Output Language",
 
@@ -251,6 +258,7 @@
     "settings.prompts.review": "Review Prompt",
     "settings.prompts.gradeSubjective": "Subjective/Coding Grading",
     "settings.prompts.analysis": "Weakness Analysis",
+    "settings.prompts.resetAll": "Reset all to default",
     "settings.prompts.reset": "Reset Default",
 
     "settings.heatmap.title": "Heatmap Settings",
@@ -259,6 +267,10 @@
     "settings.heatmap.metricMax": "Daily Max Score",
     "settings.heatmap.metricAvg": "Daily Average Score",
     "settings.heatmap.colorRanges": "Color Ranges",
+    "settings.heatmap.colorRangesHint": "A score uses the colour of the range it falls into; ranges match from the highest lower bound",
+    "settings.heatmap.rangeMin": "Range min",
+    "settings.heatmap.rangeMax": "Range max",
+    "settings.heatmap.rangeColor": "Range colour",
     "settings.heatmap.addRange": "+ Add Range",
 
     "settings.saveFailed": "Failed to save settings: {0}",
@@ -276,6 +288,7 @@
     "settings.data.clearScores": "Clear Score Records",
     "settings.data.clearProgress": "Clear Answer Progress",
 
+    "settings.title": "Plugin settings",
     "settings.nav.ai": "AI Service",
     "settings.nav.roles": "AI Roles",
     "settings.nav.general": "Quiz & Answer",
