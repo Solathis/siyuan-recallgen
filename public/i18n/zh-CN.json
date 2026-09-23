@@ -197,6 +197,8 @@
     "history.filter_high": "80 分及以上",
     "history.filter_mid": "60-79 分",
     "history.filter_low": "60 分以下",
+    "history.loadMore": "加载更多（还有 {0} 条）",
+    "history.showingCount": "已显示 {0} / {1} 条",
     "history.noMatch": "没有符合筛选条件的记录",
     "history.loadFailed": "加载成绩记录失败：{0}",
     "history.review": "查看",

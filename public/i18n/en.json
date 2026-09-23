@@ -197,6 +197,8 @@
     "history.filter_high": "80 and above",
     "history.filter_mid": "60-79",
     "history.filter_low": "Below 60",
+    "history.loadMore": "Load more ({0} remaining)",
+    "history.showingCount": "Showing {0} of {1}",
     "history.noMatch": "No records match the current filters",
     "history.loadFailed": "Failed to load score records: {0}",
     "history.review": "View",

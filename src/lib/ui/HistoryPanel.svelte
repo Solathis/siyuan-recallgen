@@ -14,6 +14,7 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { EXPORT_EXTENSION, EXPORT_MIME, buildExport, type ExportFormat } from "../quiz/export";
+    import { PAGE_SIZE, limitGroups, nextLimit } from "../quiz/paging";
     import { scorePercent } from "../quiz/stats";
     import type { QuizService } from "../quiz/service";
     import type { ScoreIndexEntry } from "@/types/quiz";
@@ -31,6 +32,12 @@
     let scoreFilter = $state<"all" | "high" | "mid" | "low">("all");
     /** 顶层视图：记录列表 / 学习统计 */
     let topView = $state<"records" | "stats">("records");
+    /**
+     * 已渲染条数上界。
+     * 记录很多时一次性渲染全部条目会创建大量 DOM，这里分段渲染并触底加载。
+     */
+    let visible = $state(PAGE_SIZE);
+    let sentinel: HTMLDivElement | null = $state(null);
 
     async function load() {
         loading = true;
@@ -79,6 +86,29 @@
             else map.set(key, [r]);
         }
         return [...map.entries()].map(([key, items]) => ({ key, items }));
+    });
+
+    /** 截断后的分组与剩余条数 */
+    const limited = $derived(limitGroups(grouped, visible));
+
+    /** 搜索或筛选变化时回到第一批，避免沿用上一次的展开量 */
+    $effect(() => {
+        void query;
+        void scoreFilter;
+        visible = PAGE_SIZE;
+    });
+
+    // 触底自动加载下一批；同时也提供按钮，保证无 IntersectionObserver 时仍可用
+    $effect(() => {
+        const element = sentinel;
+        if (!element || typeof IntersectionObserver === "undefined") return;
+        const observer = new IntersectionObserver((entries) => {
+            if (entries.some((e) => e.isIntersecting) && limited.remaining > 0) {
+                visible = nextLimit(visible, filtered.length);
+            }
+        });
+        observer.observe(element);
+        return () => observer.disconnect();
     });
 
     function timeStr(ts: number): string {
@@ -222,7 +252,7 @@
         {:else if filtered.length === 0}
             <div class="text-muted-foreground py-12 text-center text-sm">{t("history.noMatch")}</div>
         {:else}
-            {#each grouped as group (group.key)}
+            {#each limited.groups as group (group.key)}
                 <section class="flex flex-col gap-2">
                     <h3 class="border-border text-sm font-semibold border-b pb-1">
                         {group.key}
@@ -419,6 +449,18 @@
                     {/if}
                 </section>
             {/each}
+
+            {#if limited.remaining > 0}
+                <!-- 触底自动加载；按钮同时兼顾键盘操作与不支持 IntersectionObserver 的环境 -->
+                <div bind:this={sentinel} class="flex flex-col items-center gap-2 py-2">
+                    <Button variant="outline" size="sm" onclick={() => (visible = nextLimit(visible, filtered.length))}>
+                        {t("history.loadMore", String(limited.remaining))}
+                    </Button>
+                    <span class="text-muted-foreground text-xs">
+                        {t("history.showingCount", String(limited.shown), String(filtered.length))}
+                    </span>
+                </div>
+            {/if}
         {/if}
     {/if}
 </div>
