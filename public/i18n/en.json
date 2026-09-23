@@ -1,5 +1,4 @@
 {
-    "name": "RecallGen",
     "generateQuiz": "💡 Generate Quiz",
     "generateNotebookQuiz": "📚 Generate from Notebook",
     "openDocFirst": "Please open a document first",
@@ -7,10 +6,7 @@
 
     "common.true": "True",
     "common.false": "False",
-    "common.correct": "Correct",
-    "common.wrong": "Wrong",
     "common.unanswered": "Unanswered",
-    "common.all": "All",
     "common.loading": "Loading…",
     "common.cancel": "Cancel",
     "common.send": "Send",
@@ -144,7 +140,6 @@
     "history.colCount": "Questions",
     "history.colTime": "Time",
     "history.pts": "pts",
-    "history.qs": "Q",
 
     "question.edit": "Edit",
     "question.preview": "Preview",
@@ -183,7 +178,6 @@
     "settings.ai.jsonSchemaDesc": "On → json_schema strict constraint; Off → json_object loose mode (better compatibility)",
     "settings.ai.openaiCompat": "OpenAI Compatible",
     "settings.ai.ollama": "Ollama",
-    "settings.ai.endpointDefault": "Default",
     "settings.ai.alertModelsInUse": "{0} model(s) exist under this endpoint, please delete them first",
     "settings.ai.alertModelInRole": "This model is referenced by a role, please reassign in AI Roles first",
     "settings.ai.alertDupModelName": "Duplicate model name \"{0}\" under this endpoint",

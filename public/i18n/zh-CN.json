@@ -1,5 +1,4 @@
 {
-    "name": "RecallGen",
     "generateQuiz": "💡 生成复习题",
     "generateNotebookQuiz": "📚 从笔记本生成复习题",
     "openDocFirst": "请先打开文档",
@@ -7,10 +6,7 @@
 
     "common.true": "正确",
     "common.false": "错误",
-    "common.correct": "正确",
-    "common.wrong": "错误",
     "common.unanswered": "未答",
-    "common.all": "全部",
     "common.loading": "加载中…",
     "common.cancel": "取消",
     "common.send": "发送",
@@ -144,7 +140,6 @@
     "history.colCount": "题数",
     "history.colTime": "时间",
     "history.pts": "分",
-    "history.qs": "题",
 
     "question.edit": "编辑",
     "question.preview": "预览",
@@ -183,7 +178,6 @@
     "settings.ai.jsonSchemaDesc": "开启→json_schema 严格约束；关闭→json_object 宽松模式（兼容性更好）",
     "settings.ai.openaiCompat": "OpenAI 兼容",
     "settings.ai.ollama": "Ollama",
-    "settings.ai.endpointDefault": "默认端点",
     "settings.ai.alertModelsInUse": "该端点下有 {0} 个模型，请先删除这些模型",
     "settings.ai.alertModelInRole": "该模型被角色引用，请先在「AI 身份」中更换",
     "settings.ai.alertDupModelName": "该端点下已存在同名模型「{0}」",

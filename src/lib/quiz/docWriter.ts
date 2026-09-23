@@ -105,12 +105,6 @@ export async function saveAsNewDoc(
     return createDocWithMd(sourceDocId as NotebookId, "/" + title, md);
 }
 
-/** 插入到当前文档末尾 */
-export async function appendQuestions(questions: Question[], sourceDocId: string): Promise<void> {
-    const md = buildQuestionsMarkdown(questions);
-    await appendBlock("markdown", md, sourceDocId);
-}
-
 /** 将薄弱点分析追加到文档末尾 */
 export async function appendAnalysis(docId: string, analysis: string): Promise<void> {
     const md = `\n---\n\n${t("doc.analysisTitle")}\n\n${analysis}\n`;
