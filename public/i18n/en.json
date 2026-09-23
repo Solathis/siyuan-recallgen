@@ -49,6 +49,7 @@
     "quiz.questionNum": "Q{0}",
     "quiz.answeredTag": "Answered",
     "bank.dueNotice": "{0} question(s) are due for review. Open \"Review due questions\" from the command palette.",
+    "bank.reviewDueDoc": "Review due questions from this document",
     "bank.reviewDue": "Review due questions",
     "bank.loadingDue": "Loading due questions…",
     "bank.sessionTitle": "Due review ({0} questions)",
@@ -150,6 +151,8 @@
     "heatmap.noRecord": "No record",
     "heatmap.scoreTip": "{0} · {1} pts ({2} times)",
 
+    "stats.heatmap": "Study activity",
+    "stats.heatmapDesc": "Quiz activity over the past year; colours are configurable under Settings → Heatmap",
     "stats.title": "Study statistics",
     "stats.range": "Range",
     "stats.rangeDays": "Last {0} days",

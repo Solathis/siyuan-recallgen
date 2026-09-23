@@ -273,9 +273,10 @@ export default class RecallGenPlugin extends Plugin {
             listScores: () => this.scoreStore.listIndex(),
             loadScoreDetail: (id) => this.scoreStore.loadDetail(id),
             removeScore: (id) => this.scoreStore.remove(id),
-            dueBankQuestions: async (limit = 0) => {
+            dueBankQuestions: async (limit = 0, sourceDocId) => {
                 const items = await this.bankStore.list();
-                return pickDueItems(items, Date.now(), limit).map((item) => item.question);
+                const scoped = sourceDocId ? items.filter((item) => item.sourceDocId === sourceDocId) : items;
+                return pickDueItems(scoped, Date.now(), limit).map((item) => item.question);
             },
             bankSummary: () => this.bankStore.summary(),
             recordBankOutcomes: async (questions, source, results) => {

@@ -72,8 +72,11 @@ export interface QuizService {
     listNotebooks(): Promise<{ id: string; name: string }[]>;
 
     // ── 题库与间隔重复 ──────────────────────────────────────────
-    /** 按 FSRS 排程取出到期的题目，用于「复习到期题目」 */
-    dueBankQuestions(limit?: number): Promise<Question[]>;
+    /**
+     * 按 FSRS 排程取出到期的题目，用于「复习到期题目」。
+     * 传入 sourceDocId 时只取来自该文档的题目，便于「只复习这篇笔记」。
+     */
+    dueBankQuestions(limit?: number, sourceDocId?: string): Promise<Question[]>;
     /** 题库规模概览 */
     bankSummary(): Promise<BankSummary>;
     /**
@@ -113,6 +116,8 @@ export interface QuizTabData {
     sourceTitle: string;
     dateRange?: "today" | "beforeToday";
     notebookId?: string;
+    /** reviewDue 模式下限定来源文档，只复习该文档的到期题目 */
+    dueSourceDocId?: string;
     /** review 模式的成绩数据 */
     review?: ReviewPayload;
 }

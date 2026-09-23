@@ -163,7 +163,7 @@
         progressValue = null;
         progressLabel = t("bank.loadingDue");
         try {
-            const due = await service.dueBankQuestions();
+            const due = await service.dueBankQuestions(0, tabData.dueSourceDocId);
             if (cancelled) return;
             if (due.length === 0) {
                 error = {

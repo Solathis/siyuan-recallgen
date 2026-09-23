@@ -23,6 +23,12 @@
 
     let records = $state<ScoreIndexEntry[]>([]);
     let loading = $state(true);
+    /** 热力图需要配色配置与输出语言，跟随配置变化；初值经函数读取以避免捕获警告 */
+    function initialConfig() {
+        return service.getConfig();
+    }
+    let config = $state(initialConfig());
+    $effect(() => service.subscribeConfig((next) => (config = next)));
     let loadError = $state<string | null>(null);
     let deleting = $state<string | null>(null);
     let query = $state("");
@@ -168,7 +174,7 @@
     </Tabs.Root>
 
     {#if topView === "stats"}
-        <StatsPanel {records} {loading} />
+        <StatsPanel {records} {loading} heatmapConfig={config.heatmap} lang={config.general.language} />
     {:else}
         <header class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-lg font-semibold">{t("history.title")}</h2>

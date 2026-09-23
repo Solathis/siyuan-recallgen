@@ -49,6 +49,7 @@
     "quiz.questionNum": "第 {0} 题",
     "quiz.answeredTag": "已答",
     "bank.dueNotice": "有 {0} 道题到复习时间了，可用命令面板的「复习到期题目」开始",
+    "bank.reviewDueDoc": "复习本篇笔记的到期题目",
     "bank.reviewDue": "复习到期题目",
     "bank.loadingDue": "正在读取到期题目…",
     "bank.sessionTitle": "到期复习（{0} 题）",
@@ -150,6 +151,8 @@
     "heatmap.noRecord": "无记录",
     "heatmap.scoreTip": "{0} · {1} 分（{2} 次）",
 
+    "stats.heatmap": "学习轨迹",
+    "stats.heatmapDesc": "过去一年的答题热力图；配色可在「设置 → 热力图」调整",
     "stats.title": "学习统计",
     "stats.range": "统计范围",
     "stats.rangeDays": "近 {0} 天",
