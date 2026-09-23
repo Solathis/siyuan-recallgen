@@ -9,7 +9,7 @@ import {
     buildJsonObjectResponseFormat,
     parseJsonLoose,
 } from "../ai/schema";
-import type { RecallGenConfig } from "@/types/config";
+import type { MultipleChoicePolicy, RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, UserAnswer } from "@/types/quiz";
 
 const MAX_CONCURRENT = 4;
@@ -26,6 +26,7 @@ export async function gradeAll(
     /** 每题的作答耗时（秒），可选；缺失时该题不填 seconds */
     secondsByQuestion?: Record<string, number>
 ): Promise<GradingResult[]> {
+    const policy = config.general.multipleChoicePolicy ?? "partial";
     const results: GradingResult[] = [];
     const pool = new PromiseLimitPool<GradingResult>(MAX_CONCURRENT);
     let done = 0;
@@ -34,7 +35,7 @@ export async function gradeAll(
     for (const q of questions) {
         const ua = answers[q.id];
         if (isObjective(q.type)) {
-            results.push(withSeconds(gradeObjective(q, ua), secondsByQuestion));
+            results.push(withSeconds(gradeObjective(q, ua, policy), secondsByQuestion));
             done++;
             onProgress?.(done, total);
         } else {
@@ -80,7 +81,11 @@ export function isObjective(type: Question["type"]): boolean {
  * 多选题选对 3 个中的 2 个得 0 分对用户是不公平的。
  * `correct` 表示「完全正确」，部分正确由 score 表达。
  */
-export function gradeObjective(q: Question, ua: UserAnswer | undefined): GradingResult {
+export function gradeObjective(
+    q: Question,
+    ua: UserAnswer | undefined,
+    policy: MultipleChoicePolicy = "partial"
+): GradingResult {
     const base: GradingResult = {
         questionId: q.id,
         type: q.type,
@@ -93,24 +98,37 @@ export function gradeObjective(q: Question, ua: UserAnswer | undefined): Grading
     if (!ua) {
         return base;
     }
-    const score = scoreObjective(q, ua);
+    const score = scoreObjective(q, ua, policy);
     return { ...base, correct: score === 100, score };
 }
 
-/** 客观题得分（0-100），支持部分得分 */
-export function scoreObjective(q: Question, ua: UserAnswer): number {
+/**
+ * 客观题得分（0-100）。
+ * 多选题按 policy 决定是否允许部分得分；填空题始终按空计分。
+ */
+export function scoreObjective(q: Question, ua: UserAnswer, policy: MultipleChoicePolicy = "partial"): number {
     switch (q.type) {
         case "single_choice":
             return ua.type === "single_choice" && ua.value === q.answer ? 100 : 0;
         case "true_false":
             return ua.type === "true_false" && ua.value === q.answer ? 100 : 0;
-        case "multiple_choice":
-            return ua.type === "multiple_choice" ? scoreMultipleChoice(q.answer, ua.value) : 0;
+        case "multiple_choice": {
+            if (ua.type !== "multiple_choice") return 0;
+            if (policy === "strict") return isExactlyCorrect(q.answer, ua.value) ? 100 : 0;
+            return scoreMultipleChoice(q.answer, ua.value);
+        }
         case "fill_blank":
             return ua.type === "fill_blank" ? scoreFillBlank(q.answer, ua.value) : 0;
         default:
             return 0;
     }
+}
+
+/** 多选题是否完全选对（顺序无关，不多不少） */
+export function isExactlyCorrect(correct: number[], selected: number[]): boolean {
+    if (correct.length !== selected.length) return false;
+    const set = new Set(correct);
+    return selected.every((index) => set.has(index));
 }
 
 /**

@@ -4,6 +4,7 @@ import {
     type AIConfig,
     type AIEndpoint,
     type AIModel,
+    type QuizPreset,
     type RecallGenConfig,
 } from "@/types/config";
 import type { DifficultyDistribution, HeatmapConfig, QuestionType, ScoreRange } from "@/types/quiz";
@@ -236,6 +237,25 @@ function mergeGeneral(current: RecallGenConfig, imported: Partial<RecallGenConfi
         general.storageLocation = incoming.storageLocation;
     }
     if (typeof incoming.notebookId === "string") general.notebookId = incoming.notebookId;
+    if (incoming.multipleChoicePolicy === "strict" || incoming.multipleChoicePolicy === "partial") {
+        general.multipleChoicePolicy = incoming.multipleChoicePolicy;
+    }
+    if (Array.isArray(incoming.presets)) {
+        // 只接受结构完整的预设，避免导入后界面出现无法应用的条目
+        general.presets = incoming.presets
+            .filter((preset): preset is QuizPreset => isPlausiblePreset(preset))
+            .map((preset) => ({
+                id: preset.id,
+                name: String(preset.name).slice(0, 24),
+                allowedTypes: preset.allowedTypes.filter((t) => ALLOWED_TYPES.includes(t)),
+                difficulty: { ...preset.difficulty },
+                extraScopePct: clampInt(preset.extraScopePct, 0, 0, 100),
+            }))
+            .filter((preset) => preset.allowedTypes.length > 0);
+        if (general.presets.length !== incoming.presets.length) {
+            warnings.push("部分试卷预设结构不完整，已跳过");
+        }
+    }
     return general;
 }
 
@@ -258,6 +278,21 @@ function mergeHeatmap(current: RecallGenConfig, imported: Partial<RecallGenConfi
         else warnings.push("配色区间无效，已保留原有配色");
     }
     return heatmap;
+}
+
+/** 预设是否结构完整到可以应用 */
+function isPlausiblePreset(value: unknown): value is QuizPreset {
+    const preset = value as Partial<QuizPreset>;
+    return (
+        !!preset &&
+        typeof preset === "object" &&
+        typeof preset.id === "string" &&
+        !!preset.id &&
+        typeof preset.name === "string" &&
+        Array.isArray(preset.allowedTypes) &&
+        !!preset.difficulty &&
+        typeof preset.difficulty === "object"
+    );
 }
 
 const ALLOWED_TYPES: QuestionType[] = [

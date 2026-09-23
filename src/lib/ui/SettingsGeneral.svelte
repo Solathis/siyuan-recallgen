@@ -1,5 +1,8 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { Badge } from "@/lib/components/ui/badge";
+    import { Button } from "@/lib/components/ui/button";
+    import { applyPreset, makePreset, matchesPreset, removePreset, savePreset } from "../quiz/presets";
     import { showMessage } from "siyuan";
     import * as Card from "@/lib/components/ui/card";
     import { Checkbox } from "@/lib/components/ui/checkbox";
@@ -9,7 +12,7 @@
     import { Switch } from "@/lib/components/ui/switch";
     import { t } from "../i18n";
     import type { QuizService } from "../quiz/service";
-    import type { RecallGenConfig, StorageLocation } from "@/types/config";
+    import type { MultipleChoicePolicy, RecallGenConfig, StorageLocation } from "@/types/config";
     import type { QuestionType } from "@/types/quiz";
 
     let {
@@ -60,6 +63,22 @@
             merged[key] = clampCount(merged[key]);
         }
         patchGeneral({ difficulty: merged });
+    }
+
+    /* ── 试卷预设 ────────────────────────────────────────────────── */
+
+    let presetName = $state("");
+
+    function saveCurrentAsPreset() {
+        const name = presetName.trim();
+        if (!name) {
+            showMessage(t("settings.general.presetNameRequired"), 5000, "error");
+            return;
+        }
+        const preset = makePreset(name, config.general, `preset-${Date.now().toString(36)}`);
+        patchGeneral({ presets: savePreset(config.general.presets ?? [], preset) });
+        presetName = "";
+        showMessage(t("settings.general.presetSaved", preset.name), 4000);
     }
 
     const diffSum = $derived(
@@ -247,6 +266,85 @@
                     {/if}
                 </div>
             {/if}
+        </div>
+
+        <!-- 试卷预设 -->
+        <div class="flex flex-col gap-2">
+            <span class="text-sm font-medium">{t("settings.general.presets")}</span>
+            <p class="text-muted-foreground text-xs">{t("settings.general.presetsDesc")}</p>
+            {#if (config.general.presets ?? []).length > 0}
+                <div class="flex flex-col gap-1.5">
+                    {#each config.general.presets as preset (preset.id)}
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs">
+                                {preset.name}
+                                <span class="text-muted-foreground">
+                                    {t(
+                                        "settings.general.presetSummary",
+                                        String(preset.difficulty.total),
+                                        String(preset.allowedTypes.length)
+                                    )}
+                                </span>
+                            </span>
+                            {#if matchesPreset(config.general, preset)}
+                                <Badge variant="outline">{t("settings.general.presetActive")}</Badge>
+                            {/if}
+                            <div class="ml-auto flex gap-1">
+                                <Button
+                                    variant="outline"
+                                    size="xs"
+                                    onclick={() => onsave(applyPreset(config, preset))}
+                                    aria-label={`${t("settings.general.presetApply")} ${preset.name}`}
+                                >
+                                    {t("settings.general.presetApply")}
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    onclick={() =>
+                                        patchGeneral({
+                                            presets: removePreset(config.general.presets ?? [], preset.id),
+                                        })}
+                                >
+                                    {t("common.delete")}
+                                </Button>
+                            </div>
+                        </div>
+                    {/each}
+                </div>
+            {/if}
+            <div class="flex flex-wrap items-center gap-2">
+                <Input
+                    class="w-48"
+                    placeholder={t("settings.general.presetNamePlaceholder")}
+                    aria-label={t("settings.general.presetNamePlaceholder")}
+                    bind:value={presetName}
+                />
+                <Button variant="outline" size="sm" onclick={saveCurrentAsPreset}>
+                    {t("settings.general.presetSave")}
+                </Button>
+            </div>
+        </div>
+
+        <!-- 多选题计分策略 -->
+        <div class="flex flex-col gap-2">
+            <Label for="rg-mc-policy">{t("settings.general.mcPolicy")}</Label>
+            <Select.Root
+                type="single"
+                value={config.general.multipleChoicePolicy ?? "partial"}
+                onValueChange={(v) => patchGeneral({ multipleChoicePolicy: v as MultipleChoicePolicy })}
+            >
+                <Select.Trigger id="rg-mc-policy" class="w-full sm:w-72">
+                    {config.general.multipleChoicePolicy === "strict"
+                        ? t("settings.general.mcPolicyStrict")
+                        : t("settings.general.mcPolicyPartial")}
+                </Select.Trigger>
+                <Select.Content>
+                    <Select.Item value="partial">{t("settings.general.mcPolicyPartial")}</Select.Item>
+                    <Select.Item value="strict">{t("settings.general.mcPolicyStrict")}</Select.Item>
+                </Select.Content>
+            </Select.Root>
+            <p class="text-muted-foreground text-xs">{t("settings.general.mcPolicyDesc")}</p>
         </div>
 
         <!-- 输出语言 -->

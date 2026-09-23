@@ -46,7 +46,7 @@
         <Card.Description>{t("settings.heatmap.desc")}</Card.Description>
     </Card.Header>
     <Card.Content class="flex flex-col gap-4">
-        <Heatmap records={scores} config={config.heatmap} lang={config.general.language} />
+        <Heatmap records={scores} config={config.heatmap} lang={config.general.language} showRangePicker={false} />
 
         <div class="flex flex-col gap-1.5">
             <Label for="rg-heatmap-metric">{t("settings.heatmap.metric")}</Label>
