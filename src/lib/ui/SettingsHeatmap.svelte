@@ -41,7 +41,7 @@
         <p class={card.description}>{t("settings.heatmap.desc")}</p>
     </div>
     <div class={cn(card.content, field.group)}>
-        <Heatmap records={scores} config={config.heatmap} />
+        <Heatmap records={scores} config={config.heatmap} lang={config.general.language} />
         <div class={field.field}>
             <label class={field.label} for="rg-metric">{t("settings.heatmap.metric")}</label>
             <select id="rg-metric" class={select} value={config.heatmap.metric} on:change={onMetricChange}>

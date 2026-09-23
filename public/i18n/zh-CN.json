@@ -120,6 +120,10 @@
     "result.wrongCount": "{0} 错 · {1} 未答",
     "result.qCount": "{0} 题",
 
+    "heatmap.totalRecords": "共 {0} 条答题记录",
+    "heatmap.ariaLabel": "答题热力图，按周排列，可聚焦到某天查看成绩",
+    "heatmap.less": "少",
+    "heatmap.more": "多",
     "heatmap.noRecord": "无记录",
     "heatmap.scoreTip": "{0} · {1} 分（{2} 次）",
 

@@ -120,6 +120,10 @@
     "result.wrongCount": "{0} wrong · {1} unanswered",
     "result.qCount": "{0} questions",
 
+    "heatmap.totalRecords": "{0} record(s) in total",
+    "heatmap.ariaLabel": "Quiz activity heatmap arranged by week. Focus a day to read its score.",
+    "heatmap.less": "Less",
+    "heatmap.more": "More",
     "heatmap.noRecord": "No record",
     "heatmap.scoreTip": "{0} · {1} pts ({2} times)",
 
