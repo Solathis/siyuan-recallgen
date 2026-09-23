@@ -227,6 +227,7 @@
 
     "settings.general.title": "题目与答题",
     "settings.general.desc": "题型开关、难度分布、答题行为",
+    "settings.general.atLeastOneType": "至少要保留一种题型，否则无法生成题目",
     "settings.general.allowedTypes": "允许题型",
     "settings.general.totalCount": "题目数量（1-50）",
     "settings.general.extraScope": "超纲比例（{0}%）",

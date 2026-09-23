@@ -1,12 +1,12 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import { button, card, field, textarea, cn } from "./components";
     import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
     import { getDefaultPrompts } from "@/types/config";
 
     export let config: RecallGenConfig;
-    const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
+    /** 保存回调：Svelte 5 挂载方式下不再使用事件派发 */
+    export let onsave: (config: RecallGenConfig) => void = () => {};
 
     const PROMPT_KEYS = ["generate", "review", "gradeSubjective", "analysis"] as const;
     const PROMPT_LABELS: Record<string, string> = {
@@ -20,12 +20,12 @@
         return (e.target as HTMLTextAreaElement).value;
     }
     function onPromptInput(key: keyof typeof config.prompts, e: Event) {
-        dispatch("save", { ...config, prompts: { ...config.prompts, [key]: v(e) } });
+        onsave({ ...config, prompts: { ...config.prompts, [key]: v(e) } });
     }
     function resetPrompt(key: keyof typeof config.prompts) {
         // 按「输出语言」取对应语言的默认提示词，而不是固定用中文
         const defaults = getDefaultPrompts(config.general.language);
-        dispatch("save", { ...config, prompts: { ...config.prompts, [key]: defaults[key] } });
+        onsave({ ...config, prompts: { ...config.prompts, [key]: defaults[key] } });
     }
 </script>
 

@@ -1,18 +1,18 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import { card, field, select, cn } from "./components";
     import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
 
     export let config: RecallGenConfig;
-    const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
+    /** 保存回调：Svelte 5 挂载方式下不再使用事件派发 */
+    export let onsave: (config: RecallGenConfig) => void = () => {};
 
     function v(e: Event): string {
         return (e.target as HTMLSelectElement).value;
     }
 
     function patchRoles(patch: Partial<typeof config.ai.roles>) {
-        dispatch("save", { ...config, ai: { ...config.ai, roles: { ...config.ai.roles, ...patch } } });
+        onsave({ ...config, ai: { ...config.ai, roles: { ...config.ai.roles, ...patch } } });
     }
 
     /** 角色当前模型所属端点 ID */

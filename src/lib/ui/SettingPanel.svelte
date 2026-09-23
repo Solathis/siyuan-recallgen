@@ -30,9 +30,9 @@
     type SectionKey = (typeof SECTIONS)[number]["key"];
     let active: SectionKey = "ai";
 
-    function handleSave(e: { detail: RecallGenConfig }) {
-        config = e.detail;
-        onSave(e.detail);
+    function handleSave(next: RecallGenConfig) {
+        config = next;
+        onSave(next);
     }
 </script>
 
@@ -49,15 +49,15 @@
         <div class={scrollArea}>
             <div class="rg-setting-inner">
                 {#if active === "ai"}
-                    <SettingsAI {config} {onTestConnection} on:save={handleSave} />
+                    <SettingsAI {config} {onTestConnection} onsave={handleSave} />
                 {:else if active === "roles"}
-                    <SettingsAIRoles {config} on:save={handleSave} />
+                    <SettingsAIRoles {config} onsave={handleSave} />
                 {:else if active === "general"}
-                    <SettingsGeneral {config} on:save={handleSave} />
+                    <SettingsGeneral {config} onsave={handleSave} />
                 {:else if active === "prompts"}
-                    <SettingsPrompts {config} on:save={handleSave} />
+                    <SettingsPrompts {config} onsave={handleSave} />
                 {:else if active === "heatmap"}
-                    <SettingsHeatmap {config} {scores} on:save={handleSave} />
+                    <SettingsHeatmap {config} {scores} onsave={handleSave} />
                 {:else if active === "data"}
                     <SettingsData {onClearScores} {onClearProgress} scoreCount={scores.length} />
                 {/if}

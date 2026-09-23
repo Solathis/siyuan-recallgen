@@ -227,6 +227,7 @@
 
     "settings.general.title": "Quiz & Answer",
     "settings.general.desc": "Question types, difficulty, answer behavior",
+    "settings.general.atLeastOneType": "Keep at least one question type, otherwise generation cannot run",
     "settings.general.allowedTypes": "Allowed Types",
     "settings.general.totalCount": "Total Questions (1-50)",
     "settings.general.extraScope": "Extra-Scope Ratio ({0}%)",

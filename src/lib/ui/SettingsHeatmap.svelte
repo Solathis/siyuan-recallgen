@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import Heatmap from "./Heatmap.svelte";
     import { button, card, field, input, select, cn } from "./components";
     import { t } from "../i18n";
@@ -8,7 +7,8 @@
 
     export let config: RecallGenConfig;
     export let scores: ScoreIndexEntry[] = [];
-    const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
+    /** 保存回调：Svelte 5 挂载方式下不再使用事件派发 */
+    export let onsave: (config: RecallGenConfig) => void = () => {};
 
     function v(e: Event): string {
         return (e.target as HTMLInputElement | HTMLSelectElement).value;
@@ -18,7 +18,7 @@
     }
 
     function patchHeatmap(patch: Partial<typeof config.heatmap>) {
-        dispatch("save", { ...config, heatmap: { ...config.heatmap, ...patch } });
+        onsave({ ...config, heatmap: { ...config.heatmap, ...patch } });
     }
     function onMetricChange(e: Event) {
         patchHeatmap({ metric: v(e) as "max" | "avg" });
@@ -31,7 +31,7 @@
     }
     function patchRange(i: number, patch: Partial<{ min: number; max: number; color: string }>) {
         const ranges = config.heatmap.ranges.map((r, idx) => (idx === i ? { ...r, ...patch } : r));
-        dispatch("save", { ...config, heatmap: { ...config.heatmap, ranges } });
+        onsave({ ...config, heatmap: { ...config.heatmap, ranges } });
     }
 </script>
 

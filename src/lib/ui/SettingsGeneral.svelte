@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import {
         card,
         field,
@@ -13,12 +12,14 @@
         alertDescription,
         cn,
     } from "./components";
+    import { showMessage } from "siyuan";
     import { t } from "../i18n";
     import type { RecallGenConfig, StorageLocation } from "@/types/config";
     import type { QuestionType } from "@/types/quiz";
 
     export let config: RecallGenConfig;
-    const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
+    /** 保存回调：Svelte 5 挂载方式下不再使用事件派发 */
+    export let onsave: (config: RecallGenConfig) => void = () => {};
 
     const TYPE_OPTIONS: { key: QuestionType; label: string }[] = [
         { key: "single_choice", label: t("type.single_choice") },
@@ -39,29 +40,47 @@
         return (e.target as HTMLInputElement).checked;
     }
 
-    let _extraScope = config.general.extraScopePct;
-    let _panelWidth = config.general.panelWidth;
+    /**
+     * 滑块的本地镜像值：拖动过程只更新镜像，松开时才写回配置。
+     * 取值包在函数里，避免在响应式上下文之外直接引用 config。
+     */
+    function initialExtraScope() {
+        return config.general.extraScopePct;
+    }
+    function initialPanelWidth() {
+        return config.general.panelWidth;
+    }
+    let _extraScope = initialExtraScope();
+    let _panelWidth = initialPanelWidth();
 
     $: diffOk =
         config.general.difficulty.easy + config.general.difficulty.medium + config.general.difficulty.hard ===
         config.general.difficulty.total;
     $: totalValid = config.general.difficulty.total >= 1 && config.general.difficulty.total <= 50;
 
-    function toggleType(t: QuestionType) {
-        const arr = config.general.allowedTypes;
-        const i = arr.indexOf(t);
-        if (i >= 0) arr.splice(i, 1);
-        else arr.push(t);
-        dispatch("save", { ...config, general: { ...config.general, allowedTypes: [...arr] } });
+    function toggleType(type: QuestionType) {
+        const current = config.general.allowedTypes;
+        const next = current.includes(type) ? current.filter((x) => x !== type) : [...current, type];
+        // 一个题型都不选会让生成必然失败，直接拒绝而不是留下无效配置
+        if (next.length === 0) {
+            showMessage(t("settings.general.atLeastOneType"), 7000, "error");
+            return;
+        }
+        patchGeneral({ allowedTypes: next });
     }
     function patchGeneral(patch: Partial<typeof config.general>) {
-        dispatch("save", { ...config, general: { ...config.general, ...patch } });
+        onsave({ ...config, general: { ...config.general, ...patch } });
+    }
+    /** 难度分档统一收敛到 0-50 的整数，避免写入负数或超大值 */
+    function clampCount(value: number): number {
+        return Math.max(0, Math.min(50, Math.round(value)));
     }
     function patchDifficulty(patch: Partial<typeof config.general.difficulty>) {
-        dispatch("save", {
-            ...config,
-            general: { ...config.general, difficulty: { ...config.general.difficulty, ...patch } },
-        });
+        const merged = { ...config.general.difficulty, ...patch };
+        for (const key of ["total", "easy", "medium", "hard"] as const) {
+            merged[key] = clampCount(merged[key]);
+        }
+        patchGeneral({ difficulty: merged });
     }
     function onLangChange(e: Event) {
         patchGeneral({ language: v(e) as "zh" | "en" });
