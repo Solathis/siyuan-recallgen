@@ -79,12 +79,18 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 - **GitHub-style Heatmap**: Fixed 53 weeks × 7 days (371 cells) contribution graph showing the past year's daily quiz activity
 - **Aggregation**: Daily max score or daily average score (configurable)
 - **Color Ranges**: Default GitHub green palette, customizable with color pickers
-- **Auto-Recording**: Score saved immediately on submit to `recallgen-scores.json`, independent of subsequent analysis success
-- **History Tab**: Top-right icon opens the history panel; group by date or source notebook; thumbnail/list/table views; click a record to replay the full result view
+- **Auto-Recording**: On submit the score index and the current month's detail shard are written immediately, independent of subsequent analysis. The history list loads only the lightweight index; detail is fetched on demand when reviewing
+- **History Tab**: open from the top-right icon
+  - Group by date or by source notebook; thumbnail / list / table views
+  - **Search** by title and source
+  - **Filter** by score band: all / 80+ / 60-79 / below 60
+  - **Export** the current filter result as JSON / CSV / Markdown
+  - **Delete a single record** with confirmation (removes both index entry and detail)
+  - Click a record to replay the full result view
 
 ### Settings Panel
 
-Left sidebar navigation + right content area, 5 independent sections:
+Left sidebar navigation + right content area, 6 independent sections:
 
 1. **AI Service**: Endpoint CRUD (name/provider/protocol/Base URL/API Key), nested models per endpoint (name/temperature/MaxTokens), duplicate name prevention, test connection (endpoint+model cascade select), global timeout and JSON Schema toggle
 2. **AI Roles**: Three role cards (generator/reviewer/grader) with endpoint+model cascade selection; different models recommended but same allowed
@@ -121,14 +127,17 @@ Left sidebar navigation + right content area, 5 independent sections:
 
 | Component | Technology | Version |
 |-----------|-----------|---------|
-| Frontend Framework | Svelte | 4.2+ |
-| Build Tool | Vite | 5.2+ |
-| Type System | TypeScript | 5.1+ |
+| Frontend Framework | Svelte | 5.57+ |
+| Build Tool | Vite | 7.3+ |
+| Type System | TypeScript | 5.9+ |
+| Styling & Components | Tailwind CSS 4 + shadcn-svelte (bits-ui) | 4.3+ / 1.7+ |
 | SiYuan SDK | siyuan | 1.2.3 |
 | Code Editor | CodeMirror 6 | 6.x |
 | Math Rendering | KaTeX | 0.18.1 |
 | Markdown Rendering | marked | 18.0.9 |
 | JSON Repair | jsonrepair | 3.15+ |
+| HTML Sanitizing | DOMPurify | 3.4+ |
+| Unit Tests | Vitest | 4.1+ |
 | Package Manager | pnpm | 11+ |
 
 ### Architecture Highlights
@@ -137,64 +146,41 @@ Left sidebar navigation + right content area, 5 independent sections:
 - **AI Network Proxy**: All AI requests via `forwardProxy` (kernel HTTP proxy), `payloadEncoding: 'json'` passes JSON object directly, no CORS, API keys not exposed
 - **Data Persistence**: Uses SiYuan `saveData`/`loadData` (not localStorage), supports multi-device sync
   - `recallgen-config.json`: Plugin configuration
-  - `recallgen-scores.json`: Score records (includes questions, answers, comments, analysis)
+  - `recallgen-scores-index.json`: Score index with per-type/per-difficulty aggregates; the history list and charts read only this file
+  - `recallgen-scores-YYYY-MM.json`: Monthly detail shards (questions, grading, analysis), loaded on demand
   - `recallgen-progress.json`: Answer progress (unsaved sessions)
-- **Async Store Base**: `AsyncStore` implements write serialization (Promise chain), in-memory cache + disk persistence, concurrency-safe
+- **Async Store Base**: `AsyncStore` handles serialized reads/writes, prevents a read from clobbering a concurrent write, and propagates write failures. Config writes are coalesced over a 400ms window so typing in a field no longer rewrites the whole file; quiz progress expires after 30 days
 - **Tab State Machine**: `configuring → loading_generating → answering → loading_grading → result`
-- **UI Components**: shadcn-style Svelte components (Card/Button/Badge/Field/Progress/Separator/Tooltip etc.) using SiYuan `--b3-*` CSS variables, theme-native, no Tailwind dependency
+- **UI Components**: all built on shadcn-svelte (Button/Card/Badge/Input/Select/Switch/Tabs/Table/AlertDialog/DropdownMenu/Progress/Skeleton, powered by bits-ui). shadcn semantic variables are mapped to SiYuan's `--b3-*`, so light/dark follow the host theme, and the `dark:` variant is bound to SiYuan's `.theme-dark`
+- **Style isolation**: Tailwind's preflight is **deliberately not imported** — SiYuan and the plugin share one document, and a global reset would break SiYuan's own UI. Only the theme and utilities layers are imported, with the resets Tailwind relies on narrowed to the plugin container `.rg-scope`. KaTeX's own `body{counter-reset}` rule is rewritten to that scope too, so the plugin makes zero global style changes
 - **Tab Restore**: SiYuan restores custom tabs on restart; `mode='generate'` tabs auto-detect existing progress and resume to answering state
-- **LaTeX CSS**: KaTeX CSS injected via CDN `<link>` (not Vite import) to avoid base64 font bloat
+- **Formula rendering**: KaTeX styles and fonts ship with the plugin (woff2 only, ~296KB) instead of a CDN, so formulas render offline. The pipeline is `marked → DOMPurify → restore KaTeX`: at sanitize time formulas are still placeholders, which blocks script injection from notes/AI text without damaging KaTeX's own MathML
 
 ### Project Structure
 
 ```
 src/
-├── index.ts                    # Plugin entry: lifecycle, tab registration, service assembly
-├── index.scss                  # Global styles (rg-* component classes mapping SiYuan variables)
-├── api.ts                      # SiYuan API wrappers (forwardProxy, block ops, SQL, export)
+├── index.ts                    # Plugin entry: lifecycle, tab registration (mount/unmount), service wiring
+├── app.css                     # Tailwind v4 entry + shadcn tokens mapped to --b3-* + scoped .rg-scope preflight
+├── api.ts                      # SiYuan API wrappers (only what is actually used)
+├── test/
+│   ├── siyuan-stub.ts          # Stand-in for the siyuan package (types only, no runtime)
+│   └── setup-i18n.ts           # Loads the real Chinese dictionary for tests
 ├── types/
-│   ├── config.ts               # Config types and defaults
-│   └── quiz.ts                 # Question/answer/grading/score types
-├── lib/
-│   ├── ai/
-│   │   ├── client.ts           # AI calls (3 protocols, retry, timeout, forwardProxy)
-│   │   ├── schema.ts            # JSON Schema definitions and loose parsing (parseJsonLoose)
-│   │   └── prompts.ts           # Prompt builders (generate/review/regenerate/grade/analyze/chat)
-│   ├── quiz/
-│   │   ├── generator.ts        # Generation + review loop + fault-tolerant validation
-│   │   ├── grader.ts           # Grading (objective local + subjective AI)
-│   │   ├── selector.ts         # Entry point registration (menus/commands/events)
-│   │   ├── service.ts          # QuizService interface (decouples QuizPanel from backend)
-│   │   ├── docWriter.ts        # Write questions to SiYuan docs (IAL tagging)
-│   │   └── dateRange.ts        # Date range queries (SQL created field)
-│   ├── editor/
-│   │   └── codemirror.ts       # CodeMirror 6 editor (dynamic language pack imports)
-│   ├── storage/
-│   │   ├── store.ts            # AsyncStore base (serialized writes + cache)
-│   │   ├── config.ts           # Config store (mergeDefaults migration)
-│   │   ├── scores.ts           # Score store
-│   │   ├── progress.ts         # Answer progress store
-│   │   └── index.ts            # Storage module exports
-│   └── ui/
-│       ├── QuizPanel.svelte    # Main answer panel (state machine)
-│       ├── QuestionView.svelte # Single question rendering (Markdown+LaTeX+editor)
-│       ├── ResultPanel.svelte  # Result panel (3 tabs + AI Q&A)
-│       ├── ChatPanel.svelte     # Per-question AI chat
-│       ├── ProgressBar.svelte   # Generation/grading progress bar
-│       ├── Heatmap.svelte       # Heatmap component
-│       ├── HistoryPanel.svelte  # History records panel
-│       ├── SettingPanel.svelte  # Settings panel (sidebar nav)
-│       ├── SettingsAI.svelte    # AI endpoint/model management
-│       ├── SettingsAIRoles.svelte # AI role config
-│       ├── SettingsGeneral.svelte # Quiz & answer settings
-│       ├── SettingsPrompts.svelte # Prompt editors
-│       ├── SettingsHeatmap.svelte # Heatmap settings
-│       ├── SettingsData.svelte   # Data management
-│       ├── latex.ts            # Markdown+LaTeX rendering function
-│       └── components/         # shadcn-style component library
-│           ├── index.ts        # CSS class constant exports
-│           └── Tabs*.svelte    # Tabs component (context API)
-└── libs/                       # Template utilities (dialog, setting-utils)
+│   ├── config.ts               # Config types, defaults, ConfigPatch, legacy migration
+│   └── quiz.ts                 # Question/answer/grading/score index & detail types
+└── lib/
+    ├── ai/                     # client.ts, errors.ts, schema.ts, scaffold.ts, prompts.ts
+    ├── quiz/                   # generator.ts, grader.ts, selector.ts, content.ts, stats.ts,
+    │                           # export.ts, service.ts, docWriter.ts, dateRange.ts
+    ├── editor/codemirror.ts    # CodeMirror 6 editor (lazy language packs, theme follows SiYuan)
+    ├── i18n/index.ts           # t() with global placeholder replacement and dictionary fallback
+    ├── storage/                # store.ts, config.ts, scores.ts, progress.ts
+    ├── ui/                     # QuizPanel, QuestionView, ResultPanel, HistoryPanel, Heatmap,
+    │                           # ProgressBar, SettingPanel + 6 Settings* panels, latex.ts
+    ├── components/ui/          # shadcn-svelte components (CLI-generated, editable)
+    ├── utils.ts                # cn() plus the type helpers shadcn components import
+    └── promise-pool.ts         # Concurrency-limited pool
 ```
 
 ## 💻 Development
@@ -226,8 +212,9 @@ pnpm run make-install
 
 ### Build Artifacts
 
-- `dist/index.js`: Single-file bundle (inlineDynamicImports), ~1MB (gzip 360KB)
-- `dist/index.css`: Stylesheet, ~24KB (gzip 4KB)
+- `dist/index.js`: Single-file bundle (inlineDynamicImports), ~1.47MB (gzip 466KB)
+- `dist/index.css`: Stylesheet including KaTeX styles, ~74KB (gzip 12KB)
+- `dist/fonts/`: KaTeX fonts (20 woff2 files, ~296KB)
 - `dist/icon.png`: Plugin icon
 - `dist/plugin.json`: Plugin manifest
 - `package.zip`: Packaged zip file
@@ -237,7 +224,9 @@ pnpm run make-install
 - **npm/npx unavailable**: In MSYS2 bash, npm path is not executable; use `pnpm` or `pnpm exec`
 - **SiYuan SDK patch**: `siyuan@1.2.3` has a TS6196 unused import issue, fixed via `patches/siyuan@1.2.3.patch` (configured in `pnpm-workspace.yaml` `patchedDependencies`)
 - **Vite config**: `output.inlineDynamicImports: true` forces single-file output; `viteStaticCopy` copies `icon.png`; `optimizeDeps.include` pre-bundles CodeMirror language packs
-- **Svelte 4 limitations**: No inline TS type assertions in `on:event` handlers; `getContext`/`setContext` Symbols must be declared in a shared module
+- **Svelte 5**: components are mounted with `mount`/`unmount` (`new Component()` and `$destroy()` no longer work). `mount()` does not expose `$on`, so plugin-to-component communication uses callback props (`onsave`, `onchange`, ...). New components use runes (`$props`/`$state`/`$derived`/`$effect`)
+- **Quality gates**: `pnpm run typecheck` (svelte-check), `pnpm run format:check` (prettier), `pnpm test` (vitest), `pnpm run build`; CI runs all of them on push/PR and verifies the release tag matches `plugin.json`
+- **Output directory**: production builds go to `dist/` by default. To build straight into your SiYuan plugin folder, copy `.env.local.example` to `.env.local` and set `OUTPUT_DIR` (that file is gitignored)
 - **SiYuan plugin loader**: Uses browser module loader (not Node require); Rollup code-split `require()` stubs cause runtime failures
 
 ## 📊 Data Flow
@@ -328,6 +317,41 @@ Score record → recallgen-scores.json
 
 - **AI Output Language**: Configurable (Chinese/English) — controls the language of generated questions, grading comments, and analysis
 - **UI Language**: Currently Chinese-only; i18n infrastructure is in place for future localization
+
+## 🔄 Recent Refactor
+
+This round migrated the plugin from "Svelte 4 + hand-written CSS classes" to "Svelte 5 + Tailwind 4 + shadcn-svelte" and fixed a batch of correctness issues.
+
+### Correctness & security
+
+- **Render safety**: Markdown output was injected without sanitizing, so `<img onerror>` or `<script>` from notes or AI output could execute inside the SiYuan desktop app. It now goes through DOMPurify before injection
+- **Formula rendering**: fixed a placeholder-index mismatch that made every formula after the first one fail to render. KaTeX styles and fonts now ship with the plugin instead of coming from a CDN
+- **AI retry**: fixed timeouts never being retried (the old check matched English text) and an uncleaned watchdog timer that caused unhandled rejections
+- **Generation tolerance**: fixed one invalid question discarding the whole batch, and out-of-range choice answer indices (questions users could never answer correctly)
+- **Content selection**: fixed the "short note" confirmation ignoring Cancel, silent truncation at 200 notebook documents, and sequential unbounded document export
+- **Data safety**: clearing scores/progress now requires confirmation; config write failures are no longer swallowed; quiz progress expires after 30 days
+- **Settings**: fixed new models always getting an empty name, duplicate names desyncing the input from config, all question types being uncheckable, and every keystroke rewriting the config file
+
+### Storage layout
+
+Scores moved from "one file holding every record, fully rewritten on each submit" to "lightweight index + monthly detail shards".
+The history list and charts read only the index (no questions or grading detail), and a submit writes only as much as that month holds. The old file is migrated automatically on first launch, with a backup kept.
+
+### Interaction & UI
+
+- Every screen now uses shadcn-svelte components; 400+ lines of hand-written CSS classes were removed
+- Fixed several hard-coded colours that were unreadable in dark mode
+- Fixed the heatmap tooltip being permanently invisible and cells collapsing below 4px on narrow screens
+- Fixed setting changes not applying during a quiz, and the code editor keeping the previous question's content
+- Fixed the "weakness analysis" and "study advice" tabs showing the same text
+- Added empty, loading (skeleton) and error states (title + actionable hint + raw message) plus keyboard accessibility
+- Prompt scaffolding and default prompts now follow the output-language setting
+
+### Not implemented yet (planned)
+
+- **Statistics charts**: score trend, per-type accuracy, weakest knowledge points, score distribution. Only the heatmap exists today
+- **Spaced repetition**: no FSRS/SM-2 scheduling or reusable question bank yet; every generation produces new questions
+- **Virtual scrolling in history**: a long history renders all rows at once
 
 ## 📄 License
 
