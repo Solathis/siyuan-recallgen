@@ -11,11 +11,26 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { lineGeometry } from "../quiz/chart-geometry";
-    import { MAX_BANK_HISTORY, cardPhase, dueState, masteryScore, recentAverage, type BankItem } from "../quiz/bank";
+    import {
+        MAX_BANK_HISTORY,
+        bankTags,
+        cardPhase,
+        dueState,
+        masteryScore,
+        recentAverage,
+        type BankItem,
+    } from "../quiz/bank";
     import { nextLimit, PAGE_SIZE } from "../quiz/paging";
     import type { QuizService } from "../quiz/service";
 
-    let { service }: { service: QuizService } = $props();
+    let {
+        service,
+        onStartReview = () => {},
+    }: {
+        service: QuizService;
+        /** 按知识点开始一次到期复习；由插件层打开新的答题 Tab */
+        onStartReview?: (scope: { tag?: string }) => void;
+    } = $props();
 
     let items = $state<BankItem[]>([]);
     let loading = $state(true);
@@ -24,6 +39,7 @@
     let query = $state("");
     let filter = $state<"all" | "due" | "weak">("all");
     let typeFilter = $state<string>("all");
+    let tagFilter = $state<string>("all");
     let visible = $state(PAGE_SIZE);
 
     async function load() {
@@ -48,6 +64,7 @@
         void query;
         void filter;
         void typeFilter;
+        void tagFilter;
         visible = PAGE_SIZE;
     });
 
@@ -61,6 +78,18 @@
         [...new Set(items.map((item) => item.question.type))].sort((a, b) => a.localeCompare(b))
     );
 
+    /** 题库里出现过的知识点标签（按题数倒序），用于筛选与「按知识点复习」 */
+    const tagOptions = $derived(bankTags(items));
+
+    /** 当前标签筛选下已到期的题数，用于复习按钮的可用状态与人数提示 */
+    const tagDueCount = $derived(
+        tagFilter === "all"
+            ? 0
+            : items.filter(
+                  (item) => (item.question.tags ?? []).includes(tagFilter) && dueState(item.card) === "overdue"
+              ).length
+    );
+
     const filtered = $derived.by(() => {
         const keyword = query.trim().toLowerCase();
         const now = Date.now();
@@ -69,6 +98,7 @@
                 .filter((item) => {
                     if (keyword && !item.question.question.toLowerCase().includes(keyword)) return false;
                     if (typeFilter !== "all" && item.question.type !== typeFilter) return false;
+                    if (tagFilter !== "all" && !(item.question.tags ?? []).includes(tagFilter)) return false;
                     if (filter === "due" && item.card.due > now) return false;
                     if (filter === "weak" && masteryScore(item) >= 60) return false;
                     return true;
@@ -197,11 +227,45 @@
                     </Select.Content>
                 </Select.Root>
             {/if}
+            {#if tagOptions.length > 0}
+                <Select.Root type="single" value={tagFilter} onValueChange={(v) => (tagFilter = v)}>
+                    <Select.Trigger class="h-8 w-32" aria-label={t("bank.filterTag")}>
+                        {tagFilter === "all" ? t("bank.filterAllTags") : tagFilter}
+                    </Select.Trigger>
+                    <Select.Content>
+                        <Select.Item value="all">{t("bank.filterAllTags")}</Select.Item>
+                        {#each tagOptions as option (option.tag)}
+                            <Select.Item value={option.tag}>
+                                {option.tag}
+                                <span class="text-muted-foreground">· {option.count}</span>
+                            </Select.Item>
+                        {/each}
+                    </Select.Content>
+                </Select.Root>
+            {/if}
             <Button variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
                 {t("common.refresh")}
             </Button>
         </div>
     </div>
+
+    <!-- 按知识点筛选时给出一条可执行的复习入口，而不是只能看列表 -->
+    {#if tagFilter !== "all" && !loading && items.length > 0}
+        <div class="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2">
+            <span class="text-xs">
+                {t("bank.tagScope", tagFilter, String(filtered.length))}
+                <span class="text-muted-foreground">{t("bank.tagDue", String(tagDueCount))}</span>
+            </span>
+            <Button
+                size="sm"
+                variant="outline"
+                disabled={tagDueCount === 0}
+                onclick={() => onStartReview({ tag: tagFilter })}
+            >
+                {t("bank.reviewTag")}
+            </Button>
+        </div>
+    {/if}
 
     {#if loading}
         <div class="flex flex-col gap-2">
@@ -388,6 +452,22 @@
                                             <dt class="text-muted-foreground">{t("bank.detailCreated")}</dt>
                                             <dd>{fmtDateTime(item.createdAt)}</dd>
                                         </dl>
+                                        {#if (item.question.tags ?? []).length > 0}
+                                            <div class="flex flex-wrap items-center gap-1">
+                                                <span class="text-muted-foreground text-[11px]">
+                                                    {t("bank.detailTags")}
+                                                </span>
+                                                {#each item.question.tags ?? [] as tag (tag)}
+                                                    <button
+                                                        type="button"
+                                                        class="border-border hover:bg-muted rounded border px-1.5 py-0.5 text-[11px]"
+                                                        onclick={() => (tagFilter = tag)}
+                                                    >
+                                                        {tag}
+                                                    </button>
+                                                {/each}
+                                            </div>
+                                        {/if}
                                         <p class="text-muted-foreground text-[11px]">
                                             {t("bank.detailSource", item.sourceTitle || item.sourceDocId)}
                                         </p>

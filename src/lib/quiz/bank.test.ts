@@ -14,12 +14,14 @@ import {
     isCardDue,
     masteryScore,
     newCardState,
+    bankTags,
     normalizeBankItem,
     normalizeText,
     pickDueItems,
     recentAverage,
     questionFingerprint,
     scheduleReview,
+    selectReviewItems,
     summarizeBank,
     toCardState,
     type BankItem,
@@ -339,6 +341,80 @@ describe("cardPhase", () => {
 
     it("未知阶段按复习中处理，不抛异常", () => {
         expect(cardPhase({ ...card, state: 99 as State })).toBe("review");
+    });
+});
+
+describe("selectReviewItems", () => {
+    /** 造一道已到期的题：可指定来源文档与知识点标签 */
+    const make = (text: string, doc: string, tags: string[] = []): BankItem => {
+        const base = createBankItem(question(text), { sourceDocId: doc, sourceTitle: doc }, NOW);
+        return {
+            ...base,
+            question: { ...base.question, tags },
+            card: { ...base.card, due: NOW - DAY },
+        };
+    };
+
+    const bank: BankItem[] = [
+        make("甲", "doc-1", ["代数", "函数"]),
+        make("乙", "doc-1", ["代数"]),
+        make("丙", "doc-2", ["几何"]),
+        make("丁", "doc-2"),
+    ];
+
+    it("默认返回全部到期题目", () => {
+        expect(selectReviewItems(bank, { now: NOW })).toHaveLength(4);
+    });
+
+    it("按知识点标签筛选", () => {
+        expect(selectReviewItems(bank, { now: NOW, tag: "代数" }).map((i) => i.question.question)).toEqual([
+            "甲",
+            "乙",
+        ]);
+    });
+
+    it("按来源文档与标签同时限定", () => {
+        expect(selectReviewItems(bank, { now: NOW, tag: "代数", sourceDocId: "doc-1" })).toHaveLength(2);
+        expect(selectReviewItems(bank, { now: NOW, tag: "几何", sourceDocId: "doc-1" })).toHaveLength(0);
+    });
+
+    it("没有标签的题目不会匹配任何标签筛选", () => {
+        const ids = selectReviewItems(bank, { now: NOW, tag: "几何" }).map((i) => i.question.question);
+        expect(ids).toEqual(["丙"]);
+    });
+
+    it("未到期的不返回", () => {
+        const future = [{ ...bank[0], card: { ...bank[0].card, due: NOW + DAY } }];
+        expect(selectReviewItems(future, { now: NOW })).toHaveLength(0);
+    });
+
+    it("limit 限制数量且保持到期时间升序", () => {
+        const out = selectReviewItems(bank, { now: NOW, tag: "代数", limit: 1 });
+        expect(out).toHaveLength(1);
+    });
+});
+
+describe("bankTags", () => {
+    /** 只关心标签，其余字段用最简结构 */
+    const tagged = (text: string, tags: string[] = []): BankItem => {
+        const base = createBankItem(question(text), { sourceDocId: "d", sourceTitle: "t" }, NOW);
+        return { ...base, question: { ...base.question, tags } };
+    };
+
+    it("统计标签题数并按题数倒序", () => {
+        const items: BankItem[] = [tagged("甲", ["代数", "函数"]), tagged("乙", ["代数"]), tagged("丙")];
+        expect(bankTags(items)).toEqual([
+            { tag: "代数", count: 2 },
+            { tag: "函数", count: 1 },
+        ]);
+    });
+
+    it("同一道题的重复标签只计一次", () => {
+        expect(bankTags([tagged("甲", ["代数", "代数"])])).toEqual([{ tag: "代数", count: 1 }]);
+    });
+
+    it("没有标签时返回空数组", () => {
+        expect(bankTags([tagged("甲")])).toEqual([]);
     });
 });
 

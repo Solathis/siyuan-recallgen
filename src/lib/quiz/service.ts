@@ -82,7 +82,7 @@ export interface QuizService {
      * 按 FSRS 排程取出到期的题目，用于「复习到期题目」。
      * 传入 sourceDocId 时只取来自该文档的题目，便于「只复习这篇笔记」。
      */
-    dueBankQuestions(limit?: number, sourceDocId?: string): Promise<Question[]>;
+    dueBankQuestions(limit?: number, sourceDocId?: string, tag?: string): Promise<Question[]>;
     /** 题库规模概览 */
     bankSummary(): Promise<BankSummary>;
     /** 题库全部条目，用于题库浏览界面 */
@@ -132,6 +132,8 @@ export interface QuizTabData {
     notebookId?: string;
     /** reviewDue 模式下限定来源文档，只复习该文档的到期题目 */
     dueSourceDocId?: string;
+    /** reviewDue 模式下限定知识点标签，只复习该标签的到期题目 */
+    dueTag?: string;
     /** review 模式的成绩数据 */
     review?: ReviewPayload;
 }
