@@ -16,15 +16,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
       - uses: pnpm/action-setup@v4
         with:
           version: 11
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
       - run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches plugin version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PLUGIN_VERSION="$(node -p "require('./plugin.json').version")"
+          if [ "$TAG" != "$PLUGIN_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match plugin.json version $PLUGIN_VERSION" >&2
+            exit 1
+          fi
+
+      - run: pnpm run typecheck
+
+      - run: pnpm test
 
       - run: pnpm run build
 

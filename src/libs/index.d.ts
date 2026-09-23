@@ -4,9 +4,10 @@
  * @Date         : 2024-04-19 18:30:12
  * @FilePath     : /src/libs/index.d.ts
  * @LastEditTime : 2024-04-30 16:39:54
- * @Description  : 
+ * @Description  :
  */
-type TSettingItemType = "checkbox" | "select" | "textinput" | "textarea" | "number" | "slider" | "button" | "hint" | "custom";
+type TSettingItemType =
+    "checkbox" | "select" | "textinput" | "textarea" | "number" | "slider" | "button" | "hint" | "custom";
 
 interface ISettingItemCore {
     type: TSettingItemType;
@@ -22,7 +23,7 @@ interface ISettingItemCore {
     button?: {
         label: string;
         callback: () => void;
-    }
+    };
 }
 
 interface ISettingItem extends ISettingItemCore {
@@ -31,12 +32,11 @@ interface ISettingItem extends ISettingItemCore {
     direction?: "row" | "column";
 }
 
-
 //Interface for setting-utils
 interface ISettingUtilsItem extends ISettingItem {
     action?: {
         callback: () => void;
-    }
+    };
     createElement?: (currentVal: any) => HTMLElement;
     getEleVal?: (ele: HTMLElement) => any;
     setEleVal?: (ele: HTMLElement, val: any) => void;

@@ -1,0 +1,15 @@
+node_modules
+dist
+dev
+build
+tmp
+coverage
+pnpm-lock.yaml
+package.zip
+preview.png
+icon.png
+.zcode
+public/i18n
+README.md
+README.zh-CN.md
+CHANGELOG.md

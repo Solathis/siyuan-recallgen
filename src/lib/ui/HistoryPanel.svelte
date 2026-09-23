@@ -1,6 +1,5 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { button, badge, card, separator, cn } from "./components";
     import { t } from "../i18n";
     import type { QuizService } from "../quiz/service";
     import type { ScoreRecord } from "@/types/quiz";
@@ -58,13 +57,34 @@
         <h2 class="rg-history__title">{t("history.title")}</h2>
         <div class="rg-history__controls">
             <div class="rg-history__group">
-                <button class="rg-history__seg" class:active={groupBy === "date"} on:click={() => groupBy = "date"}>{t("history.byDate")}</button>
-                <button class="rg-history__seg" class:active={groupBy === "notebook"} on:click={() => groupBy = "notebook"}>{t("history.bySource")}</button>
+                <button class="rg-history__seg" class:active={groupBy === "date"} on:click={() => (groupBy = "date")}
+                    >{t("history.byDate")}</button
+                >
+                <button
+                    class="rg-history__seg"
+                    class:active={groupBy === "notebook"}
+                    on:click={() => (groupBy = "notebook")}>{t("history.bySource")}</button
+                >
             </div>
             <div class="rg-history__group">
-                <button class="rg-history__seg" class:active={viewMode === "thumbnail"} on:click={() => viewMode = "thumbnail"} title={t("history.thumb")}>▦</button>
-                <button class="rg-history__seg" class:active={viewMode === "list"} on:click={() => viewMode = "list"} title={t("history.list")}>☰</button>
-                <button class="rg-history__seg" class:active={viewMode === "table"} on:click={() => viewMode = "table"} title={t("history.table")}>⊏</button>
+                <button
+                    class="rg-history__seg"
+                    class:active={viewMode === "thumbnail"}
+                    on:click={() => (viewMode = "thumbnail")}
+                    title={t("history.thumb")}>▦</button
+                >
+                <button
+                    class="rg-history__seg"
+                    class:active={viewMode === "list"}
+                    on:click={() => (viewMode = "list")}
+                    title={t("history.list")}>☰</button
+                >
+                <button
+                    class="rg-history__seg"
+                    class:active={viewMode === "table"}
+                    on:click={() => (viewMode = "table")}
+                    title={t("history.table")}>⊏</button
+                >
             </div>
         </div>
     </header>
@@ -76,45 +96,60 @@
     {:else}
         {#each grouped as group}
             <section class="rg-history__group-section">
-                <h3 class="rg-history__group-title">{group.key} <span class="rg-history__count">({group.items.length})</span></h3>
+                <h3 class="rg-history__group-title">
+                    {group.key} <span class="rg-history__count">({group.items.length})</span>
+                </h3>
 
                 {#if viewMode === "thumbnail"}
                     <div class="rg-thumb-grid">
-                        {#each group.items as r}
-                            <div class="rg-thumb" on:click={() => onOpenReview(r)} role="button" tabindex="0">
+                        {#each group.items as r (r.id)}
+                            <button type="button" class="rg-thumb" on:click={() => onOpenReview(r)}>
                                 <div class="rg-thumb__score" style="color:{scoreColor(r)}">
                                     {pct(r).toFixed(0)}<span class="rg-thumb__unit">{t("history.pts")}</span>
                                 </div>
                                 <div class="rg-thumb__info">
                                     <div class="rg-thumb__title">{r.title}</div>
-                                    <div class="rg-thumb__meta">{t("result.qCount", String(r.questionCount))} · {timeStr(r.timestamp)}</div>
+                                    <div class="rg-thumb__meta">
+                                        {t("result.qCount", String(r.questionCount))} · {timeStr(r.timestamp)}
+                                    </div>
                                 </div>
                                 <div class="rg-thumb__bar">
-                                    <div class="rg-thumb__bar-fill" style="width:{pct(r)}%;background:{scoreColor(r)}"></div>
+                                    <div
+                                        class="rg-thumb__bar-fill"
+                                        style="width:{pct(r)}%;background:{scoreColor(r)}"
+                                    ></div>
                                 </div>
-                            </div>
+                            </button>
                         {/each}
                     </div>
                 {:else if viewMode === "list"}
                     <div class="rg-list">
-                        {#each group.items as r}
-                            <div class="rg-list__item" on:click={() => onOpenReview(r)} role="button" tabindex="0">
+                        {#each group.items as r (r.id)}
+                            <button type="button" class="rg-list__item" on:click={() => onOpenReview(r)}>
                                 <span class="rg-list__score" style="color:{scoreColor(r)}">{pct(r).toFixed(0)}</span>
                                 <span class="rg-list__title">{r.title}</span>
                                 <span class="rg-list__meta">{t("result.qCount", String(r.questionCount))}</span>
                                 <span class="rg-list__time">{timeStr(r.timestamp)}</span>
-                            </div>
+                            </button>
                         {/each}
                     </div>
                 {:else}
                     <table class="rg-table">
                         <thead>
-                            <tr><th>{t("history.colTitle")}</th><th>{t("history.colScore")}</th><th>{t("history.colCount")}</th><th>{t("history.colTime")}</th></tr>
+                            <tr
+                                ><th>{t("history.colTitle")}</th><th>{t("history.colScore")}</th><th
+                                    >{t("history.colCount")}</th
+                                ><th>{t("history.colTime")}</th></tr
+                            >
                         </thead>
                         <tbody>
-                            {#each group.items as r}
-                                <tr on:click={() => onOpenReview(r)} style="cursor:pointer">
-                                    <td>{r.title}</td>
+                            {#each group.items as r (r.id)}
+                                <tr>
+                                    <td
+                                        ><button type="button" class="rg-table__link" on:click={() => onOpenReview(r)}
+                                            >{r.title}</button
+                                        ></td
+                                    >
                                     <td style="color:{scoreColor(r)}">{pct(r).toFixed(0)} / 100</td>
                                     <td>{r.questionCount}</td>
                                     <td>{timeStr(r.timestamp)}</td>
@@ -129,45 +164,241 @@
 </div>
 
 <style>
-    .rg-history { display: flex; flex-direction: column; gap: 16px; padding: 16px 24px; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; }
-    .rg-history__bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-    .rg-history__title { font-size: 18px; font-weight: 600; margin: 0; }
-    .rg-history__controls { display: flex; gap: 12px; flex-wrap: wrap; }
-    .rg-history__group { display: flex; border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); overflow: hidden; }
-    .rg-history__seg { padding: 4px 12px; border: none; background: transparent; cursor: pointer; font-size: 13px; color: var(--b3-theme-on-surface-light); border-radius: 0; }
-    .rg-history__seg.active { background: var(--b3-theme-primary); color: #fff; }
-    .rg-history__seg:hover:not(.active) { background: var(--b3-list-hover); }
-    .rg-history__empty { text-align: center; padding: 48px; color: var(--b3-theme-on-surface-light); font-size: 14px; }
-    .rg-history__group-section { display: flex; flex-direction: column; gap: 8px; }
-    .rg-history__group-title { font-size: 14px; font-weight: 600; margin: 0; color: var(--b3-theme-on-background); border-bottom: 1px solid var(--b3-border-color); padding-bottom: 4px; }
-    .rg-history__count { font-size: 12px; color: var(--b3-theme-on-surface-light); font-weight: 400; }
+    .rg-history {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .rg-history__bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .rg-history__title {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+    }
+    .rg-history__controls {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .rg-history__group {
+        display: flex;
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        overflow: hidden;
+    }
+    .rg-history__seg {
+        padding: 4px 12px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--b3-theme-on-surface-light);
+        border-radius: 0;
+    }
+    .rg-history__seg.active {
+        background: var(--b3-theme-primary);
+        color: #fff;
+    }
+    .rg-history__seg:hover:not(.active) {
+        background: var(--b3-list-hover);
+    }
+    .rg-history__empty {
+        text-align: center;
+        padding: 48px;
+        color: var(--b3-theme-on-surface-light);
+        font-size: 14px;
+    }
+    .rg-history__group-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .rg-history__group-title {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--b3-theme-on-background);
+        border-bottom: 1px solid var(--b3-border-color);
+        padding-bottom: 4px;
+    }
+    .rg-history__count {
+        font-size: 12px;
+        color: var(--b3-theme-on-surface-light);
+        font-weight: 400;
+    }
     /* thumbnail */
-    .rg-thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-    .rg-thumb { border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); padding: 12px; cursor: pointer; display: flex; flex-direction: column; gap: 8px; transition: border-color .12s, box-shadow .12s; background: var(--b3-theme-background); }
-    .rg-thumb:hover { border-color: var(--b3-theme-primary); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-    .rg-thumb__score { font-size: 28px; font-weight: 700; line-height: 1; }
-    .rg-thumb__unit { font-size: 13px; font-weight: 400; margin-left: 2px; }
-    .rg-thumb__info { flex: 1; }
-    .rg-thumb__title { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .rg-thumb__meta { font-size: 12px; color: var(--b3-theme-on-surface-light); margin-top: 2px; }
-    .rg-thumb__bar { height: 4px; border-radius: 2px; background: var(--b3-theme-surface); overflow: hidden; }
-    .rg-thumb__bar-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+    .rg-thumb-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+    }
+    .rg-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        width: 100%;
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        padding: 12px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        transition:
+            border-color 0.12s,
+            box-shadow 0.12s;
+        background: var(--b3-theme-background);
+    }
+    .rg-thumb:hover {
+        border-color: var(--b3-theme-primary);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    .rg-thumb__score {
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .rg-thumb__unit {
+        font-size: 13px;
+        font-weight: 400;
+        margin-left: 2px;
+    }
+    .rg-thumb__info {
+        flex: 1;
+    }
+    .rg-thumb__title {
+        font-size: 13px;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .rg-thumb__meta {
+        font-size: 12px;
+        color: var(--b3-theme-on-surface-light);
+        margin-top: 2px;
+    }
+    .rg-thumb__bar {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--b3-theme-surface);
+        overflow: hidden;
+    }
+    .rg-thumb__bar-fill {
+        height: 100%;
+        border-radius: 2px;
+        transition: width 0.3s;
+    }
     /* list */
-    .rg-list { display: flex; flex-direction: column; gap: 4px; }
-    .rg-list__item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: var(--b3-border-radius); cursor: pointer; transition: background .12s; }
-    .rg-list__item:hover { background: var(--b3-list-hover); }
-    .rg-list__score { font-size: 18px; font-weight: 700; min-width: 40px; text-align: right; }
-    .rg-list__title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .rg-list__meta { font-size: 12px; color: var(--b3-theme-on-surface-light); }
-    .rg-list__time { font-size: 12px; color: var(--b3-theme-on-surface-light); }
+    .rg-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .rg-list__item {
+        appearance: none;
+        -webkit-appearance: none;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        width: 100%;
+        background: transparent;
+        border: none;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        border-radius: var(--b3-border-radius);
+        cursor: pointer;
+        transition: background 0.12s;
+    }
+    .rg-list__item:hover {
+        background: var(--b3-list-hover);
+    }
+    .rg-list__score {
+        font-size: 18px;
+        font-weight: 700;
+        min-width: 40px;
+        text-align: right;
+    }
+    .rg-list__title {
+        flex: 1;
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .rg-list__meta {
+        font-size: 12px;
+        color: var(--b3-theme-on-surface-light);
+    }
+    .rg-list__time {
+        font-size: 12px;
+        color: var(--b3-theme-on-surface-light);
+    }
     /* table */
-    .rg-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .rg-table th { text-align: left; padding: 6px 12px; font-weight: 600; border-bottom: 1px solid var(--b3-border-color); color: var(--b3-theme-on-surface-light); }
-    .rg-table td { padding: 8px 12px; border-bottom: 1px solid var(--b3-border-color); }
-    .rg-table tr:hover td { background: var(--b3-list-hover); }
+    .rg-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .rg-table th {
+        text-align: left;
+        padding: 6px 12px;
+        font-weight: 600;
+        border-bottom: 1px solid var(--b3-border-color);
+        color: var(--b3-theme-on-surface-light);
+    }
+    .rg-table td {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--b3-border-color);
+    }
+    .rg-table tr:hover td {
+        background: var(--b3-list-hover);
+    }
+    .rg-table__link {
+        appearance: none;
+        -webkit-appearance: none;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        padding: 0;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        text-decoration: underline;
+        text-decoration-color: transparent;
+        transition: text-decoration-color 0.12s;
+    }
+    .rg-table__link:hover {
+        text-decoration-color: currentColor;
+    }
+    .rg-table__link:focus-visible {
+        outline: 2px solid var(--b3-theme-primary);
+        outline-offset: 2px;
+    }
     @media (max-width: 640px) {
-        .rg-history { padding: 12px; }
-        .rg-thumb-grid { grid-template-columns: 1fr; }
-        .rg-list__item { flex-wrap: wrap; }
+        .rg-history {
+            padding: 12px;
+        }
+        .rg-thumb-grid {
+            grid-template-columns: 1fr;
+        }
+        .rg-list__item {
+            flex-wrap: wrap;
+        }
     }
 </style>

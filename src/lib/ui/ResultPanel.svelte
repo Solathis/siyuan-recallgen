@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { button, separator, cn } from "./components";
+    import { button } from "./components";
     import { renderMarkdownLatex as renderLatex } from "../ui/latex";
     import { t } from "../i18n";
     import type { QuizService, ChatTurn } from "../quiz/service";
@@ -26,15 +26,18 @@
     let chatScrollEl: HTMLElement | null = null;
 
     const TYPE_LABEL: Record<string, string> = {
-        single_choice: t("type.single_choice"), multiple_choice: t("type.multiple_choice"), fill_blank: t("type.fill_blank"),
-        true_false: t("type.true_false"), subjective: t("type.subjective"), coding: t("type.coding"),
+        single_choice: t("type.single_choice"),
+        multiple_choice: t("type.multiple_choice"),
+        fill_blank: t("type.fill_blank"),
+        true_false: t("type.true_false"),
+        subjective: t("type.subjective"),
+        coding: t("type.coding"),
     };
     const DIFF_LABEL: Record<string, string> = { easy: t("diff.easy"), medium: t("diff.medium"), hard: t("diff.hard") };
 
     $: total = results.reduce((s, r) => s + r.score, 0);
     $: max = results.reduce((s, r) => s + r.maxScore, 0);
     $: pct = max > 0 ? (total / max) * 100 : 0;
-    $: passed = pct >= 60;
     $: correctCount = results.filter((r) => r.score >= 60).length;
     $: wrongCount = results.length - correctCount;
     $: unanswered = results.filter((r) => !r.userAnswer).length;
@@ -56,12 +59,21 @@
     function correctText(q: Question): string {
         const qany = q as any;
         switch (q.type) {
-            case "single_choice": return String.fromCharCode(65 + qany.answer);
-            case "multiple_choice": return qany.answer.map((i: number) => String.fromCharCode(65 + i)).sort().join("、");
-            case "true_false": return qany.answer ? t("common.true") : t("common.false");
-            case "fill_blank": return qany.answer.map((o: string[]) => o.join(" / ")).join("；");
-            case "subjective": return qany.reference_answer;
-            case "coding": return t("common.seeAnswer");
+            case "single_choice":
+                return String.fromCharCode(65 + qany.answer);
+            case "multiple_choice":
+                return qany.answer
+                    .map((i: number) => String.fromCharCode(65 + i))
+                    .sort()
+                    .join("、");
+            case "true_false":
+                return qany.answer ? t("common.true") : t("common.false");
+            case "fill_blank":
+                return qany.answer.map((o: string[]) => o.join(" / ")).join("；");
+            case "subjective":
+                return qany.reference_answer;
+            case "coding":
+                return t("common.seeAnswer");
         }
         return "";
     }
@@ -70,11 +82,20 @@
         if (!ua) return `（${t("common.unanswered")}）`;
         const v = ua.value as any;
         switch (ua.type) {
-            case "single_choice": return String.fromCharCode(65 + v);
-            case "multiple_choice": return v.map((i: number) => String.fromCharCode(65 + i)).sort().join("、");
-            case "true_false": return v ? t("common.true") : t("common.false");
-            case "fill_blank": return v.join("；");
-            case "subjective": case "coding": return v;
+            case "single_choice":
+                return String.fromCharCode(65 + v);
+            case "multiple_choice":
+                return v
+                    .map((i: number) => String.fromCharCode(65 + i))
+                    .sort()
+                    .join("、");
+            case "true_false":
+                return v ? t("common.true") : t("common.false");
+            case "fill_blank":
+                return v.join("；");
+            case "subjective":
+            case "coding":
+                return v;
         }
         return "";
     }
@@ -103,7 +124,10 @@
             const reply = await service.chatGlobal(questions, results, analysis ?? "", chatHistory.slice(0, -1), msg);
             chatHistory = [...chatHistory, { role: "assistant", content: reply }];
         } catch (e) {
-            chatHistory = [...chatHistory, { role: "assistant", content: `（${t("common.errorPrefix")}${(e as Error).message}）` }];
+            chatHistory = [
+                ...chatHistory,
+                { role: "assistant", content: `（${t("common.errorPrefix")}${(e as Error).message}）` },
+            ];
         } finally {
             chatLoading = false;
             await tick();
@@ -111,7 +135,10 @@
         }
     }
     function onChatKey(e: KeyboardEvent) {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendChat(); }
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            void sendChat();
+        }
     }
     function onChatInput(e: Event) {
         const el = e.target as HTMLTextAreaElement;
@@ -119,7 +146,9 @@
         el.style.height = "auto";
         el.style.height = Math.min(el.scrollHeight, 80) + "px";
     }
-    function tick(): Promise<void> { return new Promise((r) => setTimeout(r, 0)); }
+    function tick(): Promise<void> {
+        return new Promise((r) => setTimeout(r, 0));
+    }
 </script>
 
 <div class="rg-result">
@@ -144,7 +173,9 @@
             <div>
                 <div class="rg-stat-card__num" style="color:{scoreColor(accuracy)}">{accuracy.toFixed(0)}%</div>
                 <div class="rg-stat-card__label">{t("result.accuracy")}</div>
-                <div class="rg-stat-card__sub">{t("result.qCount", String(correctCount) + "/" + String(results.length))}</div>
+                <div class="rg-stat-card__sub">
+                    {t("result.qCount", String(correctCount) + "/" + String(results.length))}
+                </div>
             </div>
         </div>
         <div class="rg-stat-card">
@@ -159,9 +190,15 @@
 
     <!-- 导航标签 -->
     <div class="rg-tabs">
-        <button class="rg-tabs__btn" class:active={activeTab === "questions"} on:click={() => activeTab = "questions"}>{t("result.tabQuestions")}</button>
-        <button class="rg-tabs__btn" class:active={activeTab === "analysis"} on:click={() => activeTab = "analysis"}>{t("result.tabAnalysis")}</button>
-        <button class="rg-tabs__btn" class:active={activeTab === "advice"} on:click={() => activeTab = "advice"}>{t("result.tabAdvice")}</button>
+        <button class="rg-tabs__btn" class:active={activeTab === "questions"} on:click={() => (activeTab = "questions")}
+            >{t("result.tabQuestions")}</button
+        >
+        <button class="rg-tabs__btn" class:active={activeTab === "analysis"} on:click={() => (activeTab = "analysis")}
+            >{t("result.tabAnalysis")}</button
+        >
+        <button class="rg-tabs__btn" class:active={activeTab === "advice"} on:click={() => (activeTab = "advice")}
+            >{t("result.tabAdvice")}</button
+        >
     </div>
 
     <!-- 题目列表 Tab -->
@@ -195,9 +232,9 @@
                     class:wrong={qStatus(r) === "wrong"}
                     class:unanswered={qStatus(r) === "unanswered"}
                     class:active={i === activeQ}
-                    on:click={() => activeQ = i}
-                    title="第{i + 1}题"
-                >{i + 1}</button>
+                    on:click={() => (activeQ = i)}
+                    title="第{i + 1}题">{i + 1}</button
+                >
             {/each}
         </div>
 
@@ -206,8 +243,14 @@
             <div class="rg-qdetail">
                 <div class="rg-qdetail__header">
                     <span class="rg-qdetail__type">{TYPE_LABEL[activeQuestion.type] ?? activeQuestion.type}</span>
-                    <span class="rg-qdetail__diff">{DIFF_LABEL[activeQuestion.difficulty] ?? activeQuestion.difficulty}</span>
-                    <span class="rg-qdetail__score" style="color:{scoreColor(activeResult.score / activeResult.maxScore * 100)}">{activeResult.score.toFixed(0)}/{activeResult.maxScore}</span>
+                    <span class="rg-qdetail__diff"
+                        >{DIFF_LABEL[activeQuestion.difficulty] ?? activeQuestion.difficulty}</span
+                    >
+                    <span
+                        class="rg-qdetail__score"
+                        style="color:{scoreColor((activeResult.score / activeResult.maxScore) * 100)}"
+                        >{activeResult.score.toFixed(0)}/{activeResult.maxScore}</span
+                    >
                 </div>
                 <p class="rg-qdetail__q">{@html renderLatex(activeQuestion.question)}</p>
 
@@ -215,7 +258,8 @@
                     <div class="rg-qdetail__options">
                         {#each activeQuestion.options as opt, j}
                             <div class="rg-qdetail__opt" class:is-correct={isCorrectOption(activeQuestion, j)}>
-                                <b>{String.fromCharCode(65 + j)}.</b> {@html renderLatex(opt)}
+                                <b>{String.fromCharCode(65 + j)}.</b>
+                                {@html renderLatex(opt)}
                             </div>
                         {/each}
                     </div>
@@ -280,103 +324,434 @@
             {/if}
         </div>
         <div class="rg-chat__input-row">
-            <textarea class="rg-chat__input" placeholder={t("chat.globalPlaceholder")} value={chatInput} on:input={onChatInput} on:keydown={onChatKey} disabled={chatLoading}></textarea>
+            <textarea
+                class="rg-chat__input"
+                placeholder={t("chat.globalPlaceholder")}
+                value={chatInput}
+                on:input={onChatInput}
+                on:keydown={onChatKey}
+                disabled={chatLoading}
+            ></textarea>
             <button class="rg-chat__send" on:click={sendChat} disabled={chatLoading || !chatInput.trim()}>➤</button>
         </div>
     </div>
 
     <!-- 底部操作 -->
     <div class="rg-result__foot">
-        <button class={button({ variant: "ghost", size: "sm" })} on:click={() => dispatch("discard")}>{t("result.discard")}</button>
-        <button class={button({ variant: "outline", size: "sm" })} on:click={() => dispatch("saveWrong")}>{t("result.saveWrong")}</button>
-        <button class={button({ variant: "default", size: "sm" })} on:click={() => dispatch("save")}>{t("result.save")}</button>
+        <button class={button({ variant: "ghost", size: "sm" })} on:click={() => dispatch("discard")}
+            >{t("result.discard")}</button
+        >
+        <button class={button({ variant: "outline", size: "sm" })} on:click={() => dispatch("saveWrong")}
+            >{t("result.saveWrong")}</button
+        >
+        <button class={button({ variant: "default", size: "sm" })} on:click={() => dispatch("save")}
+            >{t("result.save")}</button
+        >
     </div>
 </div>
 
 <style>
-    .rg-result { display: flex; flex-direction: column; gap: 12px; padding: 0 0 12px; }
+    .rg-result {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 0 0 12px;
+    }
 
     /* 标题区域 */
-    .rg-header { background: color-mix(in srgb, #65a84c 10%, var(--b3-theme-background)); border-radius: var(--b3-border-radius); padding: 12px 16px; }
-    .rg-header__title { font-size: 18px; font-weight: 700; margin: 0; color: #2d6a2d; }
-    .rg-header__sub { font-size: 13px; color: #5a8a5a; margin: 2px 0 0; }
+    .rg-header {
+        background: color-mix(in srgb, #65a84c 10%, var(--b3-theme-background));
+        border-radius: var(--b3-border-radius);
+        padding: 12px 16px;
+    }
+    .rg-header__title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+        color: #2d6a2d;
+    }
+    .rg-header__sub {
+        font-size: 13px;
+        color: #5a8a5a;
+        margin: 2px 0 0;
+    }
 
     /* 统计卡片 */
-    .rg-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .rg-stat-card { display: flex; align-items: center; gap: 12px; border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); padding: 12px; background: var(--b3-theme-background); }
-    .rg-stat-card__icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; flex-shrink: 0; }
-    .rg-stat-card__icon--score { background: color-mix(in srgb, #65a84c 18%, transparent); color: #65a84c; }
-    .rg-stat-card__icon--acc { background: color-mix(in srgb, var(--b3-theme-primary) 18%, transparent); color: var(--b3-theme-primary); }
-    .rg-stat-card__icon--time { background: color-mix(in srgb, #d97706 18%, transparent); color: #d97706; }
-    .rg-stat-card__num { font-size: 22px; font-weight: 700; line-height: 1.1; }
-    .rg-stat-card__label { font-size: 12px; color: var(--b3-theme-on-surface-light); }
-    .rg-stat-card__sub { font-size: 11px; color: var(--b3-theme-on-surface-light); }
+    .rg-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+    .rg-stat-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        padding: 12px;
+        background: var(--b3-theme-background);
+    }
+    .rg-stat-card__icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+    .rg-stat-card__icon--score {
+        background: color-mix(in srgb, #65a84c 18%, transparent);
+        color: #65a84c;
+    }
+    .rg-stat-card__icon--acc {
+        background: color-mix(in srgb, var(--b3-theme-primary) 18%, transparent);
+        color: var(--b3-theme-primary);
+    }
+    .rg-stat-card__icon--time {
+        background: color-mix(in srgb, #d97706 18%, transparent);
+        color: #d97706;
+    }
+    .rg-stat-card__num {
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+    .rg-stat-card__label {
+        font-size: 12px;
+        color: var(--b3-theme-on-surface-light);
+    }
+    .rg-stat-card__sub {
+        font-size: 11px;
+        color: var(--b3-theme-on-surface-light);
+    }
 
     /* 导航标签 */
-    .rg-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--b3-border-color); }
-    .rg-tabs__btn { padding: 8px 16px; border: none; background: transparent; cursor: pointer; font-size: 13px; color: var(--b3-theme-on-surface-light); border-radius: var(--b3-border-radius) var(--b3-border-radius) 0 0; border-bottom: 2px solid transparent; appearance: none; -webkit-appearance: none; }
-    .rg-tabs__btn.active { color: #2d6a2d; border-bottom-color: #65a84c; font-weight: 600; }
-    .rg-tabs__btn:hover:not(.active) { background: var(--b3-list-hover); }
+    .rg-tabs {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--b3-border-color);
+    }
+    .rg-tabs__btn {
+        padding: 8px 16px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--b3-theme-on-surface-light);
+        border-radius: var(--b3-border-radius) var(--b3-border-radius) 0 0;
+        border-bottom: 2px solid transparent;
+        appearance: none;
+        -webkit-appearance: none;
+    }
+    .rg-tabs__btn.active {
+        color: #2d6a2d;
+        border-bottom-color: #65a84c;
+        font-weight: 600;
+    }
+    .rg-tabs__btn:hover:not(.active) {
+        background: var(--b3-list-hover);
+    }
 
     /* 汇总信息行 */
-    .rg-qstats { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--b3-theme-on-surface-light); }
-    .rg-qstats__item { display: flex; align-items: center; gap: 4px; }
-    .rg-qstats__dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-    .rg-qstats__dot--all { background: var(--b3-theme-on-surface-light); }
-    .rg-qstats__dot--correct { background: #65a84c; }
-    .rg-qstats__dot--wrong { background: #d23f31; }
-    .rg-qstats__dot--unanswered { background: #aaa; }
+    .rg-qstats {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        font-size: 13px;
+        color: var(--b3-theme-on-surface-light);
+    }
+    .rg-qstats__item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .rg-qstats__dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .rg-qstats__dot--all {
+        background: var(--b3-theme-on-surface-light);
+    }
+    .rg-qstats__dot--correct {
+        background: #65a84c;
+    }
+    .rg-qstats__dot--wrong {
+        background: #d23f31;
+    }
+    .rg-qstats__dot--unanswered {
+        background: #aaa;
+    }
 
     /* 题目进度条 */
-    .rg-progress-bar { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px 0; }
-    .rg-progress-bar__circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--b3-border-color); background: var(--b3-theme-background); cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; color: var(--b3-theme-on-surface-light); appearance: none; -webkit-appearance: none; transition: transform .12s, border-color .12s; }
-    .rg-progress-bar__circle:hover { transform: scale(1.1); }
-    .rg-progress-bar__circle.correct { background: #65a84c; border-color: #65a84c; color: #fff; }
-    .rg-progress-bar__circle.wrong { background: #d23f31; border-color: #d23f31; color: #fff; }
-    .rg-progress-bar__circle.unanswered { background: #aaa; border-color: #aaa; color: #fff; }
-    .rg-progress-bar__circle.active { box-shadow: 0 0 0 3px color-mix(in srgb, var(--b3-theme-primary) 40%, transparent); border-color: var(--b3-theme-primary); }
+    .rg-progress-bar {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding: 4px 0;
+    }
+    .rg-progress-bar__circle {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 2px solid var(--b3-border-color);
+        background: var(--b3-theme-background);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--b3-theme-on-surface-light);
+        appearance: none;
+        -webkit-appearance: none;
+        transition:
+            transform 0.12s,
+            border-color 0.12s;
+    }
+    .rg-progress-bar__circle:hover {
+        transform: scale(1.1);
+    }
+    .rg-progress-bar__circle.correct {
+        background: #65a84c;
+        border-color: #65a84c;
+        color: #fff;
+    }
+    .rg-progress-bar__circle.wrong {
+        background: #d23f31;
+        border-color: #d23f31;
+        color: #fff;
+    }
+    .rg-progress-bar__circle.unanswered {
+        background: #aaa;
+        border-color: #aaa;
+        color: #fff;
+    }
+    .rg-progress-bar__circle.active {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--b3-theme-primary) 40%, transparent);
+        border-color: var(--b3-theme-primary);
+    }
 
     /* 题目解析 */
-    .rg-qdetail { border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); padding: 12px 16px; background: var(--b3-theme-background); }
-    .rg-qdetail__header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .rg-qdetail__type { font-size: 12px; font-weight: 600; color: #2d6a2d; background: color-mix(in srgb, #65a84c 12%, transparent); padding: 2px 8px; border-radius: var(--b3-border-radius); }
-    .rg-qdetail__diff { font-size: 12px; color: var(--b3-theme-on-surface-light); }
-    .rg-qdetail__score { font-size: 14px; font-weight: 700; margin-left: auto; }
-    .rg-qdetail__q { font-size: 14px; font-weight: 500; line-height: 1.6; margin: 0 0 12px; }
-    .rg-qdetail__options { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
-    .rg-qdetail__opt { padding: 6px 10px; border-radius: var(--b3-border-radius); font-size: 13px; }
-    .rg-qdetail__opt.is-correct { background: color-mix(in srgb, #65a84c 12%, transparent); font-weight: 600; }
-    .rg-qdetail__analysis { margin-top: 12px; border-top: 1px solid var(--b3-border-color); padding-top: 8px; }
-    .rg-qdetail__analysis-title { font-size: 13px; font-weight: 600; color: #2d6a2d; margin: 0 0 4px; }
-    .rg-qdetail__analysis-content { font-size: 13px; line-height: 1.7; color: var(--b3-theme-on-background); }
+    .rg-qdetail {
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        padding: 12px 16px;
+        background: var(--b3-theme-background);
+    }
+    .rg-qdetail__header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .rg-qdetail__type {
+        font-size: 12px;
+        font-weight: 600;
+        color: #2d6a2d;
+        background: color-mix(in srgb, #65a84c 12%, transparent);
+        padding: 2px 8px;
+        border-radius: var(--b3-border-radius);
+    }
+    .rg-qdetail__diff {
+        font-size: 12px;
+        color: var(--b3-theme-on-surface-light);
+    }
+    .rg-qdetail__score {
+        font-size: 14px;
+        font-weight: 700;
+        margin-left: auto;
+    }
+    .rg-qdetail__q {
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.6;
+        margin: 0 0 12px;
+    }
+    .rg-qdetail__options {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin: 8px 0;
+    }
+    .rg-qdetail__opt {
+        padding: 6px 10px;
+        border-radius: var(--b3-border-radius);
+        font-size: 13px;
+    }
+    .rg-qdetail__opt.is-correct {
+        background: color-mix(in srgb, #65a84c 12%, transparent);
+        font-weight: 600;
+    }
+    .rg-qdetail__analysis {
+        margin-top: 12px;
+        border-top: 1px solid var(--b3-border-color);
+        padding-top: 8px;
+    }
+    .rg-qdetail__analysis-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #2d6a2d;
+        margin: 0 0 4px;
+    }
+    .rg-qdetail__analysis-content {
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--b3-theme-on-background);
+    }
 
     /* 通用文本面板 */
-    .rg-panel-text { border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); padding: 12px 16px; font-size: 13px; line-height: 1.7; background: var(--b3-theme-background); min-height: 100px; }
-    .rg-empty { color: var(--b3-theme-on-surface-light); text-align: center; padding: 24px; }
+    .rg-panel-text {
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        padding: 12px 16px;
+        font-size: 13px;
+        line-height: 1.7;
+        background: var(--b3-theme-background);
+        min-height: 100px;
+    }
+    .rg-empty {
+        color: var(--b3-theme-on-surface-light);
+        text-align: center;
+        padding: 24px;
+    }
 
     /* AI 答疑 */
-    .rg-chat { border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); background: var(--b3-theme-background); display: flex; flex-direction: column; overflow: hidden; }
-    .rg-chat__header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: color-mix(in srgb, #65a84c 8%, var(--b3-theme-background)); font-size: 13px; font-weight: 600; color: #2d6a2d; }
-    .rg-chat__hint { font-size: 11px; color: var(--b3-theme-on-surface-light); font-weight: 400; }
-    .rg-chat__msgs { display: flex; flex-direction: column; gap: 8px; padding: 12px; max-height: 240px; overflow-y: auto; min-height: 60px; }
-    .rg-chat__empty { font-size: 13px; color: var(--b3-theme-on-surface-light); text-align: center; padding: 12px; }
-    .rg-chat__msg { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--b3-border-radius); font-size: 13px; line-height: 1.6; }
-    .rg-chat__msg.is-user { background: color-mix(in srgb, var(--b3-theme-primary) 10%, transparent); align-self: flex-end; max-width: 85%; }
-    .rg-chat__msg.is-ai { background: var(--b3-theme-background-light); align-self: flex-start; max-width: 90%; }
-    .rg-chat__role { font-size: 11px; color: var(--b3-theme-on-surface-light); font-weight: 600; }
-    .rg-chat__text { word-break: break-word; }
-    .rg-chat__typing { color: var(--b3-theme-on-surface-light); font-style: italic; }
-    .rg-chat__input-row { display: flex; gap: 8px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--b3-border-color); }
-    .rg-chat__input { flex: 1; min-height: 36px; max-height: 80px; resize: none; padding: 6px 10px; border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); background: var(--b3-theme-background); color: var(--b3-theme-on-background); font-size: 13px; font-family: inherit; }
-    .rg-chat__send { width: 36px; height: 36px; border-radius: 50%; border: none; background: #65a84c; color: #fff; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; appearance: none; -webkit-appearance: none; }
-    .rg-chat__send:hover:not(:disabled) { background: #5a8a3f; }
-    .rg-chat__send:disabled { opacity: .5; cursor: not-allowed; }
+    .rg-chat {
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        background: var(--b3-theme-background);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .rg-chat__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        background: color-mix(in srgb, #65a84c 8%, var(--b3-theme-background));
+        font-size: 13px;
+        font-weight: 600;
+        color: #2d6a2d;
+    }
+    .rg-chat__hint {
+        font-size: 11px;
+        color: var(--b3-theme-on-surface-light);
+        font-weight: 400;
+    }
+    .rg-chat__msgs {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+        max-height: 240px;
+        overflow-y: auto;
+        min-height: 60px;
+    }
+    .rg-chat__empty {
+        font-size: 13px;
+        color: var(--b3-theme-on-surface-light);
+        text-align: center;
+        padding: 12px;
+    }
+    .rg-chat__msg {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 10px;
+        border-radius: var(--b3-border-radius);
+        font-size: 13px;
+        line-height: 1.6;
+    }
+    .rg-chat__msg.is-user {
+        background: color-mix(in srgb, var(--b3-theme-primary) 10%, transparent);
+        align-self: flex-end;
+        max-width: 85%;
+    }
+    .rg-chat__msg.is-ai {
+        background: var(--b3-theme-background-light);
+        align-self: flex-start;
+        max-width: 90%;
+    }
+    .rg-chat__role {
+        font-size: 11px;
+        color: var(--b3-theme-on-surface-light);
+        font-weight: 600;
+    }
+    .rg-chat__text {
+        word-break: break-word;
+    }
+    .rg-chat__typing {
+        color: var(--b3-theme-on-surface-light);
+        font-style: italic;
+    }
+    .rg-chat__input-row {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+        padding: 8px 12px;
+        border-top: 1px solid var(--b3-border-color);
+    }
+    .rg-chat__input {
+        flex: 1;
+        min-height: 36px;
+        max-height: 80px;
+        resize: none;
+        padding: 6px 10px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        background: var(--b3-theme-background);
+        color: var(--b3-theme-on-background);
+        font-size: 13px;
+        font-family: inherit;
+    }
+    .rg-chat__send {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: none;
+        background: #65a84c;
+        color: #fff;
+        cursor: pointer;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        appearance: none;
+        -webkit-appearance: none;
+    }
+    .rg-chat__send:hover:not(:disabled) {
+        background: #5a8a3f;
+    }
+    .rg-chat__send:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 
-    .rg-result__foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+    .rg-result__foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding-top: 4px;
+    }
 
     @media (max-width: 640px) {
-        .rg-stats { grid-template-columns: 1fr; }
-        .rg-qstats { gap: 8px; }
-        .rg-progress-bar__circle { width: 24px; height: 24px; font-size: 11px; }
+        .rg-stats {
+            grid-template-columns: 1fr;
+        }
+        .rg-qstats {
+            gap: 8px;
+        }
+        .rg-progress-bar__circle {
+            width: 24px;
+            height: 24px;
+            font-size: 11px;
+        }
     }
 </style>

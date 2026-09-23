@@ -3,7 +3,10 @@ import type { AIConfig, AIProvider, AIProtocol } from "@/types/config";
 
 /** AI 调用错误，附带 HTTP 状态便于上层区分 */
 export class AIError extends Error {
-    constructor(message: string, readonly status?: number) {
+    constructor(
+        message: string,
+        readonly status?: number
+    ) {
         super(message);
         this.name = "AIError";
     }
@@ -95,7 +98,11 @@ function joinUrl(base: string, path: string): string {
 }
 
 function safeParse(text: string): unknown {
-    try { return JSON.parse(text); } catch { return null; }
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -114,10 +121,12 @@ async function forward(
     url: string,
     body: Record<string, unknown>,
     headers: Record<string, string>[],
-    timeout: number,
+    timeout: number
 ): Promise<ForwardResponse> {
     const req: ForwardRequest = {
-        url, method: "POST", timeout,
+        url,
+        method: "POST",
+        timeout,
         contentType: "application/json",
         headers,
         payload: body,
@@ -126,7 +135,7 @@ async function forward(
     };
     const fetchPromise = fetchSyncPost("/api/network/forwardProxy", req);
     const timer = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new AIError(`请求超时（${timeout / 1000}秒）`)), timeout + 5000),
+        setTimeout(() => reject(new AIError(`请求超时（${timeout / 1000}秒）`)), timeout + 5000)
     );
     const resp = await Promise.race([fetchPromise, timer]);
     if (resp.code !== 0) {
@@ -159,14 +168,16 @@ function buildAuthHeaders(rc: ResolvedAIConfig): Record<string, string>[] {
 // ── 协议1: OpenAI Chat Completions ────────────────────────────────────
 
 function extractChatContent(parsed: unknown): string {
-    const choices = (parsed as {
-        choices?: Array<{
-            message?: {
-                content?: string;
-                tool_calls?: Array<{ function?: { arguments?: string } }>;
-            };
-        }>;
-    })?.choices;
+    const choices = (
+        parsed as {
+            choices?: Array<{
+                message?: {
+                    content?: string;
+                    tool_calls?: Array<{ function?: { arguments?: string } }>;
+                };
+            }>;
+        }
+    )?.choices;
     const msg = choices?.[0]?.message;
     if (!msg) return "";
     // 优先从 tool_calls 提取（function calling 模式）
@@ -281,9 +292,12 @@ async function callMessages(rc: ResolvedAIConfig, messages: ChatMessage[], opts:
 
 async function callOnce(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLMCallOptions): Promise<LLMResult> {
     switch (rc.protocol) {
-        case "chat": return callChat(rc, messages, opts);
-        case "responses": return callResponses(rc, messages, opts);
-        case "messages": return callMessages(rc, messages, opts);
+        case "chat":
+            return callChat(rc, messages, opts);
+        case "responses":
+            return callResponses(rc, messages, opts);
+        case "messages":
+            return callMessages(rc, messages, opts);
     }
 }
 
@@ -300,7 +314,7 @@ const RETRY_BASE_MS = 3000;
 export async function callLLM(
     rc: ResolvedAIConfig,
     messages: ChatMessage[],
-    opts: LLMCallOptions = {},
+    opts: LLMCallOptions = {}
 ): Promise<LLMResult> {
     let lastError: unknown;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -323,7 +337,8 @@ export async function testConnection(config: AIConfig, modelId?: string): Promis
     const rc = resolveAI(config, modelId ?? config.testModelId);
     const prompt = config.testPrompt?.trim() || "请用一句话简要介绍你自己";
     const result = await callLLM(rc, [{ role: "user", content: prompt }], {
-        maxTokens: 128, temperature: 0,
+        maxTokens: 128,
+        temperature: 0,
     });
     return result.content;
 }

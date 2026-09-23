@@ -1,51 +1,43 @@
 import { resolve } from "path";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import livereload from "rollup-plugin-livereload";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import zipPack from "vite-plugin-zip-pack";
 import fg from "fast-glob";
 
-import vitePluginYamlI18n from "./yaml-plugin";
-
 const env = process.env;
+const mode = env.NODE_ENV === "development" ? "development" : "production";
 const isSrcmap = env.VITE_SOURCEMAP === "inline";
-const isDev = env.NODE_ENV === "development";
-const outputDir = isDev ? "dev" : (env.OUTPUT_DIR || "F:/SiYuanBook/data/plugins/siyuan-recallgen");
+const isDev = mode === "development";
 
-console.log("isDev=>", isDev);
-console.log("isSrcmap=>", isSrcmap);
-console.log("outputDir=>", outputDir);
+/** 本地开发时可在 gitignore 的 .env.local 里指定思源插件目录，避免把机器路径写进仓库 */
+const fileEnv = loadEnv(mode, process.cwd(), "");
+const outputDir = isDev ? "dev" : env.OUTPUT_DIR || fileEnv.OUTPUT_DIR || "dist";
 
 export default defineConfig({
     resolve: {
         alias: {
             "@": resolve(__dirname, "src"),
-        }
+        },
     },
 
     plugins: [
         svelte(),
 
-        vitePluginYamlI18n({
-            inDir: "public/i18n",
-            outDir: `${outputDir}/i18n`
-        }),
-
         viteStaticCopy({
             targets: [
                 { src: "./README*.md", dest: "./" },
-                { src: "./docs/*.md", dest: "./docs" },
                 { src: "./plugin.json", dest: "./" },
                 { src: "./preview.png", dest: "./" },
-                { src: "./icon.png", dest: "./" }
+                { src: "./icon.png", dest: "./" },
             ],
         }),
     ],
 
     define: {
         "process.env.DEV_MODE": JSON.stringify(isDev),
-        "process.env.NODE_ENV": JSON.stringify(env.NODE_ENV)
+        "process.env.NODE_ENV": JSON.stringify(env.NODE_ENV),
     },
 
     optimizeDeps: {
@@ -77,21 +69,15 @@ export default defineConfig({
             formats: ["cjs"],
         },
         rollupOptions: {
-            plugins: isDev ? [
-                livereload(outputDir),
-                watchExternalFiles([
-                    "public/i18n/**",
-                    "./README*.md",
-                    "./docs/*.md",
-                    "./plugin.json"
-                ])
-            ] : [
-                zipPack({
-                    inDir: outputDir,
-                    outDir: outputDir,
-                    outFileName: "package.zip"
-                })
-            ],
+            plugins: isDev
+                ? [livereload(outputDir), watchExternalFiles(["public/i18n/**", "./README*.md", "./plugin.json"])]
+                : [
+                      zipPack({
+                          inDir: outputDir,
+                          outDir: outputDir,
+                          outFileName: "package.zip",
+                      }),
+                  ],
 
             external: ["siyuan", "process"],
 
@@ -106,7 +92,7 @@ export default defineConfig({
                 },
             },
         },
-    }
+    },
 });
 
 function watchExternalFiles(patterns: string[]) {
@@ -117,6 +103,6 @@ function watchExternalFiles(patterns: string[]) {
             for (const file of files) {
                 this.addWatchFile(file);
             }
-        }
+        },
     };
 }

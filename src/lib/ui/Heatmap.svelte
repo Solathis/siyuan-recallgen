@@ -43,7 +43,10 @@
             const key = fmtDay(cur);
             const e = byDate.get(key);
             col.push({ date: key, score: e ? e.score : null, count: e ? e.count : 0 });
-            if (col.length === 7) { out.push(col); col = []; }
+            if (col.length === 7) {
+                out.push(col);
+                col = [];
+            }
             cur.setDate(cur.getDate() + 1);
         }
         if (col.length > 0) out.push(col);
@@ -64,7 +67,8 @@
         }
         const out = new Map<string, { score: number; count: number }>();
         for (const [k, v] of m) {
-            const score = metric === "max" ? Math.max(...v.scores) : v.scores.reduce((a, b) => a + b, 0) / v.scores.length;
+            const score =
+                metric === "max" ? Math.max(...v.scores) : v.scores.reduce((a, b) => a + b, 0) / v.scores.length;
             out.set(k, { score: Math.round(score), count: v.count });
         }
         return out;
@@ -73,13 +77,19 @@
     function colorFor(score: number | null): string {
         if (score === null) return "#ebedf0";
         const ranges: ScoreRange[] = [...(config?.ranges ?? [])].sort((a, b) => b.min - a.min);
-        for (const r of ranges) { if (score >= r.min) return r.color; }
+        for (const r of ranges) {
+            if (score >= r.min) return r.color;
+        }
         return "#ebedf0";
     }
 
     let hover: Cell | null = null;
-    function onEnter(cell: Cell) { hover = cell; }
-    function onLeave() { hover = null; }
+    function onEnter(cell: Cell) {
+        hover = cell;
+    }
+    function onLeave() {
+        hover = null;
+    }
 
     /** 月份标签：仅在月份变化时显示，避免重复 */
     $: monthLabels = (() => {
@@ -88,7 +98,10 @@
             const first = col.find((c) => c.date);
             if (!first) return "";
             const m = new Date(first.date + "T00:00:00").getMonth();
-            if (m !== prevMonth) { prevMonth = m; return MONTHS[m]; }
+            if (m !== prevMonth) {
+                prevMonth = m;
+                return MONTHS[m];
+            }
             return "";
         });
     })();
@@ -106,11 +119,13 @@
         {#each cols as col}
             <div class={h.col}>
                 {#each col as cell}
-                    <div class={h.cell}
-                         style="background:{colorFor(cell.score)}"
-                         on:mouseenter={() => onEnter(cell)}
-                         on:mouseleave={onLeave}
-                         role="button" tabindex="-1"
+                    <div
+                        class={h.cell}
+                        style="background:{colorFor(cell.score)}"
+                        on:mouseenter={() => onEnter(cell)}
+                        on:mouseleave={onLeave}
+                        role="button"
+                        tabindex="-1"
                     ></div>
                 {/each}
             </div>

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount, onDestroy, createEventDispatcher } from "svelte";
     import { CodeEditor } from "../editor/codemirror";
-    import { card, field, input, textarea, badge, cn } from "./components";
+    import { card, input, textarea, cn } from "./components";
     import { renderMarkdownLatex as renderLatex } from "../ui/latex";
     import { t } from "../i18n";
     import type { Question, UserAnswer } from "@/types/quiz";
@@ -18,7 +18,9 @@
         answer = value;
         dispatch("change", value);
     }
-    function setSingle(idx: number) { emit({ type: "single_choice", value: idx }); }
+    function setSingle(idx: number) {
+        emit({ type: "single_choice", value: idx });
+    }
     function toggleMulti(idx: number) {
         const cur = answer?.type === "multiple_choice" ? [...answer.value] : [];
         const i = cur.indexOf(idx);
@@ -27,15 +29,30 @@
         emit({ type: "multiple_choice", value: cur.sort((a, b) => a - b) });
     }
     function setBlank(i: number, v: string) {
-        const cur = answer?.type === "fill_blank" ? [...answer.value] : question.type === "fill_blank" ? question.answer.map(() => "") : [];
+        const cur =
+            answer?.type === "fill_blank"
+                ? [...answer.value]
+                : question.type === "fill_blank"
+                  ? question.answer.map(() => "")
+                  : [];
         cur[i] = v;
         emit({ type: "fill_blank", value: cur });
     }
-    function setBool(v: boolean) { emit({ type: "true_false", value: v }); }
-    function setSubjective(v: string) { emit({ type: "subjective", value: v }); }
-    function setCoding(v: string) { emit({ type: "coding", value: v }); }
-    function onBlankInput(i: number, e: Event) { setBlank(i, (e.target as HTMLInputElement).value); }
-    function onSubjectiveInput(e: Event) { setSubjective((e.target as HTMLTextAreaElement).value); }
+    function setBool(v: boolean) {
+        emit({ type: "true_false", value: v });
+    }
+    function setSubjective(v: string) {
+        emit({ type: "subjective", value: v });
+    }
+    function setCoding(v: string) {
+        emit({ type: "coding", value: v });
+    }
+    function onBlankInput(i: number, e: Event) {
+        setBlank(i, (e.target as HTMLInputElement).value);
+    }
+    function onSubjectiveInput(e: Event) {
+        setSubjective((e.target as HTMLTextAreaElement).value);
+    }
 
     onMount(() => {
         if (question.type === "coding") {
@@ -43,12 +60,15 @@
                 editorEl,
                 question.language,
                 answer?.type === "coding" ? answer.value : (question.starter_code ?? ""),
-                (doc) => setCoding(doc),
+                (doc) => setCoding(doc)
             );
             void editor.mount();
         }
     });
-    onDestroy(() => { editor?.destroy(); editor = null; });
+    onDestroy(() => {
+        editor?.destroy();
+        editor = null;
+    });
 </script>
 
 <div class={cn(card.root, "rg-q")}>
@@ -59,7 +79,12 @@
             <div class="rg-q__options">
                 {#each question.options as opt, i}
                     <label class="rg-q__opt" class:checked={answer?.type === "single_choice" && answer.value === i}>
-                        <input type="radio" name={question.id} checked={answer?.type === "single_choice" && answer.value === i} on:change={() => setSingle(i)} />
+                        <input
+                            type="radio"
+                            name={question.id}
+                            checked={answer?.type === "single_choice" && answer.value === i}
+                            on:change={() => setSingle(i)}
+                        />
                         <span>{@html renderLatex(opt)}</span>
                     </label>
                 {/each}
@@ -67,8 +92,15 @@
         {:else if question.type === "multiple_choice"}
             <div class="rg-q__options">
                 {#each question.options as opt, i}
-                    <label class="rg-q__opt" class:checked={answer?.type === "multiple_choice" && answer.value.includes(i)}>
-                        <input type="checkbox" checked={answer?.type === "multiple_choice" && answer.value.includes(i)} on:change={() => toggleMulti(i)} />
+                    <label
+                        class="rg-q__opt"
+                        class:checked={answer?.type === "multiple_choice" && answer.value.includes(i)}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={answer?.type === "multiple_choice" && answer.value.includes(i)}
+                            on:change={() => toggleMulti(i)}
+                        />
                         <span>{@html renderLatex(opt)}</span>
                     </label>
                 {/each}
@@ -76,28 +108,54 @@
         {:else if question.type === "fill_blank"}
             <div class="rg-q__blanks">
                 {#each question.answer as _opts, i}
-                    <input class={input} type="text" placeholder={t("common.blank", String(i + 1))} value={answer?.type === "fill_blank" ? answer.value[i] ?? "" : ""} on:input={(e) => onBlankInput(i, e)} />
+                    <input
+                        class={input}
+                        type="text"
+                        placeholder={t("common.blank", String(i + 1))}
+                        value={answer?.type === "fill_blank" ? (answer.value[i] ?? "") : ""}
+                        on:input={(e) => onBlankInput(i, e)}
+                    />
                 {/each}
             </div>
         {:else if question.type === "true_false"}
             <div class="rg-q__options">
                 <label class="rg-q__opt" class:checked={answer?.type === "true_false" && answer.value === true}>
-                    <input type="radio" name={question.id} checked={answer?.type === "true_false" && answer.value === true} on:change={() => setBool(true)} /><span>{t("common.true")}</span>
+                    <input
+                        type="radio"
+                        name={question.id}
+                        checked={answer?.type === "true_false" && answer.value === true}
+                        on:change={() => setBool(true)}
+                    /><span>{t("common.true")}</span>
                 </label>
                 <label class="rg-q__opt" class:checked={answer?.type === "true_false" && answer.value === false}>
-                    <input type="radio" name={question.id} checked={answer?.type === "true_false" && answer.value === false} on:change={() => setBool(false)} /><span>{t("common.false")}</span>
+                    <input
+                        type="radio"
+                        name={question.id}
+                        checked={answer?.type === "true_false" && answer.value === false}
+                        on:change={() => setBool(false)}
+                    /><span>{t("common.false")}</span>
                 </label>
             </div>
         {:else if question.type === "subjective"}
             <div class="rg-q__subjective">
                 <div class="rg-q__md-bar">
-                    <button class="rg-q__md-btn" class:active={!preview} on:click={() => preview = false}>{t("question.edit")}</button>
-                    <button class="rg-q__md-btn" class:active={preview} on:click={() => preview = true}>{t("question.preview")}</button>
+                    <button class="rg-q__md-btn" class:active={!preview} on:click={() => (preview = false)}
+                        >{t("question.edit")}</button
+                    >
+                    <button class="rg-q__md-btn" class:active={preview} on:click={() => (preview = true)}
+                        >{t("question.preview")}</button
+                    >
                 </div>
                 {#if preview}
-                    <div class="rg-q__md-preview">{@html renderLatex(answer?.type === "subjective" ? answer.value : "")}</div>
+                    <div class="rg-q__md-preview">
+                        {@html renderLatex(answer?.type === "subjective" ? answer.value : "")}
+                    </div>
                 {:else}
-                    <textarea class={cn(textarea, "rg-q__textarea")} placeholder={t("question.subjectivePlaceholder")} on:input={onSubjectiveInput}>{answer?.type === "subjective" ? answer.value : ""}</textarea>
+                    <textarea
+                        class={cn(textarea, "rg-q__textarea")}
+                        placeholder={t("question.subjectivePlaceholder")}
+                        on:input={onSubjectiveInput}>{answer?.type === "subjective" ? answer.value : ""}</textarea
+                    >
                 {/if}
             </div>
         {:else if question.type === "coding"}
@@ -107,24 +165,110 @@
 </div>
 
 <style>
-    .rg-q__title { font-size: 15px; line-height: 1.7; margin: 0 0 12px; }
-    .rg-q__options { display: flex; flex-direction: column; gap: 6px; }
-    .rg-q__opt { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--b3-border-radius); cursor: pointer; border: 1px solid transparent; transition: background .12s, border-color .12s; }
-    .rg-q__opt:hover { background: var(--b3-list-hover); }
-    .rg-q__opt.checked { background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent); border-color: var(--b3-theme-primary); }
-    .rg-q__blanks { display: flex; flex-direction: column; gap: 8px; }
-    :global(.rg-q__textarea) { min-height: 160px; }
-    .rg-q__code { border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); overflow: hidden; }
-    :global(.rg-q__code .cm-editor) { font-size: 13px; }
-    :global(.rg-q__code .cm-scroller) { min-height: 200px; }
-    .rg-q__subjective { display: flex; flex-direction: column; gap: 8px; }
-    .rg-q__md-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--b3-border-color); padding-bottom: 4px; }
-    .rg-q__md-btn { padding: 2px 12px; font-size: 12px; border: 1px solid transparent; border-radius: var(--b3-border-radius); background: transparent; cursor: pointer; color: var(--b3-theme-on-surface-light); }
-    .rg-q__md-btn.active { border-color: var(--b3-border-color); color: var(--b3-theme-primary); font-weight: 600; }
-    .rg-q__md-preview { min-height: 160px; padding: 8px 12px; border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius); font-size: 14px; line-height: 1.7; overflow-y: auto; max-height: 400px; }
-    .rg-q__md-preview :global(p) { margin: 0 0 8px; }
-    .rg-q__md-preview :global(ul), .rg-q__md-preview :global(ol) { padding-left: 20px; margin: 0 0 8px; }
-    .rg-q__md-preview :global(pre) { background: var(--b3-theme-background-light); padding: 8px 12px; border-radius: var(--b3-border-radius); overflow-x: auto; }
-    .rg-q__md-preview :global(code) { font-family: var(--b3-font-family-code, monospace); font-size: 13px; }
-    .rg-q__md-preview :global(h1), .rg-q__md-preview :global(h2), .rg-q__md-preview :global(h3) { margin: 12px 0 8px; }
+    .rg-q__title {
+        font-size: 15px;
+        line-height: 1.7;
+        margin: 0 0 12px;
+    }
+    .rg-q__options {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .rg-q__opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: var(--b3-border-radius);
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition:
+            background 0.12s,
+            border-color 0.12s;
+    }
+    .rg-q__opt:hover {
+        background: var(--b3-list-hover);
+    }
+    .rg-q__opt.checked {
+        background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+        border-color: var(--b3-theme-primary);
+    }
+    .rg-q__blanks {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    :global(.rg-q__textarea) {
+        min-height: 160px;
+    }
+    .rg-q__code {
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        overflow: hidden;
+    }
+    :global(.rg-q__code .cm-editor) {
+        font-size: 13px;
+    }
+    :global(.rg-q__code .cm-scroller) {
+        min-height: 200px;
+    }
+    .rg-q__subjective {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .rg-q__md-bar {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--b3-border-color);
+        padding-bottom: 4px;
+    }
+    .rg-q__md-btn {
+        padding: 2px 12px;
+        font-size: 12px;
+        border: 1px solid transparent;
+        border-radius: var(--b3-border-radius);
+        background: transparent;
+        cursor: pointer;
+        color: var(--b3-theme-on-surface-light);
+    }
+    .rg-q__md-btn.active {
+        border-color: var(--b3-border-color);
+        color: var(--b3-theme-primary);
+        font-weight: 600;
+    }
+    .rg-q__md-preview {
+        min-height: 160px;
+        padding: 8px 12px;
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--b3-border-radius);
+        font-size: 14px;
+        line-height: 1.7;
+        overflow-y: auto;
+        max-height: 400px;
+    }
+    .rg-q__md-preview :global(p) {
+        margin: 0 0 8px;
+    }
+    .rg-q__md-preview :global(ul),
+    .rg-q__md-preview :global(ol) {
+        padding-left: 20px;
+        margin: 0 0 8px;
+    }
+    .rg-q__md-preview :global(pre) {
+        background: var(--b3-theme-background-light);
+        padding: 8px 12px;
+        border-radius: var(--b3-border-radius);
+        overflow-x: auto;
+    }
+    .rg-q__md-preview :global(code) {
+        font-family: var(--b3-font-family-code, monospace);
+        font-size: 13px;
+    }
+    .rg-q__md-preview :global(h1),
+    .rg-q__md-preview :global(h2),
+    .rg-q__md-preview :global(h3) {
+        margin: 12px 0 8px;
+    }
 </style>

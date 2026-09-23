@@ -9,11 +9,7 @@ import {
     parseJsonLoose,
 } from "../ai/schema";
 import type { RecallGenConfig } from "@/types/config";
-import type {
-    DifficultyDistribution,
-    Question,
-    QuestionType,
-} from "@/types/quiz";
+import type { DifficultyDistribution, Question, QuestionType } from "@/types/quiz";
 
 /** 审题进度回调：phase=当前阶段, round=当前轮次(1-based), detail=描述 */
 export type GenProgressCallback = (phase: GenPhase, round: number, detail: string) => void;
@@ -37,7 +33,7 @@ const MAX_REVIEW_ROUNDS = 3;
 export async function generateQuestions(
     config: RecallGenConfig,
     content: string,
-    onProgress?: GenProgressCallback,
+    onProgress?: GenProgressCallback
 ): Promise<Question[]> {
     const { prompts, general, ai } = config;
     const types = general.allowedTypes;
@@ -80,7 +76,7 @@ async function reviewLoop(
     config: RecallGenConfig,
     questions: Question[],
     content: string,
-    onProgress?: GenProgressCallback,
+    onProgress?: GenProgressCallback
 ): Promise<Question[]> {
     const { ai, prompts } = config;
     const reviewAI = resolveAI(ai, ai.roles.reviewer);
@@ -158,7 +154,7 @@ function pickCallOpts(
     jsonSchemaEnabled: boolean,
     name: string,
     description: string,
-    schema: object,
+    schema: object
 ): { tools?: unknown[]; toolChoice?: unknown; responseFormat?: unknown } {
     if (jsonSchemaEnabled) {
         return {
@@ -170,10 +166,7 @@ function pickCallOpts(
 }
 
 /** 宽松校验：逐题 try-catch，单题失败返回 null 而非整批异常 */
-function validateQuestionsLenient(
-    raw: unknown[],
-    allowedTypes: QuestionType[],
-): (Question | null)[] {
+function validateQuestionsLenient(raw: unknown[], allowedTypes: QuestionType[]): (Question | null)[] {
     return raw.map((item, i) => {
         try {
             const obj = item as Record<string, unknown>;
@@ -198,7 +191,7 @@ function validateQuestionsLenient(
 function validateQuestions(
     raw: unknown[],
     allowedTypes: QuestionType[],
-    _difficulty: DifficultyDistribution,
+    _difficulty: DifficultyDistribution
 ): Question[] {
     const out: Question[] = [];
     for (let i = 0; i < raw.length; i++) {
@@ -220,11 +213,7 @@ function validateQuestions(
     return out;
 }
 
-function coerceByType(
-    base: Omit<Question, never>,
-    type: QuestionType,
-    item: Record<string, unknown>,
-): Question {
+function coerceByType(base: Omit<Question, never>, type: QuestionType, item: Record<string, unknown>): Question {
     switch (type) {
         case "single_choice": {
             const options = toStringArray(item.options);
@@ -270,9 +259,15 @@ function coerceByType(
             const language = String(item.language ?? "python");
             const test_cases = Array.isArray(item.test_cases)
                 ? item.test_cases.map((t) => ({
-                      input: (t as { input?: unknown })?.input !== undefined ? String((t as { input: unknown }).input) : undefined,
+                      input:
+                          (t as { input?: unknown })?.input !== undefined
+                              ? String((t as { input: unknown }).input)
+                              : undefined,
                       expected: String((t as { expected: unknown }).expected ?? ""),
-                      description: (t as { description?: unknown })?.description !== undefined ? String((t as { description: unknown }).description) : undefined,
+                      description:
+                          (t as { description?: unknown })?.description !== undefined
+                              ? String((t as { description: unknown }).description)
+                              : undefined,
                   }))
                 : undefined;
             return {
@@ -310,5 +305,5 @@ function toNumberArray(v: unknown): number[] {
 /** 填空题 answer: 二维数组 string[][] */
 function toAnswerMatrix(v: unknown): string[][] {
     if (!Array.isArray(v)) return [];
-    return v.map((blank) => Array.isArray(blank) ? blank.map((x) => String(x)) : [String(blank)]);
+    return v.map((blank) => (Array.isArray(blank) ? blank.map((x) => String(x)) : [String(blank)]));
 }

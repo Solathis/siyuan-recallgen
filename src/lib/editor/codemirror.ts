@@ -11,12 +11,7 @@ import {
     highlightSpecialChars,
     keymap,
 } from "@codemirror/view";
-import {
-    defaultKeymap,
-    history,
-    historyKeymap,
-    indentWithTab,
-} from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import {
     indentOnInput,
     bracketMatching,
@@ -55,7 +50,7 @@ export class CodeEditor {
         private readonly parent: HTMLElement,
         private readonly lang: string,
         private readonly initialCode = "",
-        private readonly onChange?: (doc: string) => void,
+        private readonly onChange?: (doc: string) => void
     ) {}
 
     async mount(): Promise<void> {
@@ -66,7 +61,13 @@ export class CodeEditor {
                 doc: this.initialCode,
                 extensions: [
                     ...this.basicExtensions(),
-                    keymap.of([...defaultKeymap, ...historyKeymap, ...closeBracketsKeymap, ...completionKeymap, indentWithTab]),
+                    keymap.of([
+                        ...defaultKeymap,
+                        ...historyKeymap,
+                        ...closeBracketsKeymap,
+                        ...completionKeymap,
+                        indentWithTab,
+                    ]),
                     languageExt,
                     this.themeCompartment.of(this.resolveTheme()),
                     EditorView.updateListener.of((v) => {
@@ -147,7 +148,9 @@ export class CodeEditor {
                 return (await import("@codemirror/lang-python")).python();
             }
             if (key === "javascript" || key === "js" || key === "typescript" || key === "ts") {
-                return (await import("@codemirror/lang-javascript")).javascript({ typescript: key === "typescript" || key === "ts" });
+                return (await import("@codemirror/lang-javascript")).javascript({
+                    typescript: key === "typescript" || key === "ts",
+                });
             }
             if (key === "css") {
                 return (await import("@codemirror/lang-css")).css();

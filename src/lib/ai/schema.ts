@@ -24,7 +24,8 @@ export const QUIZ_SCHEMA = {
                         description: "选项文本数组，仅 single_choice/multiple_choice 使用",
                     },
                     answer: {
-                        description: "single_choice:number; multiple_choice:number[]; true_false:boolean; fill_blank:string[][]; coding:string",
+                        description:
+                            "single_choice:number; multiple_choice:number[]; true_false:boolean; fill_blank:string[][]; coding:string",
                     },
                     reference_answer: { type: "string", description: "主观题参考答案要点 / 编程题参考说明" },
                     language: { type: "string", description: "编程题语言：python/javascript/go 等" },
@@ -88,10 +89,12 @@ export const GRADING_SCHEMA = {
 
 /** 构建 tools/function calling 声明（遵循标准格式） */
 export function buildTools(name: string, description: string, schema: object): unknown[] {
-    return [{
-        type: "function",
-        function: { name, description, parameters: schema },
-    }];
+    return [
+        {
+            type: "function",
+            function: { name, description, parameters: schema },
+        },
+    ];
 }
 
 /** 构建强制工具选择：要求模型必须调用指定函数 */
@@ -113,13 +116,17 @@ export function parseJsonLoose(text: string): unknown {
     // 1. 直接解析
     try {
         return JSON.parse(cleaned);
-    } catch { /* 继续容错 */ }
+    } catch {
+        /* 继续容错 */
+    }
     // 2. 从文本中提取第一个完整 JSON 对象后解析
     const extracted = extractJsonObject(cleaned);
     if (extracted) {
         try {
             return JSON.parse(extracted);
-        } catch { /* 继续修复 */ }
+        } catch {
+            /* 继续修复 */
+        }
         try {
             return JSON.parse(jsonrepair(extracted));
         } catch (e) {
@@ -161,9 +168,18 @@ function extractJsonObject(text: string): string | null {
     let escape = false;
     for (let i = begin; i < text.length; i++) {
         const ch = text[i];
-        if (escape) { escape = false; continue; }
-        if (ch === "\\") { escape = true; continue; }
-        if (ch === '"') { inStr = !inStr; continue; }
+        if (escape) {
+            escape = false;
+            continue;
+        }
+        if (ch === "\\") {
+            escape = true;
+            continue;
+        }
+        if (ch === '"') {
+            inStr = !inStr;
+            continue;
+        }
         if (inStr) continue;
         if (ch === "{" || ch === "[") depth++;
         else if (ch === "}" || ch === "]") {

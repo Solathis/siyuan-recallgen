@@ -4,22 +4,8 @@
   "url": "https://github.com/Solathis/siyuan-recallgen",
   "version": "0.1.0",
   "minAppVersion": "3.7.0",
-  "backends": [
-    "windows",
-    "linux",
-    "darwin",
-    "ios",
-    "android",
-    "harmony",
-    "docker"
-  ],
-  "frontends": [
-    "desktop",
-    "mobile",
-    "browser-desktop",
-    "browser-mobile",
-    "desktop-window"
-  ],
+  "backends": ["windows", "linux", "darwin", "ios", "android", "harmony", "docker"],
+  "frontends": ["desktop", "mobile", "browser-desktop", "browser-mobile", "desktop-window"],
   "displayName": {
     "default": "RecallGen",
     "zh-CN": "知了·RecallGen"
@@ -38,10 +24,5 @@
     "github": "",
     "custom": []
   },
-  "keywords": [
-    "AI",
-    "quiz",
-    "review",
-    "复习"
-  ]
+  "keywords": ["AI", "quiz", "review", "复习"]
 }

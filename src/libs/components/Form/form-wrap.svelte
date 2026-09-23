@@ -9,7 +9,7 @@
 <script lang="ts">
     export let title: string; // Displayint Setting Title
     export let description: string; // Displaying Setting Text
-    export let direction: 'row' | 'column' = 'column';
+    export let direction: "row" | "column" = "column";
 </script>
 
 {#if direction === "row"}
@@ -39,7 +39,7 @@
 <style>
     span.title {
         font-weight: bold;
-        color: var(--b3-theme-primary)
+        color: var(--b3-theme-primary);
     }
     .item-wrap.b3-label {
         box-shadow: none !important;
