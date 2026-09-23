@@ -1,11 +1,19 @@
 import { fetchSyncPost } from "siyuan";
 import type { AIConfig, AIProvider, AIProtocol } from "@/types/config";
 
-/** AI 调用错误，附带 HTTP 状态便于上层区分 */
+/**
+ * AI 调用错误类别。
+ * 用类别而非消息文本判断是否可重试——原实现匹配英文 "timeout"，
+ * 而超时消息是中文「请求超时」，导致超时永远不会重试。
+ */
+export type AIErrorKind = "http" | "timeout" | "network" | "parse" | "config";
+
+/** AI 调用错误，附带类别与 HTTP 状态便于上层区分 */
 export class AIError extends Error {
     constructor(
         message: string,
-        readonly status?: number
+        readonly status?: number,
+        readonly kind: AIErrorKind = "http"
     ) {
         super(message);
         this.name = "AIError";
@@ -54,9 +62,9 @@ export interface ResolvedAIConfig {
  */
 export function resolveAI(config: AIConfig, modelId: string): ResolvedAIConfig {
     const model = config.models.find((m) => m.id === modelId);
-    if (!model) throw new AIError(`未找到模型: ${modelId}`);
+    if (!model) throw new AIError(`未找到模型: ${modelId}`, undefined, "config");
     const endpoint = config.endpoints.find((e) => e.id === model.endpointId);
-    if (!endpoint) throw new AIError(`模型 ${model.name} 引用的端点不存在: ${model.endpointId}`);
+    if (!endpoint) throw new AIError(`模型 ${model.name} 引用的端点不存在: ${model.endpointId}`, undefined, "config");
     return {
         provider: endpoint.provider,
         protocol: endpoint.protocol,
@@ -91,7 +99,8 @@ interface ForwardRequest {
     responseEncoding: "text";
 }
 
-function joinUrl(base: string, path: string): string {
+/** 拼接 baseUrl 与路径，容忍两侧多余斜杠 */
+export function joinUrl(base: string, path: string): string {
     const b = base.replace(/\/+$/, "");
     const p = path.replace(/^\/+/, "");
     return `${b}/${p}`;
@@ -109,14 +118,18 @@ function sleep(ms: number): Promise<void> {
     return new Promise((r) => setTimeout(r, ms));
 }
 
-function isRetryable(err: unknown): boolean {
+/**
+ * 是否值得重试：限流、服务端错误、超时、网络层失败。
+ * 4xx（除 429）属于请求本身有问题，重试没有意义。
+ */
+export function isRetryable(err: unknown): boolean {
     if (!(err instanceof AIError)) return false;
     if (err.status === 429) return true;
-    if (err.status && err.status >= 500) return true;
-    const msg = err.message.toLowerCase();
-    return msg.includes("timeout") || msg.includes("rate limit");
+    if (typeof err.status === "number" && err.status >= 500) return true;
+    return err.kind === "timeout" || err.kind === "network";
 }
 
+/** 向内核 forwardProxy 发起一次请求，带独立超时看门狗 */
 async function forward(
     url: string,
     body: Record<string, unknown>,
@@ -133,13 +146,29 @@ async function forward(
         payloadEncoding: "json",
         responseEncoding: "text",
     };
+
     const fetchPromise = fetchSyncPost("/api/network/forwardProxy", req);
-    const timer = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new AIError(`请求超时（${timeout / 1000}秒）`)), timeout + 5000)
-    );
-    const resp = await Promise.race([fetchPromise, timer]);
+    // 超时后底层请求仍可能失败，提前挂一个兜底 catch，避免未捕获的 Promise 拒绝
+    void fetchPromise.catch(() => undefined);
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const watchdog = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+            () => reject(new AIError(`请求超时（${timeout / 1000}秒）`, undefined, "timeout")),
+            timeout + 5000
+        );
+    });
+
+    let resp: Awaited<typeof fetchPromise>;
+    try {
+        resp = await Promise.race([fetchPromise, watchdog]);
+    } finally {
+        // 必须清理看门狗：否则请求成功后定时器仍会 reject，产生未捕获拒绝并拖住事件循环
+        clearTimeout(timer);
+    }
+
     if (resp.code !== 0) {
-        throw new AIError(`forwardProxy 失败: ${resp.msg}`);
+        throw new AIError(`forwardProxy 失败: ${resp.msg}`, undefined, "network");
     }
     return resp.data as ForwardResponse;
 }
@@ -154,8 +183,8 @@ function checkHttpOk(fr: ForwardResponse): void {
 
 function buildAuthHeaders(rc: ResolvedAIConfig): Record<string, string>[] {
     const headers: Record<string, string>[] = [];
-    const needAuth = rc.provider !== "ollama" || !!rc.apiKey;
-    if (!needAuth || !rc.apiKey) return headers;
+    // 无 API Key 时不发认证头（Ollama 及未配置鉴权的自建服务）
+    if (!rc.apiKey) return headers;
     if (rc.protocol === "messages") {
         headers.push({ "x-api-key": rc.apiKey });
         headers.push({ "anthropic-version": "2023-06-01" });
@@ -205,9 +234,9 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
-    if (parsed === null) throw new AIError("AI 响应非 JSON");
+    if (parsed === null) throw new AIError("AI 响应非 JSON", undefined, "parse");
     const content = extractChatContent(parsed);
-    if (!content) throw new AIError("AI 响应缺少 content");
+    if (!content) throw new AIError("AI 响应缺少 content", undefined, "parse");
     return { content, raw: parsed };
 }
 
@@ -243,9 +272,9 @@ async function callResponses(rc: ResolvedAIConfig, messages: ChatMessage[], opts
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
-    if (parsed === null) throw new AIError("AI 响应非 JSON");
+    if (parsed === null) throw new AIError("AI 响应非 JSON", undefined, "parse");
     const content = extractResponsesContent(parsed);
-    if (!content) throw new AIError("AI 响应缺少 content");
+    if (!content) throw new AIError("AI 响应缺少 content", undefined, "parse");
     return { content, raw: parsed };
 }
 
@@ -282,9 +311,9 @@ async function callMessages(rc: ResolvedAIConfig, messages: ChatMessage[], opts:
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
-    if (parsed === null) throw new AIError("AI 响应非 JSON");
+    if (parsed === null) throw new AIError("AI 响应非 JSON", undefined, "parse");
     const content = extractMessagesContent(parsed);
-    if (!content) throw new AIError("AI 响应缺少 content");
+    if (!content) throw new AIError("AI 响应缺少 content", undefined, "parse");
     return { content, raw: parsed };
 }
 
@@ -308,8 +337,9 @@ const RETRY_BASE_MS = 3000;
 
 /**
  * 调用 LLM，经思源内核 forwardProxy 转发。
- * 对限流(429)、超时、5xx 自动重试最多 2 次，指数退避。
- * // safe for concurrent calls（无共享状态）
+ * 对限流(429)、5xx、超时、网络层失败自动重试最多 2 次，退避 3s、6s（指数）。
+ * 其余 4xx 属于请求本身有问题，不重试，直接抛出。
+ * 无共享状态，可并发调用。
  */
 export async function callLLM(
     rc: ResolvedAIConfig,
@@ -323,7 +353,7 @@ export async function callLLM(
         } catch (e) {
             lastError = e;
             if (attempt < MAX_RETRIES && isRetryable(e)) {
-                await sleep(RETRY_BASE_MS * (attempt + 1));
+                await sleep(RETRY_BASE_MS * 2 ** attempt);
                 continue;
             }
             throw e;
