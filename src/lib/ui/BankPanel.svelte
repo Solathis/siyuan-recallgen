@@ -254,14 +254,13 @@
         <div class="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2">
             <span class="text-xs">
                 {t("bank.tagScope", tagFilter, String(filtered.length))}
-                <span class="text-muted-foreground">{t("bank.tagDue", String(tagDueCount))}</span>
+                {#if tagDueCount > 0}
+                    <span class="text-muted-foreground">{t("bank.tagDue", String(tagDueCount))}</span>
+                {:else}
+                    <span class="text-muted-foreground">{t("bank.tagAhead")}</span>
+                {/if}
             </span>
-            <Button
-                size="sm"
-                variant="outline"
-                disabled={tagDueCount === 0}
-                onclick={() => onStartReview({ tag: tagFilter })}
-            >
+            <Button size="sm" variant="outline" onclick={() => onStartReview({ tag: tagFilter })}>
                 {t("bank.reviewTag")}
             </Button>
         </div>

@@ -80,9 +80,10 @@ export interface QuizService {
     // ── 题库与间隔重复 ──────────────────────────────────────────
     /**
      * 按 FSRS 排程取出到期的题目，用于「复习到期题目」。
-     * 传入 sourceDocId 时只取来自该文档的题目，便于「只复习这篇笔记」。
+     * 传入 sourceDocId 时只取来自该文档的题目（「只复习这篇笔记」），
+     * 传入 tag 时只取该知识点的题目；ahead 允许在没有到期题目时按掌握度补题。
      */
-    dueBankQuestions(limit?: number, sourceDocId?: string, tag?: string): Promise<Question[]>;
+    dueBankQuestions(scope?: import("./bank").ReviewScope): Promise<Question[]>;
     /** 题库规模概览 */
     bankSummary(): Promise<BankSummary>;
     /** 题库全部条目，用于题库浏览界面 */

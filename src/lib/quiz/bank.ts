@@ -242,25 +242,37 @@ export function pickDueItems(items: BankItem[], now = Date.now(), limit = 0): Ba
     return limit > 0 ? due.slice(0, limit) : due;
 }
 
+/** 复习选题的范围限定 */
+export interface ReviewScope {
+    now?: number;
+    /** 0 表示不限题数 */
+    limit?: number;
+    tag?: string;
+    sourceDocId?: string;
+    /**
+     * 没有到期题目时是否按掌握度从低到高补题（提前复习）。
+     * 用于「复习某个知识点」：用户想练这个点，而不是想被排程挡住；
+     * 提前作答 FSRS 本身能够正确处理，只是不会像到期复习那样拉长间隔。
+     */
+    ahead?: boolean;
+}
+
 /**
  * 复习选题：先按来源文档与知识点标签限定范围，再取到期题目（到期时间升序）。
- * limit 为 0 表示不限。抽成纯函数便于单测，也让 index.ts 的实现保持一行。
+ * 抽成纯函数便于单测，也让 index.ts 的实现保持一行。
  */
-export function selectReviewItems(
-    items: BankItem[],
-    {
-        now = Date.now(),
-        limit = 0,
-        tag,
-        sourceDocId,
-    }: { now?: number; limit?: number; tag?: string; sourceDocId?: string } = {}
-): BankItem[] {
+export function selectReviewItems(items: BankItem[], scope: ReviewScope = {}): BankItem[] {
+    const { now = Date.now(), limit = 0, tag, sourceDocId, ahead = false } = scope;
     const scoped = items.filter((item) => {
         if (sourceDocId && item.sourceDocId !== sourceDocId) return false;
         if (tag && !(item.question.tags ?? []).includes(tag)) return false;
         return true;
     });
-    return pickDueItems(scoped, now, limit);
+
+    const due = pickDueItems(scoped, now, limit);
+    if (due.length > 0 || !ahead) return due;
+    const weakest = [...scoped].sort((a, b) => masteryScore(a) - masteryScore(b) || a.card.due - b.card.due);
+    return limit > 0 ? weakest.slice(0, limit) : weakest;
 }
 
 /** 题库里出现过的知识点标签及题数，按题数倒序；用于题库的标签筛选 */
