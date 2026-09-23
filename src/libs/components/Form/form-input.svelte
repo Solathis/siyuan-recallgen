@@ -39,7 +39,7 @@
         type="checkbox"
         bind:checked={value}
         on:change={changed}
-        style={style}
+        {style}
     />
 {:else if type === "textinput"}
     <!-- Text Input -->
@@ -49,15 +49,15 @@
         class:fn__size200={fnSize}
         id={key}
         {placeholder}
-        bind:value={value}
+        bind:value
         on:change={changed}
-        style={style}
+        {style}
     />
 {:else if type === "textarea"}
     <textarea
         class="b3-text-field fn__block"
         style={`resize: vertical; height: 10em; white-space: nowrap; ${style}`}
-        bind:value={value}
+        bind:value
         on:change={changed}
     />
 {:else if type === "number"}
@@ -67,9 +67,9 @@
         class:fn__size200={fnSize}
         id={key}
         type="number"
-        bind:value={value}
+        bind:value
         on:change={changed}
-        style={style}
+        {style}
     />
 {:else if type === "button"}
     <!-- Button Input -->
@@ -80,7 +80,7 @@
         class:fn__size200={fnSize}
         id={key}
         on:click={click}
-        style={style}
+        {style}
     >
         {button.label}
     </button>
@@ -91,9 +91,9 @@
         class:fn__flex-center={true}
         class:fn__size200={fnSize}
         id="iconPosition"
-        bind:value={value}
+        bind:value
         on:change={changed}
-        style={style}
+        {style}
     >
         {#each Object.entries(options) as [value, text]}
             <option {value}>{text}</option>
@@ -110,9 +110,9 @@
             max={slider.max}
             step={slider.step}
             type="range"
-            bind:value={value}
+            bind:value
             on:change={changed}
-            style={style}
+            {style}
         />
     </div>
 {/if}

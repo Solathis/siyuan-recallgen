@@ -61,7 +61,10 @@ function answerText(q: Question): string {
         case "single_choice":
             return String.fromCharCode(65 + q.answer);
         case "multiple_choice":
-            return q.answer.map((i) => String.fromCharCode(65 + i)).sort().join("、");
+            return q.answer
+                .map((i) => String.fromCharCode(65 + i))
+                .sort()
+                .join("、");
         case "true_false":
             return q.answer ? t("common.true") : t("common.false");
         case "fill_blank":
@@ -80,7 +83,7 @@ export async function saveAsNewDoc(
     config: GeneralConfig,
     questions: Question[],
     sourceDocId: string,
-    sourceTitle: string,
+    sourceTitle: string
 ): Promise<string> {
     const md = buildQuestionsMarkdown(questions);
     const title = titleOf(sourceTitle);
@@ -103,10 +106,7 @@ export async function saveAsNewDoc(
 }
 
 /** 插入到当前文档末尾 */
-export async function appendQuestions(
-    questions: Question[],
-    sourceDocId: string,
-): Promise<void> {
+export async function appendQuestions(questions: Question[], sourceDocId: string): Promise<void> {
     const md = buildQuestionsMarkdown(questions);
     await appendBlock("markdown", md, sourceDocId);
 }

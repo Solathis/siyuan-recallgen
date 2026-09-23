@@ -17,7 +17,7 @@ export class AsyncStore {
 
     constructor(
         private readonly plugin: StoragePlugin,
-        private readonly name: string,
+        private readonly name: string
     ) {}
 
     /** 读取并缓存；首次读取后缓存命中直接返回。 */
@@ -51,9 +51,7 @@ export class AsyncStore {
     protected write(data: unknown): Promise<void> {
         this.cache = data;
         this.loaded = true;
-        const next = this.writeChain.then(() =>
-            this.plugin.saveData(this.name, data).then(() => undefined),
-        );
+        const next = this.writeChain.then(() => this.plugin.saveData(this.name, data).then(() => undefined));
         // 写失败不阻断后续写链，错误由调用方捕获
         this.writeChain = next.catch(() => undefined);
         return next;

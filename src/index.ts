@@ -84,10 +84,13 @@ export default class RecallGenPlugin extends Plugin {
                     target: div,
                     props: {
                         service: self.buildService(),
-                        onOpenReview: (rec) => self.openQuizTab({
-                            mode: "review", sourceDocId: rec.sourceDocId ?? "",
-                            sourceTitle: rec.title, reviewRecord: rec,
-                        }),
+                        onOpenReview: (rec) =>
+                            self.openQuizTab({
+                                mode: "review",
+                                sourceDocId: rec.sourceDocId ?? "",
+                                sourceTitle: rec.title,
+                                reviewRecord: rec,
+                            }),
                     },
                 });
             },
@@ -146,8 +149,12 @@ export default class RecallGenPlugin extends Plugin {
                     config: self.config,
                     scores,
                     onTestConnection: () => aiTestConnection(self.config.ai),
-                    onClearScores: async () => { await self.scoreStore.clear(); },
-                    onClearProgress: async () => { await self.progressStore.clearAll(); },
+                    onClearScores: async () => {
+                        await self.scoreStore.clear();
+                    },
+                    onClearProgress: async () => {
+                        await self.progressStore.clearAll();
+                    },
                 },
             });
             self.settingComp.$on("save", async (e: { detail: RecallGenConfig }) => {
@@ -160,13 +167,17 @@ export default class RecallGenPlugin extends Plugin {
     private buildService(): QuizService {
         return {
             getConfig: () => this.config,
-            generate: (content: string, onProgress?: GenProgressCallback) => generateQuestions(this.config, content, onProgress),
+            generate: (content: string, onProgress?: GenProgressCallback) =>
+                generateQuestions(this.config, content, onProgress),
             loadDateRangeContent: (cfg, range, notebookId) => loadDateRangeNotes(cfg, range, notebookId),
             grade: (qs, ans, onProgress) => gradeAll(this.config, qs, ans, onProgress),
             analyze: (results, questions) => this.analyze(results, questions),
-            chat: (question, result, analysis, history, userMessage) => this.chat(question, result, analysis, history, userMessage),
-            chatGlobal: (questions, results, analysis, history, userMessage) => this.chatGlobal(questions, results, analysis, history, userMessage),
-            saveResultToDoc: (session, analysis, results, wrongOnly) => this.saveResultToDoc(session, analysis, results, wrongOnly),
+            chat: (question, result, analysis, history, userMessage) =>
+                this.chat(question, result, analysis, history, userMessage),
+            chatGlobal: (questions, results, analysis, history, userMessage) =>
+                this.chatGlobal(questions, results, analysis, history, userMessage),
+            saveResultToDoc: (session, analysis, results, wrongOnly) =>
+                this.saveResultToDoc(session, analysis, results, wrongOnly),
             saveProgress: (session) => this.progressStore.save(session),
             loadProgress: (id) => this.progressStore.load(id),
             findProgressBySourceDocId: (sourceDocId) => this.progressStore.findBySourceDocId(sourceDocId),
@@ -213,10 +224,13 @@ export default class RecallGenPlugin extends Plugin {
         return res.content;
     }
 
-    private async saveResultToDoc(session: QuizSession, analysis: string, results: GradingResult[], wrongOnly?: boolean): Promise<string> {
-        const questions = wrongOnly
-            ? session.questions.filter((_, i) => results[i].score < 60)
-            : session.questions;
+    private async saveResultToDoc(
+        session: QuizSession,
+        analysis: string,
+        results: GradingResult[],
+        wrongOnly?: boolean
+    ): Promise<string> {
+        const questions = wrongOnly ? session.questions.filter((_, i) => results[i].score < 60) : session.questions;
         if (questions.length === 0) {
             showMessage(t("quiz.noWrongToSave"));
             return "";
@@ -231,7 +245,7 @@ export default class RecallGenPlugin extends Plugin {
         result: GradingResult,
         analysis: string,
         history: Array<{ role: "user" | "assistant"; content: string }>,
-        userMessage: string,
+        userMessage: string
     ): Promise<string> {
         const messages = buildChatMessages(this.config.prompts, question, result, analysis, history, userMessage);
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
@@ -247,9 +261,16 @@ export default class RecallGenPlugin extends Plugin {
         results: GradingResult[],
         analysis: string,
         history: Array<{ role: "user" | "assistant"; content: string }>,
-        userMessage: string,
+        userMessage: string
     ): Promise<string> {
-        const messages = buildGlobalChatMessages(this.config.prompts, questions, results, analysis, history, userMessage);
+        const messages = buildGlobalChatMessages(
+            this.config.prompts,
+            questions,
+            results,
+            analysis,
+            history,
+            userMessage
+        );
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
         const res = await callLLM(rc, messages as ChatMessage[], {
             temperature: 0.6,

@@ -10,12 +10,12 @@ export function buildGenerateMessages(
     general: GeneralConfig,
     content: string,
     types: QuestionType[],
-    difficulty: DifficultyDistribution,
+    difficulty: DifficultyDistribution
 ): Array<{ role: "system" | "user"; content: string }> {
     const system = [
         prompts.generate,
         "严格按 JSON Schema 输出，禁止输出多余文本或代码围栏。",
-        "输出必须是一个 JSON 对象，顶层包含 questions 数组，格式：{\"questions\":[...]}。不要输出任何其他键名。",
+        '输出必须是一个 JSON 对象，顶层包含 questions 数组，格式：{"questions":[...]}。不要输出任何其他键名。',
     ];
 
     const user = [
@@ -44,7 +44,7 @@ export function buildGenerateMessages(
 export function buildGradeSubjectiveMessages(
     prompts: PromptConfig,
     question: Question,
-    userAnswer: string,
+    userAnswer: string
 ): Array<{ role: "system" | "user"; content: string }> {
     const userParts: string[] = [`题目：${question.question}`];
 
@@ -75,12 +75,20 @@ export function buildGradeSubjectiveMessages(
 /** 格式化学生答案 */
 function formatAnswer(_q: Question, ua: UserAnswer): string {
     switch (ua.type) {
-        case "single_choice": return String.fromCharCode(65 + ua.value);
-        case "multiple_choice": return ua.value.map((i) => String.fromCharCode(65 + i)).sort().join("、");
-        case "true_false": return ua.value ? "正确" : "错误";
-        case "fill_blank": return ua.value.join("；");
+        case "single_choice":
+            return String.fromCharCode(65 + ua.value);
+        case "multiple_choice":
+            return ua.value
+                .map((i) => String.fromCharCode(65 + i))
+                .sort()
+                .join("、");
+        case "true_false":
+            return ua.value ? "正确" : "错误";
+        case "fill_blank":
+            return ua.value.join("；");
         case "subjective":
-        case "coding": return ua.value;
+        case "coding":
+            return ua.value;
     }
     return "";
 }
@@ -88,12 +96,20 @@ function formatAnswer(_q: Question, ua: UserAnswer): string {
 /** 格式化正确答案 */
 function formatCorrect(q: Question): string {
     switch (q.type) {
-        case "single_choice": return String.fromCharCode(65 + q.answer);
-        case "multiple_choice": return q.answer.map((i) => String.fromCharCode(65 + i)).sort().join("、");
-        case "true_false": return q.answer ? "正确" : "错误";
-        case "fill_blank": return q.answer.map((o) => o.join(" / ")).join("；");
+        case "single_choice":
+            return String.fromCharCode(65 + q.answer);
+        case "multiple_choice":
+            return q.answer
+                .map((i) => String.fromCharCode(65 + i))
+                .sort()
+                .join("、");
+        case "true_false":
+            return q.answer ? "正确" : "错误";
+        case "fill_blank":
+            return q.answer.map((o) => o.join(" / ")).join("；");
         case "subjective":
-        case "coding": return q.reference_answer;
+        case "coding":
+            return q.reference_answer;
     }
     return "";
 }
@@ -102,7 +118,7 @@ function formatCorrect(q: Question): string {
 export function buildAnalysisMessages(
     prompts: PromptConfig,
     results: GradingResult[],
-    questions: Question[],
+    questions: Question[]
 ): Array<{ role: "system" | "user"; content: string }> {
     const wrong = results.filter((r) => r.correct === false || (r.method === "ai" && r.score < 60));
     if (wrong.length === 0) {
@@ -141,7 +157,7 @@ export function buildAnalysisMessages(
 /** 审题消息：让审题者审核题目列表 */
 export function buildReviewMessages(
     prompts: PromptConfig,
-    questions: Question[],
+    questions: Question[]
 ): Array<{ role: "system" | "user"; content: string }> {
     const items = questions.map((q, i) => {
         const parts = [`【第${i + 1}题】`, `题型: ${q.type}`, `难度: ${q.difficulty}`, `题干: ${q.question}`];
@@ -153,7 +169,12 @@ export function buildReviewMessages(
                 break;
             case "multiple_choice":
                 parts.push(`选项: ${q.options.map((o, j) => String.fromCharCode(65 + j) + ". " + o).join(" | ")}`);
-                parts.push(`答案: ${q.answer.map((j) => String.fromCharCode(65 + j)).sort().join("")}`);
+                parts.push(
+                    `答案: ${q.answer
+                        .map((j) => String.fromCharCode(65 + j))
+                        .sort()
+                        .join("")}`
+                );
                 break;
             case "true_false":
                 parts.push(`答案: ${q.answer ? "正确" : "错误"}`);
@@ -166,7 +187,10 @@ export function buildReviewMessages(
                 break;
             case "coding":
                 parts.push(`参考答案: ${q.answer ?? ""}`);
-                if (q.test_cases) parts.push(`测试用例: ${q.test_cases.map((t) => `输入:${t.input ?? ""} 期望:${t.expected}`).join("; ")}`);
+                if (q.test_cases)
+                    parts.push(
+                        `测试用例: ${q.test_cases.map((t) => `输入:${t.input ?? ""} 期望:${t.expected}`).join("; ")}`
+                    );
                 break;
         }
         return parts.join("\n");
@@ -183,7 +207,7 @@ export function buildRegenerateMessages(
     general: GeneralConfig,
     failedQuestions: Question[],
     reasons: string[],
-    content: string,
+    content: string
 ): Array<{ role: "system" | "user"; content: string }> {
     const system = [
         prompts.generate,
@@ -198,7 +222,8 @@ export function buildRegenerateMessages(
             `原难度: ${q.difficulty}`,
             `原题: ${q.question}`,
         ];
-        if (qany.options) parts.push(`原选项: ${qany.options.map((o, j) => String.fromCharCode(65 + j) + ". " + o).join(", ")}`);
+        if (qany.options)
+            parts.push(`原选项: ${qany.options.map((o, j) => String.fromCharCode(65 + j) + ". " + o).join(", ")}`);
         if (qany.answer !== undefined) parts.push(`原答案: ${formatCorrect(q)}`);
         if (qany.reference_answer) parts.push(`原参考答案: ${qany.reference_answer}`);
         if (qany.explanation) parts.push(`原解析: ${qany.explanation}`);
@@ -228,21 +253,39 @@ export function buildChatMessages(
     result: GradingResult,
     analysis: string,
     history: Array<{ role: "user" | "assistant"; content: string }>,
-    userMessage: string,
+    userMessage: string
 ): Array<{ role: "system" | "user" | "assistant"; content: string }> {
-    const ctx = `题目：${question.question}\n` +
+    const ctx =
+        `题目：${question.question}\n` +
         `题型：${question.type}\n` +
         `你的答案：${result.userAnswer?.value ?? "未答"}\n` +
         `得分：${result.score}/${result.maxScore}\n` +
         `评语：${result.comment ?? ""}`;
     const correctParts: string[] = [];
     switch (question.type) {
-        case "single_choice": correctParts.push(`正确答案：${String.fromCharCode(65 + question.answer)}`); break;
-        case "multiple_choice": correctParts.push(`正确答案：${question.answer.map((i) => String.fromCharCode(65 + i)).sort().join("、")}`); break;
-        case "true_false": correctParts.push(`正确答案：${question.answer ? "正确" : "错误"}`); break;
-        case "fill_blank": correctParts.push(`正确答案：${question.answer.map((o) => o.join(" / ")).join("；")}`); break;
-        case "subjective": correctParts.push(`参考答案：${question.reference_answer}`); break;
-        case "coding": correctParts.push(`参考答案：${question.reference_answer ?? question.answer}`); break;
+        case "single_choice":
+            correctParts.push(`正确答案：${String.fromCharCode(65 + question.answer)}`);
+            break;
+        case "multiple_choice":
+            correctParts.push(
+                `正确答案：${question.answer
+                    .map((i) => String.fromCharCode(65 + i))
+                    .sort()
+                    .join("、")}`
+            );
+            break;
+        case "true_false":
+            correctParts.push(`正确答案：${question.answer ? "正确" : "错误"}`);
+            break;
+        case "fill_blank":
+            correctParts.push(`正确答案：${question.answer.map((o) => o.join(" / ")).join("；")}`);
+            break;
+        case "subjective":
+            correctParts.push(`参考答案：${question.reference_answer}`);
+            break;
+        case "coding":
+            correctParts.push(`参考答案：${question.reference_answer ?? question.answer}`);
+            break;
     }
     if (question.explanation) correctParts.push(`解析：${question.explanation}`);
     const system = [
@@ -251,14 +294,8 @@ export function buildChatMessages(
         `整体薄弱点分析：${analysis}`,
         "请针对这道题回答学生的问题。如涉及相关概念可以适当延伸，但需围绕本题。",
     ];
-    return [
-        { role: "system", content: system.join("\n\n") },
-        ...history,
-        { role: "user", content: userMessage },
-    ];
+    return [{ role: "system", content: system.join("\n\n") }, ...history, { role: "user", content: userMessage }];
 }
-
-
 
 /** 全局 AI 答疑消息：针对整套试卷 */
 export function buildGlobalChatMessages(
@@ -267,32 +304,44 @@ export function buildGlobalChatMessages(
     results: GradingResult[],
     analysis: string,
     history: Array<{ role: "user" | "assistant"; content: string }>,
-    userMessage: string,
+    userMessage: string
 ): Array<{ role: "system" | "user" | "assistant"; content: string }> {
-    const summary = questions.map((q, i) => {
-        const r = results[i];
-        const ua = r?.userAnswer;
-        let uaStr = "未答";
-        if (ua) {
-            switch (ua.type) {
-                case "single_choice": uaStr = String.fromCharCode(65 + ua.value); break;
-                case "multiple_choice": uaStr = ua.value.map((j) => String.fromCharCode(65 + j)).sort().join("、"); break;
-                case "true_false": uaStr = ua.value ? "正确" : "错误"; break;
-                case "fill_blank": uaStr = ua.value.join("；"); break;
-                case "subjective": case "coding": uaStr = ua.value; break;
+    const summary = questions
+        .map((q, i) => {
+            const r = results[i];
+            const ua = r?.userAnswer;
+            let uaStr = "未答";
+            if (ua) {
+                switch (ua.type) {
+                    case "single_choice":
+                        uaStr = String.fromCharCode(65 + ua.value);
+                        break;
+                    case "multiple_choice":
+                        uaStr = ua.value
+                            .map((j) => String.fromCharCode(65 + j))
+                            .sort()
+                            .join("、");
+                        break;
+                    case "true_false":
+                        uaStr = ua.value ? "正确" : "错误";
+                        break;
+                    case "fill_blank":
+                        uaStr = ua.value.join("；");
+                        break;
+                    case "subjective":
+                    case "coding":
+                        uaStr = ua.value;
+                        break;
+                }
             }
-        }
-        return `${i + 1}. [${q.type}] ${q.question}\n   学生答案：${uaStr} | 得分：${r?.score ?? 0}/${r?.maxScore ?? 100}`;
-    }).join("\n\n");
+            return `${i + 1}. [${q.type}] ${q.question}\n   学生答案：${uaStr} | 得分：${r?.score ?? 0}/${r?.maxScore ?? 100}`;
+        })
+        .join("\n\n");
     const system = [
         prompts.analysis,
         `以下是学生本次答题的整体情况：\n${summary}`,
         `整体薄弱点分析：${analysis}`,
         "请针对学生关于本次答题的问题进行回答，可以涉及多道题目的知识点关联。",
     ];
-    return [
-        { role: "system", content: system.join("\n\n") },
-        ...history,
-        { role: "user", content: userMessage },
-    ];
+    return [{ role: "system", content: system.join("\n\n") }, ...history, { role: "user", content: userMessage }];
 }

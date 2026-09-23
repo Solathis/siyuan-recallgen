@@ -5,7 +5,7 @@ import { marked } from "marked";
 const KATEX_CSS_CDN = "https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.css";
 let cssInjected = false;
 function ensureCss() {
-    if (cssInjected || document.querySelector('link[data-katex-css]')) return;
+    if (cssInjected || document.querySelector("link[data-katex-css]")) return;
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = KATEX_CSS_CDN;
@@ -17,11 +17,7 @@ ensureCss();
 
 /** HTML 转义 */
 function escapeHtml(s: string): string {
-    return s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 /** KaTeX 渲染为 HTML 字符串 */

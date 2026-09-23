@@ -19,7 +19,7 @@ export class QuizSelector {
 
     constructor(
         private readonly plugin: Plugin,
-        private readonly open: OpenQuizFn,
+        private readonly open: OpenQuizFn
     ) {}
 
     register(): void {
@@ -63,7 +63,9 @@ export class QuizSelector {
         detail.menu.addItem({
             icon: "iconSparkles",
             label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
-            click: () => { if (rootId) void this.fromDoc(rootId); },
+            click: () => {
+                if (rootId) void this.fromDoc(rootId);
+            },
         });
         detail.menu.addItem({
             icon: "iconFiles",
@@ -73,12 +75,24 @@ export class QuizSelector {
         detail.menu.addItem({
             icon: "iconCalendar",
             label: t("selector.fromToday"),
-            click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-today", sourceTitle: t("selector.todayNotes"), dateRange: "today" }),
+            click: () =>
+                this.open({
+                    mode: "dateGenerate",
+                    sourceDocId: "date-today",
+                    sourceTitle: t("selector.todayNotes"),
+                    dateRange: "today",
+                }),
         });
         detail.menu.addItem({
             icon: "iconHistory",
             label: t("selector.fromRecent"),
-            click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-before", sourceTitle: t("selector.recentNotes"), dateRange: "beforeToday" }),
+            click: () =>
+                this.open({
+                    mode: "dateGenerate",
+                    sourceDocId: "date-before",
+                    sourceTitle: t("selector.recentNotes"),
+                    dateRange: "beforeToday",
+                }),
         });
     }
 
@@ -90,8 +104,7 @@ export class QuizSelector {
         if (!elements || elements.length === 0) return;
 
         if (detail.type === "doc") {
-            const docId = elements[0].getAttribute("data-node-id")
-                || elements[0].getAttribute("data-id");
+            const docId = elements[0].getAttribute("data-node-id") || elements[0].getAttribute("data-id");
             if (!docId) return;
             detail.menu.addItem({
                 icon: "iconSparkles",
@@ -101,23 +114,37 @@ export class QuizSelector {
             detail.menu.addItem({
                 icon: "iconCalendar",
                 label: t("selector.fromToday"),
-                click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-today", sourceTitle: t("selector.todayNotes"), dateRange: "today" }),
+                click: () =>
+                    this.open({
+                        mode: "dateGenerate",
+                        sourceDocId: "date-today",
+                        sourceTitle: t("selector.todayNotes"),
+                        dateRange: "today",
+                    }),
             });
             detail.menu.addItem({
                 icon: "iconHistory",
                 label: t("selector.fromRecent"),
-                click: () => this.open({ mode: "dateGenerate", sourceDocId: "date-before", sourceTitle: t("selector.recentNotes"), dateRange: "beforeToday" }),
+                click: () =>
+                    this.open({
+                        mode: "dateGenerate",
+                        sourceDocId: "date-before",
+                        sourceTitle: t("selector.recentNotes"),
+                        dateRange: "beforeToday",
+                    }),
             });
         } else if (detail.type === "notebook") {
             const el = elements[0];
-            const nbId = el.getAttribute("data-url")
-                || el.getAttribute("data-box")
-                || el.getAttribute("data-id")
-                || el.getAttribute("data-node-id");
+            const nbId =
+                el.getAttribute("data-url") ||
+                el.getAttribute("data-box") ||
+                el.getAttribute("data-id") ||
+                el.getAttribute("data-node-id");
             if (!nbId) return;
-            const nbName = el.querySelector(".b3-list-item__text")?.textContent?.trim()
-                || el.querySelector("[title]")?.getAttribute("title")
-                || t("selector.notebook");
+            const nbName =
+                el.querySelector(".b3-list-item__text")?.textContent?.trim() ||
+                el.querySelector("[title]")?.getAttribute("title") ||
+                t("selector.notebook");
             detail.menu.addItem({
                 icon: "iconFiles",
                 label: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
@@ -126,12 +153,26 @@ export class QuizSelector {
             detail.menu.addItem({
                 icon: "iconCalendar",
                 label: t("selector.fromToday"),
-                click: () => this.open({ mode: "dateGenerate", sourceDocId: `nb-${nbId}-today`, sourceTitle: t("selector.todayNotebookPrefix", nbName), dateRange: "today", notebookId: nbId }),
+                click: () =>
+                    this.open({
+                        mode: "dateGenerate",
+                        sourceDocId: `nb-${nbId}-today`,
+                        sourceTitle: t("selector.todayNotebookPrefix", nbName),
+                        dateRange: "today",
+                        notebookId: nbId,
+                    }),
             });
             detail.menu.addItem({
                 icon: "iconHistory",
                 label: t("selector.fromRecent"),
-                click: () => this.open({ mode: "dateGenerate", sourceDocId: `nb-${nbId}-before`, sourceTitle: t("selector.recentNotebookPrefix", nbName), dateRange: "beforeToday", notebookId: nbId }),
+                click: () =>
+                    this.open({
+                        mode: "dateGenerate",
+                        sourceDocId: `nb-${nbId}-before`,
+                        sourceTitle: t("selector.recentNotebookPrefix", nbName),
+                        dateRange: "beforeToday",
+                        notebookId: nbId,
+                    }),
             });
         }
     }
@@ -174,9 +215,7 @@ export class QuizSelector {
     private async fromBlocks(detail: any) {
         const elements: HTMLElement[] = detail.blockElements ?? [];
         const rootId: string = detail.protyle?.block?.rootID;
-        const ids = elements
-            .map((el: HTMLElement) => el?.dataset?.nodeId)
-            .filter((id: string): id is string => !!id);
+        const ids = elements.map((el: HTMLElement) => el?.dataset?.nodeId).filter((id: string): id is string => !!id);
         if (ids.length === 0) return;
         let content = "";
         for (const id of ids) {
@@ -228,7 +267,7 @@ export class QuizSelector {
                 t("selector.confirmShortTitle"),
                 t("selector.confirmShortMsg", String(len)),
                 () => resolve(),
-                () => resolve(),
+                () => resolve()
             );
         });
     }
@@ -236,7 +275,9 @@ export class QuizSelector {
 
 /** 递归收集笔记本下所有文档 ID */
 async function collectDocIds(notebookId: string): Promise<string[]> {
-    const rows = await sql(`SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' ORDER BY hpath ASC LIMIT 200`);
+    const rows = await sql(
+        `SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' ORDER BY hpath ASC LIMIT 200`
+    );
     if (rows && rows.length > 0) return rows.map((r: any) => r.id as string);
     const tree = await listDocTree(notebookId as NotebookId, "/").catch(() => [] as IDocTreeNode[]);
     const ids: string[] = [];

@@ -10,10 +10,15 @@
 
     const PROMPT_KEYS = ["generate", "review", "gradeSubjective", "analysis"] as const;
     const PROMPT_LABELS: Record<string, string> = {
-        generate: t("settings.prompts.generate"), review: t("settings.prompts.review"), gradeSubjective: t("settings.prompts.gradeSubjective"), analysis: t("settings.prompts.analysis"),
+        generate: t("settings.prompts.generate"),
+        review: t("settings.prompts.review"),
+        gradeSubjective: t("settings.prompts.gradeSubjective"),
+        analysis: t("settings.prompts.analysis"),
     };
 
-    function v(e: Event): string { return (e.target as HTMLTextAreaElement).value; }
+    function v(e: Event): string {
+        return (e.target as HTMLTextAreaElement).value;
+    }
     function onPromptInput(key: keyof typeof config.prompts, e: Event) {
         dispatch("save", { ...config, prompts: { ...config.prompts, [key]: v(e) } });
     }
@@ -32,15 +37,27 @@
             <div class={field.field}>
                 <div class="rg-prompt-head">
                     <span class={field.label}>{PROMPT_LABELS[key]}</span>
-                    <button class={button({ variant: "ghost", size: "sm" })} on:click={() => resetPrompt(key)}>{t("settings.prompts.reset")}</button>
+                    <button class={button({ variant: "ghost", size: "sm" })} on:click={() => resetPrompt(key)}
+                        >{t("settings.prompts.reset")}</button
+                    >
                 </div>
-                <textarea class={cn(textarea, "rg-prompt-ta")} on:input={(e) => onPromptInput(key, e)}>{config.prompts[key]}</textarea>
+                <textarea class={cn(textarea, "rg-prompt-ta")} on:input={(e) => onPromptInput(key, e)}
+                    >{config.prompts[key]}</textarea
+                >
             </div>
         {/each}
     </div>
 </div>
 
 <style>
-    .rg-prompt-head { display: flex; justify-content: space-between; align-items: center; }
-    :global(.rg-prompt-ta) { min-height: 100px; font-family: var(--b3-font-family-code, monospace); font-size: 12px; }
+    .rg-prompt-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    :global(.rg-prompt-ta) {
+        min-height: 100px;
+        font-family: var(--b3-font-family-code, monospace);
+        font-size: 12px;
+    }
 </style>

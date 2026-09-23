@@ -7,13 +7,7 @@
 export type Difficulty = "easy" | "medium" | "hard";
 
 /** 题型枚举 */
-export type QuestionType =
-    | "single_choice"
-    | "multiple_choice"
-    | "fill_blank"
-    | "true_false"
-    | "subjective"
-    | "coding";
+export type QuestionType = "single_choice" | "multiple_choice" | "fill_blank" | "true_false" | "subjective" | "coding";
 
 /** 难度分布配置：各难度题数，总和须 ≤ total */
 export interface DifficultyDistribution {
@@ -165,9 +159,4 @@ export interface HeatmapConfig {
 }
 
 /** 答题面板状态机 */
-export type PanelState =
-    | "configuring"
-    | "loading_generating"
-    | "answering"
-    | "loading_grading"
-    | "result";
+export type PanelState = "configuring" | "loading_generating" | "answering" | "loading_grading" | "result";

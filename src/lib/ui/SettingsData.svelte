@@ -12,11 +12,19 @@
         <p class={card.description}>{t("settings.data.desc")}</p>
     </div>
     <div class="rg-data-actions">
-        <button class={button({ variant: "outline" })} on:click={onClearScores}>{t("settings.data.clearScores")}</button>
-        <button class={button({ variant: "destructive" })} on:click={onClearProgress}>{t("settings.data.clearProgress")}</button>
+        <button class={button({ variant: "outline" })} on:click={onClearScores}>{t("settings.data.clearScores")}</button
+        >
+        <button class={button({ variant: "destructive" })} on:click={onClearProgress}
+            >{t("settings.data.clearProgress")}</button
+        >
     </div>
 </div>
 
 <style>
-    .rg-data-actions { display: flex; gap: 12px; flex-wrap: wrap; padding: 0 16px 16px; }
+    .rg-data-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 0 16px 16px;
+    }
 </style>

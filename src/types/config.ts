@@ -118,9 +118,7 @@ const DEFAULT_ENDPOINT: AIEndpoint = {
 /** 默认单模型，三个角色共用 */
 function defaultModels(): AIModel[] {
     const base = { endpointId: DEFAULT_ENDPOINT.id };
-    return [
-        { ...base, id: "m-default", name: "gpt-4o-mini", temperature: 0.7, maxTokens: 16384 },
-    ];
+    return [{ ...base, id: "m-default", name: "gpt-4o-mini", temperature: 0.7, maxTokens: 16384 }];
 }
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
@@ -246,7 +244,13 @@ export function getDefaultConfig(): RecallGenConfig {
  */
 export function migrateAIConfig(old: Partial<AIConfig> | undefined | null): AIConfig {
     const def = DEFAULT_AI_CONFIG;
-    if (!old) return { ...def, endpoints: def.endpoints.map((e) => ({ ...e })), models: def.models.map((m) => ({ ...m })), roles: { ...def.roles } };
+    if (!old)
+        return {
+            ...def,
+            endpoints: def.endpoints.map((e) => ({ ...e })),
+            models: def.models.map((m) => ({ ...m })),
+            roles: { ...def.roles },
+        };
 
     // 新格式：已有 endpoints 数组
     if (Array.isArray(old.endpoints) && old.endpoints.length > 0) {
@@ -289,8 +293,9 @@ export function migrateAIConfig(old: Partial<AIConfig> | undefined | null): AICo
         endpoints: [endpoint],
         models,
         roles: { generator: "m-default", reviewer: "m-default", grader: "m-default" },
-        timeout: (old as Record<string, unknown>).timeout as number | undefined ?? def.timeout,
-        jsonSchemaEnabled: (old as Record<string, unknown>).jsonSchemaEnabled as boolean | undefined ?? def.jsonSchemaEnabled,
+        timeout: ((old as Record<string, unknown>).timeout as number | undefined) ?? def.timeout,
+        jsonSchemaEnabled:
+            ((old as Record<string, unknown>).jsonSchemaEnabled as boolean | undefined) ?? def.jsonSchemaEnabled,
         testModelId: "m-default",
         testPrompt: ((old as Record<string, unknown>).testPrompt as string | undefined) ?? def.testPrompt,
     };

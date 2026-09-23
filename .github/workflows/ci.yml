@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags-ignore:
+      - "v*"
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      OUTPUT_DIR: dist
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Format check
+        run: pnpm run format:check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Verify build output is a single bundle
+        run: |
+          test -f dist/index.js
+          test -f dist/index.css
+          test -f dist/plugin.json
+          test -f dist/i18n/zh-CN.json
+          test -f dist/i18n/en.json
+          # SiYuan's plugin loader cannot resolve code-split chunks
+          test "$(find dist -maxdepth 1 -name '*.js' | wc -l)" = "1"

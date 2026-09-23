@@ -39,12 +39,16 @@ function dateClause(cfg: DateGenConfig, range: DateRange): string {
 }
 
 /** 当前时间 */
-function now(): Date { return new Date(); }
+function now(): Date {
+    return new Date();
+}
 
 /** 收集指定笔记本内某日期范围的文档 ID */
 async function collectDocIdsByDate(notebookId: string, cfg: DateGenConfig, range: DateRange): Promise<string[]> {
     const clause = dateClause(cfg, range);
-    const rows = await sql(`SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' AND ${clause} ORDER BY hpath ASC LIMIT 200`);
+    const rows = await sql(
+        `SELECT id FROM blocks WHERE box = '${notebookId}' AND type = 'd' AND ${clause} ORDER BY hpath ASC LIMIT 200`
+    );
     return rows?.map((r: { id: string }) => r.id) ?? [];
 }
 
@@ -64,7 +68,7 @@ async function collectAllDocIdsByDate(cfg: DateGenConfig, range: DateRange): Pro
 export async function loadDateRangeNotes(
     cfg: DateGenConfig,
     range: DateRange,
-    notebookId?: string,
+    notebookId?: string
 ): Promise<{ content: string; title: string }> {
     const label = range === "today" ? "今日" : cfg.days <= 0 ? "基点之前" : `近 ${cfg.days} 天`;
 
@@ -89,9 +93,7 @@ export async function loadDateRangeNotes(
         throw new Error(`${label}笔记内容为空，请检查文档是否有实际内容`);
     }
 
-    const title = notebookId
-        ? `笔记本·${label}笔记（${docIds.length} 篇）`
-        : `${label}笔记（${docIds.length} 篇）`;
+    const title = notebookId ? `笔记本·${label}笔记（${docIds.length} 篇）` : `${label}笔记（${docIds.length} 篇）`;
 
     return { content, title };
 }

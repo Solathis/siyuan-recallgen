@@ -1,7 +1,13 @@
 import PromiseLimitPool from "@/libs/promise-pool";
 import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
 import { buildGradeSubjectiveMessages } from "../ai/prompts";
-import { GRADING_SCHEMA, buildTools, buildToolChoice, buildJsonObjectResponseFormat, parseJsonLoose } from "../ai/schema";
+import {
+    GRADING_SCHEMA,
+    buildTools,
+    buildToolChoice,
+    buildJsonObjectResponseFormat,
+    parseJsonLoose,
+} from "../ai/schema";
 import type { RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, UserAnswer } from "@/types/quiz";
 
@@ -15,7 +21,7 @@ export async function gradeAll(
     config: RecallGenConfig,
     questions: Question[],
     answers: Record<string, UserAnswer>,
-    onProgress?: (done: number, total: number) => void,
+    onProgress?: (done: number, total: number) => void
 ): Promise<GradingResult[]> {
     const results: GradingResult[] = [];
     const pool = new PromiseLimitPool<GradingResult>(MAX_CONCURRENT);
@@ -135,7 +141,11 @@ async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | un
  * true → tools/function calling
  * false → response_format: json_object
  */
-function pickGradingOpts(jsonSchemaEnabled: boolean): { tools?: unknown[]; toolChoice?: unknown; responseFormat?: unknown } {
+function pickGradingOpts(jsonSchemaEnabled: boolean): {
+    tools?: unknown[];
+    toolChoice?: unknown;
+    responseFormat?: unknown;
+} {
     if (jsonSchemaEnabled) {
         return {
             tools: buildTools("recallgen_grading", "判分", GRADING_SCHEMA as object),

@@ -13,11 +13,6 @@
     }
 </script>
 
-<button
-    type="button"
-    role="tab"
-    class={t.trigger(isActive(value))}
-    on:click={() => select(value)}
->
+<button type="button" role="tab" class={t.trigger(isActive(value))} on:click={() => select(value)}>
     <slot />
 </button>
