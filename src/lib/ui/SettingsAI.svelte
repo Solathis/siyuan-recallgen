@@ -1,63 +1,67 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
-    import { button, badge, card, field, input, select, switchCls, cn } from "./components";
+    import { showMessage } from "siyuan";
+    import { Badge } from "@/lib/components/ui/badge";
+    import { Button } from "@/lib/components/ui/button";
+    import * as Card from "@/lib/components/ui/card";
+    import { Input } from "@/lib/components/ui/input";
+    import { Label } from "@/lib/components/ui/label";
+    import * as Select from "@/lib/components/ui/select";
+    import { Separator } from "@/lib/components/ui/separator";
+    import { Switch } from "@/lib/components/ui/switch";
     import { t } from "../i18n";
-    import type { RecallGenConfig, AIEndpoint, AIModel, AIProvider, AIProtocol } from "@/types/config";
+    import type { AIEndpoint, AIModel, AIProvider, AIProtocol, RecallGenConfig } from "@/types/config";
 
-    export let config: RecallGenConfig;
-    export let onTestConnection: () => Promise<string> = async () => "";
+    let {
+        config,
+        onTestConnection = async () => "",
+        onsave,
+    }: {
+        config: RecallGenConfig;
+        onTestConnection?: () => Promise<string>;
+        onsave: (config: RecallGenConfig) => void;
+    } = $props();
 
-    const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
-    let connState: "idle" | "testing" | "ok" | "fail" = "idle";
-    let connError = "";
-    let connResult = "";
-    let showKeys: Record<string, boolean> = {};
-    let testModelId = config.ai.testModelId;
+    let connState = $state<"idle" | "testing" | "ok" | "fail">("idle");
+    let connError = $state("");
+    let connResult = $state("");
+    let showKeys = $state<Record<string, boolean>>({});
+    /** 测试用模型直接取配置值，避免本地副本与配置脱钩（原实现会残留已被删除的模型 id） */
+    const testModelId = $derived(config.ai.testModelId);
 
-    function v(e: Event): string {
-        return (e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
-    }
-    function vn(e: Event): number {
-        return parseInt(v(e)) || 0;
-    }
-    function checked(e: Event): boolean {
-        return (e.target as HTMLInputElement).checked;
-    }
+    /* ── 基础工具 ────────────────────────────────────────────────── */
 
-    function patchAi(patch: Partial<typeof config.ai>) {
-        dispatch("save", { ...config, ai: { ...config.ai, ...patch } });
+    function patchAi(patch: Partial<RecallGenConfig["ai"]>) {
+        onsave({ ...config, ai: { ...config.ai, ...patch } });
     }
 
     function genId(prefix: string): string {
         return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     }
 
-    // ── 测试连接：端点+模型级联 ──
-
-    function testEndpointId(): string {
-        const model = config.ai.models.find((m) => m.id === testModelId);
-        return model?.endpointId ?? config.ai.endpoints[0]?.id ?? "";
-    }
-    function modelsOf(epId: string): AIModel[] {
-        return config.ai.models.filter((m) => m.endpointId === epId);
-    }
-    function onTestEndpointChange(e: Event) {
-        const epId = v(e);
-        const first = modelsOf(epId)[0];
-        if (first) {
-            testModelId = first.id;
-            patchAi({ testModelId: first.id });
-        }
-    }
-    function onTestModelChange(e: Event) {
-        testModelId = v(e);
-        patchAi({ testModelId });
+    function modelsOf(endpointId: string): AIModel[] {
+        return config.ai.models.filter((m) => m.endpointId === endpointId);
     }
 
-    // ── 端点 CRUD ──────────────────────────────────────────────
+    /* ── 测试连接 ────────────────────────────────────────────────── */
+
+    const testEndpointId = $derived(
+        config.ai.models.find((m) => m.id === testModelId)?.endpointId ?? config.ai.endpoints[0]?.id ?? ""
+    );
+
+    function onTestEndpointChange(endpointId: string) {
+        const first = modelsOf(endpointId)[0];
+        if (!first) return;
+        patchAi({ testModelId: first.id });
+    }
+
+    function onTestModelChange(modelId: string) {
+        patchAi({ testModelId: modelId });
+    }
+
+    /* ── 端点 CRUD ───────────────────────────────────────────────── */
 
     function addEndpoint() {
-        const ep: AIEndpoint = {
+        const endpoint: AIEndpoint = {
             id: genId("ep"),
             name: t("settings.ai.endpointNum", String(config.ai.endpoints.length + 1)),
             provider: "openai",
@@ -65,496 +69,366 @@
             baseUrl: "",
             apiKey: "",
         };
-        patchAi({ endpoints: [...config.ai.endpoints, ep] });
+        patchAi({ endpoints: [...config.ai.endpoints, endpoint] });
     }
+
     function removeEndpoint(id: string) {
-        const modelsUsing = config.ai.models.filter((m) => m.endpointId === id);
-        if (modelsUsing.length > 0) {
-            alert(t("settings.ai.alertModelsInUse", String(modelsUsing.length)));
+        const used = config.ai.models.filter((m) => m.endpointId === id);
+        if (used.length > 0) {
+            // 原生 alert 会阻塞且样式与思源不一致，统一用思源的提示
+            showMessage(t("settings.ai.alertModelsInUse", String(used.length)), 7000, "error");
             return;
         }
         patchAi({ endpoints: config.ai.endpoints.filter((e) => e.id !== id) });
     }
+
     function patchEndpoint(id: string, patch: Partial<AIEndpoint>) {
-        patchAi({
-            endpoints: config.ai.endpoints.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-        });
-    }
-    function onEpProvider(id: string, e: Event) {
-        const provider = v(e) as AIProvider;
-        if (provider === "ollama") patchEndpoint(id, { provider, protocol: "chat" });
-        else patchEndpoint(id, { provider });
-    }
-    function onEpProtocol(id: string, e: Event) {
-        patchEndpoint(id, { protocol: v(e) as AIProtocol });
+        patchAi({ endpoints: config.ai.endpoints.map((e) => (e.id === id ? { ...e, ...patch } : e)) });
     }
 
-    // ── 模型 CRUD ──────────────────────────────────────────────
+    function onProviderChange(id: string, provider: string) {
+        // Ollama 只支持 chat 协议，切换时同步纠正
+        if (provider === "ollama") patchEndpoint(id, { provider: provider as AIProvider, protocol: "chat" });
+        else patchEndpoint(id, { provider: provider as AIProvider });
+    }
 
-    function addModel(epId: string) {
-        const existing = modelsOf(epId);
-        // 同端点下不允许同名模型
-        let name = "";
-        let n = existing.length + 1;
-        while (existing.some((m) => m.name === name)) {
-            name = t("settings.ai.modelNum", String(n++));
+    function onProtocolChange(id: string, protocol: string) {
+        patchEndpoint(id, { protocol: protocol as AIProtocol });
+    }
+
+    /* ── 模型 CRUD ───────────────────────────────────────────────── */
+
+    /** 生成不与同端点已有模型重名的默认名（原实现从空串起判，导致新模型名恒为空） */
+    function nextModelName(endpointId: string, excludeId?: string): string {
+        const existing = new Set(
+            modelsOf(endpointId)
+                .filter((m) => m.id !== excludeId)
+                .map((m) => m.name)
+        );
+        let index = existing.size + 1;
+        let candidate = t("settings.ai.modelNum", String(index));
+        while (existing.has(candidate)) {
+            index += 1;
+            candidate = t("settings.ai.modelNum", String(index));
         }
-        const m: AIModel = {
+        return candidate;
+    }
+
+    function addModel(endpointId: string) {
+        const model: AIModel = {
             id: genId("m"),
-            name,
-            endpointId: epId,
+            name: nextModelName(endpointId),
+            endpointId,
             temperature: 0.7,
             maxTokens: 4096,
         };
-        patchAi({ models: [...config.ai.models, m] });
+        patchAi({ models: [...config.ai.models, model] });
     }
+
     function removeModel(id: string) {
         const roles = config.ai.roles;
         if (roles.generator === id || roles.reviewer === id || roles.grader === id) {
-            alert(t("settings.ai.alertModelInRole"));
+            showMessage(t("settings.ai.alertModelInRole"), 7000, "error");
             return;
         }
         patchAi({ models: config.ai.models.filter((m) => m.id !== id) });
     }
+
+    /**
+     * 更新模型。
+     * 重名时不再「提示后直接 return」把界面留在已输入的新名字上（原实现会造成 UI 与状态脱钩），
+     * 而是回退到可用名，保证界面与配置始终一致。
+     */
     function patchModel(id: string, patch: Partial<AIModel>) {
-        // 同端点下不允许同名模型
+        const current = config.ai.models.find((m) => m.id === id);
+        if (!current) return;
+
+        const next = { ...current, ...patch };
         if (patch.name !== undefined) {
-            const model = config.ai.models.find((m) => m.id === id);
-            if (model) {
-                const dup = config.ai.models.some(
-                    (m) => m.endpointId === model.endpointId && m.id !== id && m.name === patch.name
-                );
-                if (dup) {
-                    alert(t("settings.ai.alertDupModelName", patch.name));
-                    return;
-                }
+            const trimmed = patch.name.trim();
+            const duplicated = modelsOf(current.endpointId).some((m) => m.id !== id && m.name === trimmed);
+            if (duplicated) {
+                showMessage(t("settings.ai.alertDupModelName", trimmed), 7000, "error");
+                next.name = nextModelName(current.endpointId, id);
+            } else if (!trimmed) {
+                next.name = nextModelName(current.endpointId, id);
             }
         }
-        patchAi({
-            models: config.ai.models.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-        });
-    }
-    function onModelTemp(id: string, e: Event) {
-        patchModel(id, { temperature: parseFloat(v(e)) || 0 });
-    }
+        // 温度与 MaxTokens 做区间收敛，避免写入 0 或负数导致调用必然失败
+        if (next.temperature !== undefined) {
+            next.temperature = Math.max(0, Math.min(2, next.temperature));
+        }
+        if (next.maxTokens !== undefined) {
+            next.maxTokens = Math.max(256, Math.min(200_000, Math.round(next.maxTokens)));
+        }
 
-    // ── 测试连接 ──
+        patchAi({ models: config.ai.models.map((m) => (m.id === id ? next : m)) });
+    }
 
     async function testConn() {
         connState = "testing";
         connError = "";
         connResult = "";
         try {
-            const content = await onTestConnection();
-            connResult = content;
+            connResult = await onTestConnection();
             connState = "ok";
         } catch (e) {
             connState = "fail";
             connError = (e as Error).message;
         }
     }
+
+    const timeoutSeconds = $derived(Math.round(config.ai.timeout / 1000));
 </script>
 
-<div class={card.root}>
-    <div class={card.header}>
-        <h3 class={card.title}>{t("settings.ai.title")}</h3>
-        <p class={card.description}>{t("settings.ai.desc")}</p>
-    </div>
-    <div class={cn(card.content, field.group)}>
-        <!-- ── 按端点分组的端点+模型 ── -->
-        {#each config.ai.endpoints as ep (ep.id)}
-            <div class="rg-ep-block">
-                <div class="rg-ep-head">
-                    <input
-                        class={cn(input, "rg-ep-name")}
-                        type="text"
-                        value={ep.name}
-                        on:input={(e) => patchEndpoint(ep.id, { name: v(e) })}
+<Card.Root>
+    <Card.Header>
+        <Card.Title>{t("settings.ai.title")}</Card.Title>
+        <Card.Description>{t("settings.ai.desc")}</Card.Description>
+    </Card.Header>
+    <Card.Content class="flex flex-col gap-4">
+        {#each config.ai.endpoints as endpoint (endpoint.id)}
+            <div class="border-border flex flex-col gap-3 rounded-lg border p-3">
+                <div class="flex items-center gap-2">
+                    <Input
+                        class="flex-1 font-medium"
+                        value={endpoint.name}
+                        aria-label={t("settings.ai.endpointName")}
                         placeholder={t("settings.ai.endpointName")}
+                        oninput={(e) => patchEndpoint(endpoint.id, { name: e.currentTarget.value })}
                     />
-                    <button
-                        class={button({ variant: "ghost", size: "sm" })}
-                        on:click={() => removeEndpoint(ep.id)}
-                        type="button">{t("settings.ai.deleteEndpoint")}</button
-                    >
+                    <Button variant="ghost" size="sm" onclick={() => removeEndpoint(endpoint.id)}>
+                        {t("settings.ai.deleteEndpoint")}
+                    </Button>
                 </div>
-                <div class="rg-ep-config">
-                    <div class="rg-row">
-                        <label class={field.label} for={`rg-ep-provider-${ep.id}`}>{t("settings.ai.provider")}</label>
-                        <select
-                            id={`rg-ep-provider-${ep.id}`}
-                            class={select}
-                            value={ep.provider}
-                            on:change={(e) => onEpProvider(ep.id, e)}
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div class="flex flex-col gap-1.5">
+                        <Label for={`rg-provider-${endpoint.id}`}>{t("settings.ai.provider")}</Label>
+                        <Select.Root
+                            type="single"
+                            value={endpoint.provider}
+                            onValueChange={(v) => onProviderChange(endpoint.id, v)}
                         >
-                            <option value="openai">{t("settings.ai.openaiCompat")}</option>
-                            <option value="ollama">{t("settings.ai.ollama")}</option>
-                        </select>
+                            <Select.Trigger id={`rg-provider-${endpoint.id}`} class="w-full">
+                                {endpoint.provider === "openai"
+                                    ? t("settings.ai.openaiCompat")
+                                    : t("settings.ai.ollama")}
+                            </Select.Trigger>
+                            <Select.Content>
+                                <Select.Item value="openai">{t("settings.ai.openaiCompat")}</Select.Item>
+                                <Select.Item value="ollama">{t("settings.ai.ollama")}</Select.Item>
+                            </Select.Content>
+                        </Select.Root>
                     </div>
-                    <div class="rg-row">
-                        <label class={field.label} for={`rg-ep-protocol-${ep.id}`}>{t("settings.ai.protocol")}</label>
-                        <select
-                            id={`rg-ep-protocol-${ep.id}`}
-                            class={select}
-                            value={ep.protocol}
-                            on:change={(e) => onEpProtocol(ep.id, e)}
-                            disabled={ep.provider === "ollama"}
+                    <div class="flex flex-col gap-1.5">
+                        <Label for={`rg-protocol-${endpoint.id}`}>{t("settings.ai.protocol")}</Label>
+                        <Select.Root
+                            type="single"
+                            value={endpoint.protocol}
+                            onValueChange={(v) => onProtocolChange(endpoint.id, v)}
                         >
-                            <option value="chat">Chat Completions</option>
-                            <option value="responses">Responses API</option>
-                            <option value="messages">Messages API</option>
-                        </select>
-                    </div>
-                    <div class="rg-row">
-                        <label class={field.label} for={`rg-ep-base-url-${ep.id}`}>{t("settings.ai.baseUrl")}</label>
-                        <input
-                            id={`rg-ep-base-url-${ep.id}`}
-                            class={input}
-                            type="text"
-                            value={ep.baseUrl}
-                            on:input={(e) => patchEndpoint(ep.id, { baseUrl: v(e) })}
-                            placeholder="https://api.openai.com/v1"
-                        />
-                    </div>
-                    <div class="rg-row">
-                        <label class={field.label} for={`rg-ep-api-key-${ep.id}`}>{t("settings.ai.apiKey")}</label>
-                        <div class="rg-key-row">
-                            <input
-                                id={`rg-ep-api-key-${ep.id}`}
-                                class={cn(input, "rg-key-input")}
-                                type={showKeys[ep.id] ? "text" : "password"}
-                                value={ep.apiKey}
-                                on:input={(e) => patchEndpoint(ep.id, { apiKey: v(e) })}
-                                placeholder="sk-..."
-                            />
-                            <button
-                                class={button({ variant: "outline", size: "sm" })}
-                                on:click={() => (showKeys[ep.id] = !showKeys[ep.id])}
-                                type="button"
+                            <Select.Trigger
+                                id={`rg-protocol-${endpoint.id}`}
+                                class="w-full"
+                                disabled={endpoint.provider === "ollama"}
                             >
-                                {showKeys[ep.id] ? t("settings.ai.hideKey") : t("settings.ai.showKey")}
-                            </button>
-                        </div>
+                                {endpoint.protocol === "chat"
+                                    ? "Chat Completions"
+                                    : endpoint.protocol === "responses"
+                                      ? "Responses API"
+                                      : "Messages API"}
+                            </Select.Trigger>
+                            <Select.Content>
+                                <Select.Item value="chat">Chat Completions</Select.Item>
+                                <Select.Item value="responses">Responses API</Select.Item>
+                                <Select.Item value="messages">Messages API</Select.Item>
+                            </Select.Content>
+                        </Select.Root>
                     </div>
                 </div>
 
-                <!-- 该端点下的模型 -->
-                <div class="rg-models-area">
-                    <div class="rg-models-head">
-                        <span class="rg-models-title">{t("settings.ai.models")}</span>
-                        <button
-                            class={button({ variant: "outline", size: "sm" })}
-                            on:click={() => addModel(ep.id)}
-                            type="button">{t("settings.ai.addModel")}</button
+                <div class="flex flex-col gap-1.5">
+                    <Label for={`rg-baseurl-${endpoint.id}`}>{t("settings.ai.baseUrl")}</Label>
+                    <Input
+                        id={`rg-baseurl-${endpoint.id}`}
+                        value={endpoint.baseUrl}
+                        placeholder="https://api.openai.com/v1"
+                        oninput={(e) => patchEndpoint(endpoint.id, { baseUrl: e.currentTarget.value })}
+                    />
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                    <Label for={`rg-apikey-${endpoint.id}`}>{t("settings.ai.apiKey")}</Label>
+                    <div class="flex gap-2">
+                        <Input
+                            id={`rg-apikey-${endpoint.id}`}
+                            class="flex-1"
+                            type={showKeys[endpoint.id] ? "text" : "password"}
+                            value={endpoint.apiKey}
+                            placeholder="sk-..."
+                            autocomplete="off"
+                            oninput={(e) => patchEndpoint(endpoint.id, { apiKey: e.currentTarget.value })}
+                        />
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onclick={() => (showKeys[endpoint.id] = !showKeys[endpoint.id])}
                         >
+                            {showKeys[endpoint.id] ? t("settings.ai.hideKey") : t("settings.ai.showKey")}
+                        </Button>
                     </div>
-                    {#if modelsOf(ep.id).length > 0}
-                        <div class="rg-model-header">
-                            <span class="rg-model-header-name">{t("settings.ai.colName")}</span>
-                            <span class="rg-model-header-num">{t("settings.ai.colTemp")}</span>
-                            <span class="rg-model-header-num">{t("settings.ai.colMaxTokens")}</span>
-                            <span class="rg-model-header-op">{t("settings.ai.colAction")}</span>
+                </div>
+
+                <Separator />
+
+                <div class="flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-muted-foreground text-xs font-semibold">{t("settings.ai.models")}</span>
+                        <Button variant="outline" size="sm" onclick={() => addModel(endpoint.id)}>
+                            {t("settings.ai.addModel")}
+                        </Button>
+                    </div>
+                    {#if modelsOf(endpoint.id).length > 0}
+                        <div
+                            class="text-muted-foreground grid grid-cols-[1fr_5rem_6rem_auto] gap-2 text-[11px] font-semibold"
+                        >
+                            <span>{t("settings.ai.colName")}</span>
+                            <span class="text-center">{t("settings.ai.colTemp")}</span>
+                            <span class="text-center">{t("settings.ai.colMaxTokens")}</span>
+                            <span class="text-center">{t("settings.ai.colAction")}</span>
                         </div>
                     {/if}
-                    {#each modelsOf(ep.id) as m (m.id)}
-                        <div class="rg-model-row">
-                            <input
-                                class={cn(input, "rg-model-name")}
-                                type="text"
-                                value={m.name}
-                                on:input={(e) => patchModel(m.id, { name: v(e) })}
+                    {#each modelsOf(endpoint.id) as model (model.id)}
+                        <div class="grid grid-cols-[1fr_5rem_6rem_auto] items-center gap-2">
+                            <Input
+                                value={model.name}
+                                aria-label={t("settings.ai.colName")}
                                 placeholder="gpt-4o-mini"
+                                oninput={(e) => patchModel(model.id, { name: e.currentTarget.value })}
                             />
-                            <input
-                                class={cn(input, "rg-model-num")}
+                            <Input
                                 type="number"
                                 step="0.1"
                                 min="0"
                                 max="2"
-                                value={m.temperature}
-                                on:input={(e) => onModelTemp(m.id, e)}
-                                title={t("settings.ai.colTemp")}
+                                class="text-center"
+                                aria-label={t("settings.ai.colTemp")}
+                                value={model.temperature}
+                                onchange={(e) =>
+                                    patchModel(model.id, { temperature: parseFloat(e.currentTarget.value) })}
                             />
-                            <input
-                                class={cn(input, "rg-model-num")}
+                            <Input
                                 type="number"
                                 step="256"
                                 min="256"
-                                value={m.maxTokens}
-                                on:input={(e) => patchModel(m.id, { maxTokens: vn(e) })}
-                                title="Max Tokens"
+                                class="text-center"
+                                aria-label={t("settings.ai.colMaxTokens")}
+                                value={model.maxTokens}
+                                onchange={(e) =>
+                                    patchModel(model.id, { maxTokens: parseInt(e.currentTarget.value, 10) })}
                             />
-                            <button
-                                class={button({ variant: "ghost", size: "sm" })}
-                                on:click={() => removeModel(m.id)}
-                                type="button">{t("common.delete")}</button
-                            >
+                            <Button variant="ghost" size="sm" onclick={() => removeModel(model.id)}>
+                                {t("common.delete")}
+                            </Button>
                         </div>
                     {:else}
-                        <span class={field.description}>{t("settings.ai.noModels")}</span>
+                        <span class="text-muted-foreground text-xs">{t("settings.ai.noModels")}</span>
                     {/each}
                 </div>
             </div>
         {:else}
-            <span class={field.description}>{t("settings.ai.noEndpoints")}</span>
+            <span class="text-muted-foreground text-xs">{t("settings.ai.noEndpoints")}</span>
         {/each}
 
-        <button class={button({ variant: "outline" })} on:click={addEndpoint} type="button"
-            >{t("settings.ai.addEndpoint")}</button
-        >
+        <Button variant="outline" onclick={addEndpoint} class="self-start">{t("settings.ai.addEndpoint")}</Button>
 
-        <div class="rg-section-sep"></div>
-        <div class="rg-section-head"><span class="rg-section-title">{t("settings.ai.testConn")}</span></div>
-        <div class={field.group}>
-            <div class="rg-row">
-                <label class={field.label} for="rg-test-endpoint">{t("settings.ai.testEndpoint")}</label>
-                <select id="rg-test-endpoint" class={select} value={testEndpointId()} on:change={onTestEndpointChange}>
-                    {#each config.ai.endpoints as ep}
-                        <option value={ep.id}>{ep.name}</option>
-                    {/each}
-                </select>
+        <Separator />
+        <span class="text-sm font-semibold">{t("settings.ai.testConn")}</span>
+
+        <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-1.5">
+                <Label for="rg-test-endpoint">{t("settings.ai.testEndpoint")}</Label>
+                <Select.Root type="single" value={testEndpointId} onValueChange={onTestEndpointChange}>
+                    <Select.Trigger id="rg-test-endpoint" class="w-full">
+                        {config.ai.endpoints.find((e) => e.id === testEndpointId)?.name ?? ""}
+                    </Select.Trigger>
+                    <Select.Content>
+                        {#each config.ai.endpoints as endpoint (endpoint.id)}
+                            <Select.Item value={endpoint.id}>{endpoint.name}</Select.Item>
+                        {/each}
+                    </Select.Content>
+                </Select.Root>
             </div>
-            <div class="rg-row">
-                <label class={field.label} for="rg-test-model">{t("settings.ai.testModel")}</label>
-                <select id="rg-test-model" class={select} value={testModelId} on:change={onTestModelChange}>
-                    {#each modelsOf(testEndpointId()) as m}
-                        <option value={m.id}>{m.name}</option>
-                    {/each}
-                </select>
+            <div class="flex flex-col gap-1.5">
+                <Label for="rg-test-model">{t("settings.ai.testModel")}</Label>
+                <Select.Root type="single" value={testModelId} onValueChange={onTestModelChange}>
+                    <Select.Trigger id="rg-test-model" class="w-full">
+                        {config.ai.models.find((m) => m.id === testModelId)?.name ?? ""}
+                    </Select.Trigger>
+                    <Select.Content>
+                        {#each modelsOf(testEndpointId) as model (model.id)}
+                            <Select.Item value={model.id}>{model.name}</Select.Item>
+                        {/each}
+                    </Select.Content>
+                </Select.Root>
             </div>
-            <div class="rg-row">
-                <label class={field.label} for="rg-test-prompt">{t("settings.ai.testPrompt")}</label>
-                <input
+            <div class="flex flex-col gap-1.5">
+                <Label for="rg-test-prompt">{t("settings.ai.testPrompt")}</Label>
+                <Input
                     id="rg-test-prompt"
-                    class={input}
-                    type="text"
                     value={config.ai.testPrompt}
-                    on:input={(e) => patchAi({ testPrompt: v(e) })}
+                    oninput={(e) => patchAi({ testPrompt: e.currentTarget.value })}
                 />
             </div>
-            <div class="rg-test-row">
-                <button
-                    class={button({ variant: "outline", size: "sm" })}
-                    on:click={testConn}
-                    disabled={connState === "testing"}
-                    type="button"
-                >
+
+            <div class="flex flex-wrap items-center gap-3">
+                <Button variant="outline" size="sm" onclick={() => void testConn()} disabled={connState === "testing"}>
                     {connState === "testing" ? t("settings.ai.testing") : t("settings.ai.testConn")}
-                </button>
-                {#if connState === "ok"}<span class={badge("success")}>{t("settings.ai.connOk")}</span>{/if}
-                {#if connState === "fail"}<span class={badge("destructive")}>{t("settings.ai.connFail")}</span>{/if}
+                </Button>
+                {#if connState === "ok"}
+                    <Badge variant="success">{t("settings.ai.connOk")}</Badge>
+                {/if}
+                {#if connState === "fail"}
+                    <Badge variant="destructive">{t("settings.ai.connFail")}</Badge>
+                {/if}
             </div>
+
             {#if connState === "fail" && connError}
-                <div class="rg-conn-error">{connError}</div>
+                <pre
+                    class="bg-destructive/10 text-destructive max-h-20 overflow-auto rounded-md p-2 text-xs">{connError}</pre>
             {/if}
             {#if connResult}
-                <div class="rg-conn-result">
-                    <span class="rg-conn-result__label">{t("settings.ai.aiReply")}</span>
-                    <div class="rg-conn-result__content">{connResult}</div>
+                <div class="bg-success/10 rounded-md p-2">
+                    <span class="text-success block text-xs font-semibold">{t("settings.ai.aiReply")}</span>
+                    <p class="rg-markdown text-sm break-words whitespace-pre-wrap">{connResult}</p>
                 </div>
             {/if}
         </div>
 
-        <div class="rg-section-sep"></div>
-        <div class="rg-section-head"><span class="rg-section-title">{t("settings.ai.globalSettings")}</span></div>
-        <div class={field.group}>
-            <div class="rg-row">
-                <label class={field.label} for="rg-ai-timeout">{t("settings.ai.timeout")}</label>
-                <input
+        <Separator />
+        <span class="text-sm font-semibold">{t("settings.ai.globalSettings")}</span>
+
+        <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-1.5">
+                <Label for="rg-ai-timeout">{t("settings.ai.timeout")}</Label>
+                <Input
                     id="rg-ai-timeout"
-                    class={input}
                     type="number"
-                    value={Math.round(config.ai.timeout / 1000)}
-                    on:input={(e) => patchAi({ timeout: vn(e) * 1000 })}
+                    min="5"
+                    value={timeoutSeconds}
+                    onchange={(e) => patchAi({ timeout: Math.max(5, parseInt(e.currentTarget.value, 10) || 5) * 1000 })}
                 />
             </div>
-            <label class="rg-check-item">
-                <input
-                    class={switchCls}
-                    type="checkbox"
+            <label class="flex items-center gap-2 text-sm">
+                <Switch
                     checked={config.ai.jsonSchemaEnabled}
-                    on:change={(e) => patchAi({ jsonSchemaEnabled: checked(e) })}
+                    onCheckedChange={(checked) => patchAi({ jsonSchemaEnabled: checked })}
+                    aria-label={t("settings.ai.jsonSchema")}
                 />
                 <span>{t("settings.ai.jsonSchema")}</span>
-                <span class={field.description}>{t("settings.ai.jsonSchemaDesc")}</span>
+                <span class="text-muted-foreground text-xs">{t("settings.ai.jsonSchemaDesc")}</span>
             </label>
         </div>
-    </div>
-</div>
-
-<style>
-    .rg-ep-block {
-        border: 1px solid var(--b3-border-color);
-        border-radius: calc(var(--b3-border-radius) * 1.2);
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        background: color-mix(in srgb, var(--b3-theme-background) 97%, var(--b3-border-color) 3%);
-    }
-    .rg-ep-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 8px;
-    }
-    .rg-ep-name {
-        flex: 1;
-        font-weight: 600;
-    }
-    .rg-ep-config {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .rg-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .rg-row label {
-        width: 72px;
-        flex-shrink: 0;
-        font-size: 13px;
-    }
-    .rg-row input,
-    .rg-row select {
-        flex: 1;
-    }
-    .rg-key-row {
-        display: flex;
-        gap: 8px;
-        flex: 1;
-    }
-    .rg-key-input {
-        flex: 1;
-    }
-    .rg-models-area {
-        border-top: 1px dashed var(--b3-border-color);
-        padding-top: 8px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-    .rg-models-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .rg-models-title {
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--b3-theme-on-surface-light);
-    }
-    .rg-model-row {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .rg-model-name {
-        flex: 1;
-    }
-    .rg-model-num {
-        width: 80px;
-        flex-shrink: 0;
-        text-align: center;
-    }
-    .rg-model-header {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 0 0 2px;
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--b3-theme-on-surface-light);
-        border-bottom: 1px solid var(--b3-border-color);
-    }
-    .rg-model-header-name {
-        flex: 1;
-    }
-    .rg-model-header-num {
-        width: 80px;
-        flex-shrink: 0;
-        text-align: center;
-    }
-    .rg-model-header-op {
-        width: 48px;
-        flex-shrink: 0;
-        text-align: center;
-    }
-    .rg-section-sep {
-        border-top: 1px solid var(--b3-border-color);
-        margin: 4px 0;
-    }
-    .rg-section-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin: 4px 0 8px;
-    }
-    .rg-section-title {
-        font-weight: 600;
-        font-size: 14px;
-        color: var(--b3-theme-on-background);
-    }
-    .rg-test-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-    .rg-check-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 13px;
-        cursor: pointer;
-        color: var(--b3-theme-on-background);
-        flex-wrap: wrap;
-    }
-    .rg-conn-error {
-        font-size: 12px;
-        font-family: monospace;
-        color: var(--b3-card-error, #d23f31);
-        background: color-mix(in srgb, var(--b3-card-error, #d23f31) 8%, transparent);
-        padding: 6px 10px;
-        border-radius: var(--b3-border-radius);
-        word-break: break-all;
-        max-height: 80px;
-        overflow-y: auto;
-    }
-    .rg-conn-result {
-        font-size: 12px;
-        background: color-mix(in srgb, var(--b3-card-success, #65a84c) 8%, transparent);
-        border: 1px solid color-mix(in srgb, var(--b3-card-success, #65a84c) 30%, transparent);
-        border-radius: var(--b3-border-radius);
-        padding: 8px 10px;
-    }
-    .rg-conn-result__label {
-        font-weight: 600;
-        color: var(--b3-card-success, #65a84c);
-        display: block;
-        margin-bottom: 4px;
-    }
-    .rg-conn-result__content {
-        color: var(--b3-theme-on-background);
-        line-height: 1.5;
-        white-space: pre-wrap;
-        word-break: break-all;
-    }
-    @media (max-width: 640px) {
-        .rg-row {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        .rg-row label {
-            width: auto;
-        }
-        .rg-model-row {
-            flex-wrap: wrap;
-        }
-        .rg-model-num {
-            width: 70px;
-        }
-    }
-</style>
+    </Card.Content>
+</Card.Root>

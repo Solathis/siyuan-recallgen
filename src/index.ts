@@ -2,11 +2,11 @@ import { mount, unmount, type Component } from "svelte";
 import { Plugin, showMessage, openTab, Setting, Dialog } from "siyuan";
 import type { Custom } from "siyuan";
 import "./app.css";
-import "./index.scss";
 
 import QuizPanel from "@/lib/ui/QuizPanel.svelte";
 import HistoryPanel from "@/lib/ui/HistoryPanel.svelte";
 import SettingPanel from "@/lib/ui/SettingPanel.svelte";
+import { lsNotebooks } from "@/api";
 import { ConfigStore, ScoreStore, ProgressStore } from "@/lib/storage";
 import { QuizSelector } from "@/lib/quiz/selector";
 import { generateQuestions, type GenProgressCallback } from "@/lib/quiz/generator";
@@ -170,12 +170,12 @@ export default class RecallGenPlugin extends Plugin {
         const self = this;
         const dialog = new Dialog({
             title: this.displayName ?? "RecallGen",
-            content: '<div class="rg-setting-root"></div>',
+            content: '<div class="rg-scope flex h-full min-h-[400px] flex-col"></div>',
             width: "900px",
             height: "70vh",
             destroyCallback: () => closeSetting(),
         });
-        const root = dialog.element.querySelector(".rg-setting-root") as HTMLElement;
+        const root = dialog.element.querySelector(".rg-scope") as HTMLElement;
         if (!root) return;
         const closeSetting = () => {
             if (self.settingComp) unmount(self.settingComp);
@@ -186,6 +186,7 @@ export default class RecallGenPlugin extends Plugin {
                 target: root,
                 props: {
                     config: self.config,
+                    service: self.buildService(),
                     scores,
                     onTestConnection: () => aiTestConnection(self.config.ai),
                     onClearScores: async () => {
@@ -237,6 +238,10 @@ export default class RecallGenPlugin extends Plugin {
             listScores: () => this.scoreStore.listIndex(),
             loadScoreDetail: (id) => this.scoreStore.loadDetail(id),
             removeScore: (id) => this.scoreStore.remove(id),
+            listNotebooks: async () => {
+                const res = await lsNotebooks().catch(() => null);
+                return (res?.notebooks ?? []).filter((n) => !n.closed).map((n) => ({ id: n.id, name: n.name }));
+            },
             testConnection: () => aiTestConnection(this.config.ai),
             clearScores: () => this.scoreStore.clear(),
             clearAllProgress: () => this.progressStore.clearAll(),

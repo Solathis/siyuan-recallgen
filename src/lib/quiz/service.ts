@@ -65,6 +65,8 @@ export interface QuizService {
     /** 按需加载单次成绩的明细（题目、判分明细、分析） */
     loadScoreDetail(id: string): Promise<ScoreDetail | null>;
     removeScore(id: string): Promise<void>;
+    /** 已打开的笔记本列表，用于设置面板选择存储位置 */
+    listNotebooks(): Promise<{ id: string; name: string }[]>;
     testConnection: () => Promise<string>;
     clearScores(): Promise<void>;
     clearAllProgress(): Promise<void>;

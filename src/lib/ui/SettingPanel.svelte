@@ -1,22 +1,33 @@
 <script lang="ts">
-    import SettingsAI from "./SettingsAI.svelte";
-    import SettingsAIRoles from "./SettingsAIRoles.svelte";
-    import SettingsGeneral from "./SettingsGeneral.svelte";
-    import SettingsPrompts from "./SettingsPrompts.svelte";
-    import SettingsHeatmap from "./SettingsHeatmap.svelte";
-    import SettingsData from "./SettingsData.svelte";
-    import { sidebarNav, sidebarNavItem, scrollArea } from "./components";
+    import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
     import type { ScoreIndexEntry } from "@/types/quiz";
+    import SettingsAI from "./SettingsAI.svelte";
+    import SettingsAIRoles from "./SettingsAIRoles.svelte";
+    import SettingsData from "./SettingsData.svelte";
+    import SettingsGeneral from "./SettingsGeneral.svelte";
+    import SettingsHeatmap from "./SettingsHeatmap.svelte";
+    import SettingsPrompts from "./SettingsPrompts.svelte";
 
-    export let config: RecallGenConfig;
-    export let scores: ScoreIndexEntry[] = [];
-    export let onTestConnection: () => Promise<string> = async () => "";
-    export let onClearScores: () => Promise<void> = async () => {};
-    export let onClearProgress: () => Promise<void> = async () => {};
-    /** 保存回调。Svelte 5 的 mount() 不再暴露 $on，因此改用回调属性 */
-    export let onSave: (config: RecallGenConfig) => void = () => {};
+    let {
+        config,
+        scores = [],
+        onTestConnection = async () => "",
+        onClearScores = async () => {},
+        onClearProgress = async () => {},
+        onSave = () => {},
+        service,
+    }: {
+        config: RecallGenConfig;
+        service?: import("../quiz/service").QuizService;
+        scores?: ScoreIndexEntry[];
+        onTestConnection?: () => Promise<string>;
+        onClearScores?: () => Promise<void>;
+        onClearProgress?: () => Promise<void>;
+        /** 配置保存回调。Svelte 5 的 mount() 不再暴露 $on，因此改用回调属性 */
+        onSave?: (config: RecallGenConfig) => void;
+    } = $props();
 
     const SECTIONS = [
         { key: "ai", label: t("settings.nav.ai"), icon: "🔌" },
@@ -28,98 +39,61 @@
     ] as const;
 
     type SectionKey = (typeof SECTIONS)[number]["key"];
-    let active: SectionKey = "ai";
+    let active = $state<SectionKey>("ai");
+    /**
+     * 面板内的配置副本：弹窗打开后父组件的 props 不再更新，
+     * 因此以本地副本为准，每次保存后同步刷新；读取初始值包在函数里以避开响应式捕获警告。
+     */
+    function initialConfig() {
+        return config;
+    }
+    let localConfig = $state(initialConfig());
 
-    function handleSave(e: { detail: RecallGenConfig }) {
-        config = e.detail;
-        onSave(e.detail);
+    function handleSave(next: RecallGenConfig) {
+        localConfig = next;
+        onSave(next);
     }
 </script>
 
-<div class="rg-scope rg-setting-layout">
-    <nav class={sidebarNav}>
-        {#each SECTIONS as s}
-            <button type="button" class={sidebarNavItem(active === s.key)} on:click={() => (active = s.key)}>
-                <span class="rg-nav-icon">{s.icon}</span>
-                <span class="rg-nav-label">{s.label}</span>
+<div class="rg-scope flex h-full min-h-0 flex-1 overflow-hidden rounded-lg border">
+    <!-- 窄屏改为横向滚动导航 -->
+    <nav
+        class="border-border flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-40 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0"
+        aria-label={t("settings.title")}
+    >
+        {#each SECTIONS as section (section.key)}
+            <button
+                type="button"
+                class={cn(
+                    "flex h-9 shrink-0 items-center gap-2 rounded-md border-l-2 px-3 text-left text-sm whitespace-nowrap transition-colors",
+                    active === section.key
+                        ? "border-primary bg-background font-semibold"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground border-transparent"
+                )}
+                aria-current={active === section.key}
+                onclick={() => (active = section.key)}
+            >
+                <span aria-hidden="true">{section.icon}</span>
+                <span>{section.label}</span>
             </button>
         {/each}
     </nav>
-    <div class="rg-setting-main">
-        <div class={scrollArea}>
-            <div class="rg-setting-inner">
-                {#if active === "ai"}
-                    <SettingsAI {config} {onTestConnection} on:save={handleSave} />
-                {:else if active === "roles"}
-                    <SettingsAIRoles {config} on:save={handleSave} />
-                {:else if active === "general"}
-                    <SettingsGeneral {config} on:save={handleSave} />
-                {:else if active === "prompts"}
-                    <SettingsPrompts {config} on:save={handleSave} />
-                {:else if active === "heatmap"}
-                    <SettingsHeatmap {config} {scores} on:save={handleSave} />
-                {:else if active === "data"}
-                    <SettingsData {onClearScores} {onClearProgress} scoreCount={scores.length} />
-                {/if}
-            </div>
+
+    <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div class="min-h-0 flex-1 overflow-y-auto p-4">
+            {#if active === "ai"}
+                <SettingsAI config={localConfig} {onTestConnection} onsave={handleSave} />
+            {:else if active === "roles"}
+                <SettingsAIRoles config={localConfig} onsave={handleSave} />
+            {:else if active === "general"}
+                <SettingsGeneral config={localConfig} onsave={handleSave} {service} />
+            {:else if active === "prompts"}
+                <SettingsPrompts config={localConfig} onsave={handleSave} />
+            {:else if active === "heatmap"}
+                <SettingsHeatmap config={localConfig} {scores} onsave={handleSave} />
+            {:else if active === "data"}
+                <SettingsData {onClearScores} {onClearProgress} scoreCount={scores.length} />
+            {/if}
         </div>
     </div>
 </div>
-
-<style>
-    .rg-setting-layout {
-        display: flex;
-        height: 100%;
-        min-height: 0;
-        overflow: hidden;
-        border: 1px solid var(--b3-border-color);
-        border-radius: calc(var(--b3-border-radius) * 1.5);
-        background: var(--b3-theme-background);
-        flex: 1;
-    }
-    .rg-setting-main {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-    .rg-setting-inner {
-        padding: 16px 20px;
-    }
-    .rg-nav-icon {
-        font-size: 15px;
-        flex-shrink: 0;
-        line-height: 1;
-    }
-    .rg-nav-label {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    @media (max-width: 640px) {
-        .rg-setting-layout {
-            flex-direction: column;
-        }
-        :global(.rg-sidebar-nav) {
-            flex-direction: row;
-            overflow-x: auto;
-            overflow-y: hidden;
-            border-right: none;
-            border-bottom: 1px solid var(--b3-border-color);
-        }
-        :global(.rg-sidebar-nav__item) {
-            height: 36px;
-            padding: 0 10px;
-            border-left: none;
-            border-bottom: 3px solid transparent;
-        }
-        :global(.rg-sidebar-nav__item--active) {
-            border-bottom-color: var(--b3-theme-primary);
-            border-left-color: transparent;
-        }
-        .rg-setting-inner {
-            padding: 12px;
-        }
-    }
-</style>

@@ -1,163 +1,100 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
-    import { card, field, select, cn } from "./components";
+    import * as Card from "@/lib/components/ui/card";
+    import { Label } from "@/lib/components/ui/label";
+    import * as Select from "@/lib/components/ui/select";
     import { t } from "../i18n";
-    import type { RecallGenConfig } from "@/types/config";
+    import type { AIRoles, RecallGenConfig } from "@/types/config";
 
-    export let config: RecallGenConfig;
-    const dispatch = createEventDispatcher<{ save: RecallGenConfig }>();
+    let { config, onsave }: { config: RecallGenConfig; onsave: (config: RecallGenConfig) => void } = $props();
 
-    function v(e: Event): string {
-        return (e.target as HTMLSelectElement).value;
+    type RoleKey = keyof AIRoles;
+
+    const ROLES: { key: RoleKey; icon: string }[] = [
+        { key: "generator", icon: "✍️" },
+        { key: "reviewer", icon: "🔍" },
+        { key: "grader", icon: "⚖️" },
+    ];
+
+    function patchRoles(patch: Partial<AIRoles>) {
+        onsave({ ...config, ai: { ...config.ai, roles: { ...config.ai.roles, ...patch } } });
     }
 
-    function patchRoles(patch: Partial<typeof config.ai.roles>) {
-        dispatch("save", { ...config, ai: { ...config.ai, roles: { ...config.ai.roles, ...patch } } });
-    }
-
-    /** 角色当前模型所属端点 ID */
-    function endpointIdOf(roleKey: "generator" | "reviewer" | "grader"): string {
-        const modelId = config.ai.roles[roleKey];
-        const model = config.ai.models.find((m) => m.id === modelId);
+    /** 角色当前模型所属端点 */
+    function endpointIdOf(role: RoleKey): string {
+        const model = config.ai.models.find((m) => m.id === config.ai.roles[role]);
         return model?.endpointId ?? config.ai.endpoints[0]?.id ?? "";
     }
 
-    /** 指定端点下的模型 */
-    function modelsOf(epId: string) {
-        return config.ai.models.filter((m) => m.endpointId === epId);
+    function modelsOf(endpointId: string) {
+        return config.ai.models.filter((m) => m.endpointId === endpointId);
     }
 
-    function onRoleEndpoint(roleKey: "generator" | "reviewer" | "grader", e: Event) {
-        const epId = v(e);
-        const first = modelsOf(epId)[0];
-        if (first) patchRoles({ [roleKey]: first.id } as Partial<typeof config.ai.roles>);
+    function onRoleEndpoint(role: RoleKey, endpointId: string) {
+        const first = modelsOf(endpointId)[0];
+        if (first) patchRoles({ [role]: first.id } as Partial<AIRoles>);
     }
 
-    function onRoleModel(roleKey: "generator" | "reviewer" | "grader", e: Event) {
-        patchRoles({ [roleKey]: v(e) } as Partial<typeof config.ai.roles>);
+    function labelOf(role: RoleKey): string {
+        return t(`settings.roles.${role}`);
     }
-
-    const ROLES = [
-        {
-            key: "generator" as const,
-            label: t("settings.roles.generator"),
-            icon: "✍️",
-            desc: t("settings.roles.generatorDesc"),
-        },
-        {
-            key: "reviewer" as const,
-            label: t("settings.roles.reviewer"),
-            icon: "🔍",
-            desc: t("settings.roles.reviewerDesc"),
-        },
-        { key: "grader" as const, label: t("settings.roles.grader"), icon: "⚖️", desc: t("settings.roles.graderDesc") },
-    ];
+    function descOf(role: RoleKey): string {
+        return t(`settings.roles.${role}Desc`);
+    }
 </script>
 
-<div class={card.root}>
-    <div class={card.header}>
-        <h3 class={card.title}>{t("settings.roles.title")}</h3>
-        <p class={card.description}>{t("settings.roles.desc")}</p>
-    </div>
-    <div class={cn(card.content, field.group)}>
-        {#each ROLES as r}
-            <div class="rg-role-card">
-                <div class="rg-role-head">
-                    <span class="rg-role-icon">{r.icon}</span>
-                    <div class="rg-role-info">
-                        <span class="rg-role-label">{r.label}</span>
-                        <span class={field.description}>{r.desc}</span>
+<Card.Root>
+    <Card.Header>
+        <Card.Title>{t("settings.roles.title")}</Card.Title>
+        <Card.Description>{t("settings.roles.desc")}</Card.Description>
+    </Card.Header>
+    <Card.Content class="flex flex-col gap-3">
+        {#each ROLES as role (role.key)}
+            <div class="border-border flex flex-col gap-3 rounded-lg border p-3">
+                <div class="flex items-start gap-2.5">
+                    <span class="text-xl leading-none" aria-hidden="true">{role.icon}</span>
+                    <div class="flex flex-col">
+                        <span class="text-sm font-semibold">{labelOf(role.key)}</span>
+                        <span class="text-muted-foreground text-xs">{descOf(role.key)}</span>
                     </div>
                 </div>
-                <div class="rg-role-row">
-                    <label class={field.label} for={`rg-role-endpoint-${r.key}`}>{t("settings.roles.endpoint")}</label>
-                    <select
-                        id={`rg-role-endpoint-${r.key}`}
-                        class={select}
-                        value={endpointIdOf(r.key)}
-                        on:change={(e) => onRoleEndpoint(r.key, e)}
-                    >
-                        {#each config.ai.endpoints as ep}
-                            <option value={ep.id}>{ep.name}</option>
-                        {/each}
-                    </select>
-                </div>
-                <div class="rg-role-row">
-                    <label class={field.label} for={`rg-role-model-${r.key}`}>{t("settings.roles.model")}</label>
-                    <select
-                        id={`rg-role-model-${r.key}`}
-                        class={select}
-                        value={config.ai.roles[r.key]}
-                        on:change={(e) => onRoleModel(r.key, e)}
-                    >
-                        {#each modelsOf(endpointIdOf(r.key)) as m}
-                            <option value={m.id}>{m.name}</option>
-                        {/each}
-                    </select>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div class="flex flex-col gap-1.5">
+                        <Label for={`rg-role-endpoint-${role.key}`}>{t("settings.roles.endpoint")}</Label>
+                        <Select.Root
+                            type="single"
+                            value={endpointIdOf(role.key)}
+                            onValueChange={(v) => onRoleEndpoint(role.key, v)}
+                        >
+                            <Select.Trigger id={`rg-role-endpoint-${role.key}`} class="w-full">
+                                {config.ai.endpoints.find((e) => e.id === endpointIdOf(role.key))?.name ?? ""}
+                            </Select.Trigger>
+                            <Select.Content>
+                                {#each config.ai.endpoints as endpoint (endpoint.id)}
+                                    <Select.Item value={endpoint.id}>{endpoint.name}</Select.Item>
+                                {/each}
+                            </Select.Content>
+                        </Select.Root>
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <Label for={`rg-role-model-${role.key}`}>{t("settings.roles.model")}</Label>
+                        <Select.Root
+                            type="single"
+                            value={config.ai.roles[role.key]}
+                            onValueChange={(v) => patchRoles({ [role.key]: v } as Partial<AIRoles>)}
+                        >
+                            <Select.Trigger id={`rg-role-model-${role.key}`} class="w-full">
+                                {config.ai.models.find((m) => m.id === config.ai.roles[role.key])?.name ?? ""}
+                            </Select.Trigger>
+                            <Select.Content>
+                                {#each modelsOf(endpointIdOf(role.key)) as model (model.id)}
+                                    <Select.Item value={model.id}>{model.name}</Select.Item>
+                                {/each}
+                            </Select.Content>
+                        </Select.Root>
+                    </div>
                 </div>
             </div>
         {/each}
-
-        <div class="rg-role-hint">
-            <span class={field.description}>
-                {t("settings.roles.hint")}
-            </span>
-        </div>
-    </div>
-</div>
-
-<style>
-    .rg-role-card {
-        border: 1px solid var(--b3-border-color);
-        border-radius: var(--b3-border-radius);
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-    .rg-role-head {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-    }
-    .rg-role-icon {
-        font-size: 20px;
-        line-height: 1.2;
-        flex-shrink: 0;
-    }
-    .rg-role-info {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-    .rg-role-label {
-        font-weight: 600;
-        font-size: 14px;
-        color: var(--b3-theme-on-background);
-    }
-    .rg-role-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .rg-role-row label {
-        width: 56px;
-        flex-shrink: 0;
-        font-size: 13px;
-    }
-    .rg-role-row select {
-        flex: 1;
-    }
-    .rg-role-hint {
-        padding: 8px 0;
-    }
-    @media (max-width: 640px) {
-        .rg-role-row {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        .rg-role-row label {
-            width: auto;
-        }
-    }
-</style>
+        <p class="text-muted-foreground text-xs">{t("settings.roles.hint")}</p>
+    </Card.Content>
+</Card.Root>
