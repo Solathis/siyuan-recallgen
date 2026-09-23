@@ -18,6 +18,7 @@
         onClearProgress = async () => {},
         onSave = () => {},
         onClearBank = async () => {},
+        onImportConfig = () => {},
         service,
     }: {
         config: RecallGenConfig;
@@ -27,6 +28,7 @@
         onClearScores?: () => Promise<void>;
         onClearProgress?: () => Promise<void>;
         onClearBank?: () => Promise<void>;
+        onImportConfig?: (next: RecallGenConfig, result: import("../quiz/config-io").ImportResult) => void;
         /** 配置保存回调。Svelte 5 的 mount() 不再暴露 $on，因此改用回调属性 */
         onSave?: (config: RecallGenConfig) => void;
     } = $props();
@@ -104,6 +106,8 @@
                     {onClearScores}
                     {onClearProgress}
                     {onClearBank}
+                    config={localConfig}
+                    {onImportConfig}
                     scoreCount={scores.length}
                     bankSize={bank.total}
                     bankDue={bank.due}

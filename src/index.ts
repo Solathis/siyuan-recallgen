@@ -218,6 +218,18 @@ export default class RecallGenPlugin extends Plugin {
                     onClearBank: async () => {
                         await self.bankStore.clear();
                     },
+                    onImportConfig: async (next, result) => {
+                        // 导入的配置立即生效并落盘；warnings 由设置面板逐条提示
+                        self.config = next;
+                        for (const listener of self.configListeners) listener(next);
+                        try {
+                            await self.configStore.set(next, { immediate: true });
+                        } catch (err) {
+                            console.error("[RecallGen] 导入配置落盘失败", err);
+                            showMessage(t("settings.saveFailed", (err as Error).message), 7000, "error");
+                        }
+                        console.info("[RecallGen] 配置导入完成", result.warnings);
+                    },
                     onSave: async (next: RecallGenConfig) => {
                         self.config = next;
                         for (const listener of self.configListeners) listener(next);
@@ -244,7 +256,7 @@ export default class RecallGenPlugin extends Plugin {
             generate: (content: string, onProgress?: GenProgressCallback) =>
                 generateQuestions(this.config, content, onProgress),
             loadDateRangeContent: (cfg, range, notebookId) => loadDateRangeNotes(cfg, range, notebookId),
-            grade: (qs, ans, onProgress) => gradeAll(this.config, qs, ans, onProgress),
+            grade: (qs, ans, onProgress, seconds) => gradeAll(this.config, qs, ans, onProgress, seconds),
             analyze: (results, questions) => this.analyze(results, questions),
             chat: (question, result, analysis, history, userMessage) =>
                 this.chat(question, result, analysis, history, userMessage),
@@ -261,9 +273,10 @@ export default class RecallGenPlugin extends Plugin {
             listScores: () => this.scoreStore.listIndex(),
             loadScoreDetail: (id) => this.scoreStore.loadDetail(id),
             removeScore: (id) => this.scoreStore.remove(id),
-            dueBankQuestions: async (limit = 0) => {
+            dueBankQuestions: async (limit = 0, sourceDocId) => {
                 const items = await this.bankStore.list();
-                return pickDueItems(items, Date.now(), limit).map((item) => item.question);
+                const scoped = sourceDocId ? items.filter((item) => item.sourceDocId === sourceDocId) : items;
+                return pickDueItems(scoped, Date.now(), limit).map((item) => item.question);
             },
             bankSummary: () => this.bankStore.summary(),
             recordBankOutcomes: async (questions, source, results) => {

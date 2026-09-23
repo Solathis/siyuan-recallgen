@@ -9,6 +9,7 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
+    import { PASS_SCORE } from "../quiz/grader";
     import type { GradingResult, PanelState, QuizSession, UserAnswer } from "@/types/quiz";
     import ProgressBar from "./ProgressBar.svelte";
     import QuestionView from "./QuestionView.svelte";
@@ -162,7 +163,7 @@
         progressValue = null;
         progressLabel = t("bank.loadingDue");
         try {
-            const due = await service.dueBankQuestions();
+            const due = await service.dueBankQuestions(0, tabData.dueSourceDocId);
             if (cancelled) return;
             if (due.length === 0) {
                 error = {
@@ -182,6 +183,9 @@
                 answers: {},
             };
             panelState = "answering";
+            activeIndex = 0;
+            timingQuestionId = due[0]?.id ?? null;
+            timingSince = Date.now();
             if (countdownEnabled) startCountdown();
         } catch (e) {
             if (cancelled) return;
@@ -193,6 +197,10 @@
     function adoptSession(existing: QuizSession) {
         session = existing;
         panelState = "answering";
+        activeIndex = 0;
+        // 开始为第一题计时
+        timingQuestionId = existing.questions[0]?.id ?? null;
+        timingSince = Date.now();
         if (countdownEnabled) startCountdown();
     }
 
@@ -315,11 +323,55 @@
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
+    /* ── 单题耗时 ────────────────────────────────────────────────── */
+
+    /**
+     * 单段最多计入的秒数。
+     * 用户可能挂着页面离开，若不加上限会把空闲时间算进「作答耗时」。
+     */
+    const MAX_TIMING_STEP_SECONDS = 300;
+
+    let timingQuestionId: string | null = null;
+    let timingSince = 0;
+
+    /**
+     * 结束当前题目的计时段落并累计到该题。
+     * 只在题目切换或交卷时结算，因此「一直在看同一道题」的时间也会被计入，
+     * 而离开很久的空档由上限制约。
+     */
+    function flushTiming(nextQuestionId: string | null) {
+        const now = Date.now();
+        if (session && timingQuestionId && timingSince > 0) {
+            const elapsed = Math.min(MAX_TIMING_STEP_SECONDS, (now - timingSince) / 1000);
+            if (elapsed > 0) {
+                const timings = { ...(session.timings ?? {}) };
+                timings[timingQuestionId] = (timings[timingQuestionId] ?? 0) + elapsed;
+                session.timings = timings;
+            }
+        }
+        timingQuestionId = nextQuestionId;
+        timingSince = now;
+    }
+
     function onAnswer(questionId: string, value: UserAnswer) {
         if (!session) return;
+        // 同一题内的连续输入也逐段累计，避免只算第一段
+        flushTiming(questionId);
         session.answers[questionId] = value;
         scheduleSave();
     }
+
+    /** 标记/取消标记某题，便于长试卷稍后回看 */
+    function toggleFlag(questionId: string) {
+        if (!session) return;
+        const flagged = { ...(session.flagged ?? {}) };
+        if (flagged[questionId]) delete flagged[questionId];
+        else flagged[questionId] = true;
+        session.flagged = flagged;
+        scheduleSave();
+    }
+
+    const flaggedCount = $derived(questions.filter((q) => session?.flagged?.[q.id]).length);
 
     function scheduleSave() {
         if (saveTimer) clearTimeout(saveTimer);
@@ -333,14 +385,20 @@
     async function submit() {
         if (!session) return;
         stopCountdown();
+        flushTiming(null);
         panelState = "loading_grading";
         progressValue = 0;
         progressLabel = t("quiz.grading");
         try {
-            results = await service.grade(session.questions, session.answers, (done, total) => {
-                progressValue = total ? (done / total) * 100 : null;
-                progressLabel = t("quiz.gradingProgress", String(done), String(total));
-            });
+            results = await service.grade(
+                session.questions,
+                session.answers,
+                (done, total) => {
+                    progressValue = total ? (done / total) * 100 : null;
+                    progressLabel = t("quiz.gradingProgress", String(done), String(total));
+                },
+                session.timings
+            );
 
             duration = Math.round((Date.now() - session.createdAt) / 1000);
             const scoreId = genId();
@@ -400,6 +458,38 @@
         await startGenerate();
     }
 
+    /** 只重做本卷未达标的题目：成绩已落盘，因此直接替换当前会话即可 */
+    function retryWrong() {
+        if (!session || !results) return;
+        const wrongIds = new Set(results.filter((r) => r.score < PASS_SCORE).map((r) => r.questionId));
+        const wrongQuestions = session.questions.filter((q) => wrongIds.has(q.id));
+        if (wrongQuestions.length === 0) {
+            showMessage(t("quiz.noWrongToRetry"), 4000);
+            return;
+        }
+
+        const source = { sourceDocId: session.sourceDocId, sourceTitle: session.sourceTitle };
+        session = {
+            id: genId(),
+            ...source,
+            sourceTitle: t("quiz.retrySessionTitle", session.sourceTitle, String(wrongQuestions.length)),
+            questions: wrongQuestions,
+            createdAt: Date.now(),
+            answers: {},
+            flagged: {},
+            timings: {},
+        };
+        results = null;
+        analysis = null;
+        duration = 0;
+        error = null;
+        panelState = "answering";
+        activeIndex = 0;
+        timingQuestionId = wrongQuestions[0]?.id ?? null;
+        timingSince = Date.now();
+        if (countdownEnabled) startCountdown();
+    }
+
     async function saveToDoc(wrongOnly: boolean) {
         if (!session || !results) return;
         try {
@@ -449,6 +539,7 @@
     function goToQuestion(index: number) {
         const clamped = Math.max(0, Math.min(questions.length - 1, index));
         activeIndex = clamped;
+        flushTiming(questions[clamped]?.id ?? null);
         const nodes = listEl?.querySelectorAll<HTMLElement>("[data-question-index]");
         nodes?.[clamped]?.scrollIntoView({ block: "start", behavior: "smooth" });
     }
@@ -578,9 +669,12 @@
             {:else}
                 <header class="border-border flex shrink-0 flex-wrap items-center justify-between gap-2 border-b py-2">
                     <div class="flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary"
-                            >{t("quiz.answered", String(answeredCount), String(questions.length))}</Badge
-                        >
+                        <Badge variant="secondary">
+                            {t("quiz.answered", String(answeredCount), String(questions.length))}
+                        </Badge>
+                        {#if flaggedCount > 0}
+                            <Badge variant="outline">{t("quiz.flaggedCount", String(flaggedCount))}</Badge>
+                        {/if}
                         {#if countdownEnabled}
                             <Badge variant={countdownLeft <= 60 ? "destructive" : "warning"}>
                                 {countdownText}
@@ -630,6 +724,7 @@
                             type="button"
                             class={cn(
                                 "size-7 rounded-md border text-xs font-semibold transition-colors",
+                                session?.flagged?.[q.id] && "border-warning",
                                 session?.answers[q.id]
                                     ? "border-primary bg-primary/10 text-primary"
                                     : "border-border text-muted-foreground hover:bg-accent",
@@ -665,6 +760,20 @@
                                     {#if session?.answers[q.id]}
                                         <Badge variant="success">{t("quiz.answeredTag")}</Badge>
                                     {/if}
+                                    <!-- 标记：长试卷里先把不确定的题标出来，稍后回看 -->
+                                    <button
+                                        type="button"
+                                        class={cn(
+                                            "ml-auto rounded-md border px-2 py-0.5 text-xs transition-colors",
+                                            session?.flagged?.[q.id]
+                                                ? "border-warning bg-warning/10 text-warning"
+                                                : "border-border text-muted-foreground hover:bg-accent"
+                                        )}
+                                        aria-pressed={!!session?.flagged?.[q.id]}
+                                        onclick={() => toggleFlag(q.id)}
+                                    >
+                                        {session?.flagged?.[q.id] ? t("quiz.unflag") : t("quiz.flag")}
+                                    </button>
                                 </div>
                                 <QuestionView
                                     question={q}
@@ -694,6 +803,7 @@
                     {duration}
                     onsave={() => void saveToDoc(false)}
                     onsavewrong={() => void saveToDoc(true)}
+                    onretrywrong={retryWrong}
                     ondiscard={closeTab}
                 />
             {/if}

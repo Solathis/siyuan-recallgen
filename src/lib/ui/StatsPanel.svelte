@@ -16,11 +16,23 @@
         type RangeDays,
     } from "../quiz/charts";
     import { scorePercent } from "../quiz/stats";
-    import type { ScoreIndexEntry } from "@/types/quiz";
+    import type { HeatmapConfig, ScoreIndexEntry } from "@/types/quiz";
     import DonutChart from "./DonutChart.svelte";
+    import Heatmap from "./Heatmap.svelte";
     import LineChart from "./LineChart.svelte";
 
-    let { records = [], loading = false }: { records?: ScoreIndexEntry[]; loading?: boolean } = $props();
+    let {
+        records = [],
+        loading = false,
+        heatmapConfig = undefined,
+        lang = "zh",
+    }: {
+        records?: ScoreIndexEntry[];
+        loading?: boolean;
+        /** 热力图配色配置；未提供时不渲染热力图 */
+        heatmapConfig?: HeatmapConfig;
+        lang?: "zh" | "en";
+    } = $props();
 
     let range = $state<RangeDays>(30);
 
@@ -105,6 +117,19 @@
     {:else if inRange.length === 0}
         <div class="text-muted-foreground py-12 text-center text-sm">{t("stats.emptyRange", rangeLabel(range))}</div>
     {:else}
+        <!-- 学习轨迹：热力图属于进度视图，放在统计页比放在设置里更符合直觉 -->
+        {#if heatmapConfig}
+            <Card.Root>
+                <Card.Header>
+                    <Card.Title class="text-sm">{t("stats.heatmap")}</Card.Title>
+                    <Card.Description>{t("stats.heatmapDesc")}</Card.Description>
+                </Card.Header>
+                <Card.Content>
+                    <Heatmap {records} config={heatmapConfig} {lang} />
+                </Card.Content>
+            </Card.Root>
+        {/if}
+
         <!-- 总览 -->
         <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {#each [{ label: t("stats.quizCount"), value: String(summary.quizCount), sub: t("stats.questionCount", String(summary.questionCount)) }, { label: t("stats.average"), value: pct(summary.averagePercent), sub: t("stats.best", pct(summary.bestPercent)) }, { label: t("stats.streak"), value: t("stats.days", String(summary.currentStreak)), sub: t("stats.longestStreak", String(summary.longestStreak)) }, { label: t("stats.perQuestion"), value: summary.secondsPerQuestion === null ? "--" : `${summary.secondsPerQuestion.toFixed(0)}s`, sub: t("stats.activeDays", String(summary.activeDays)) }] as item (item.label)}

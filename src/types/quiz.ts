@@ -19,7 +19,10 @@ export interface DifficultyDistribution {
 
 /** 编程题测试用例 */
 export interface TestCase {
+    /** 人类可读的输入描述，用于展示 */
     input?: string;
+    /** 实际调用入口函数时传入的参数（JSON 可表达的值） */
+    args?: unknown[];
     expected: string;
     description?: string;
 }
@@ -70,6 +73,8 @@ export interface SubjectiveQuestion extends QuestionBase {
 export interface CodingQuestion extends QuestionBase {
     type: "coding";
     language: string;
+    /** 入口函数名，用于执行测试用例时调用 */
+    entry_point?: string;
     starter_code?: string;
     test_cases?: TestCase[];
     /** 参考答案代码 */
@@ -109,6 +114,8 @@ export interface GradingResult {
     maxScore: number;
     comment?: string;
     userAnswer?: UserAnswer;
+    /** 本题作答耗时（秒），仅在测得有效值时存在 */
+    seconds?: number;
 }
 
 /** 一次答题会话 */
@@ -120,6 +127,10 @@ export interface QuizSession {
     createdAt: number;
     /** questionId -> UserAnswer，按题型存值 */
     answers: Record<string, UserAnswer>;
+    /** 被用户标记「稍后回看」的题号 */
+    flagged?: Record<string, boolean>;
+    /** questionId -> 已累计的作答耗时（秒） */
+    timings?: Record<string, number>;
 }
 
 /** 成绩记录，用于热力图与历史回溯 */
@@ -136,7 +147,7 @@ export interface ScoreRecord {
     questions?: Question[];
     /** 薄弱点分析文本 */
     analysis?: string;
-    /** 答题耗时（秒） */
+    /** 答题耗时（秒，墙钟时间） */
     duration?: number;
     /** 来源文档/笔记本 ID */
     sourceDocId?: string;
@@ -171,8 +182,12 @@ export interface ScoreIndexEntry {
     passedCount: number;
     /** 未作答题数 */
     unanswered: number;
-    /** 答题耗时（秒） */
+    /** 答题耗时（秒，墙钟时间） */
     duration?: number;
+    /** 实测的单题平均耗时（秒）；有单题数据时优先于 duration/questionCount */
+    avgQuestionSeconds?: number;
+    /** 最耗时的一道题（秒） */
+    slowestQuestionSeconds?: number;
     sourceDocId?: string;
     sourceTitle?: string;
     byType: Partial<Record<QuestionType, ScoreAggregate>>;

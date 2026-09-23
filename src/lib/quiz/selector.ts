@@ -83,6 +83,19 @@ export class QuizSelector {
             label: t("bank.reviewDue"),
             click: () => this.openDueReview(),
         });
+        if (rootId) {
+            detail.menu.addItem({
+                icon: "iconHistory",
+                label: t("bank.reviewDueDoc"),
+                click: () =>
+                    this.open({
+                        mode: "reviewDue",
+                        sourceDocId: rootId,
+                        sourceTitle: t("bank.reviewDueDoc"),
+                        dueSourceDocId: rootId,
+                    }),
+            });
+        }
         detail.menu.addItem({
             icon: "iconCalendar",
             label: t("selector.fromToday"),
@@ -121,6 +134,11 @@ export class QuizSelector {
                 icon: "iconSparkles",
                 label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
                 click: () => void this.run(() => this.fromDoc(docId)),
+            });
+            detail.menu.addItem({
+                icon: "iconHistory",
+                label: t("bank.reviewDueDoc"),
+                click: () => this.run(async () => this.openDueReviewForDoc(docId, await safeTitle(docId))),
             });
             detail.menu.addItem({
                 icon: "iconCalendar",
@@ -186,6 +204,16 @@ export class QuizSelector {
                     }),
             });
         }
+    }
+
+    /** 复习某篇文档的到期题目 */
+    private openDueReviewForDoc(docId: string, title: string) {
+        this.open({
+            mode: "reviewDue",
+            sourceDocId: docId,
+            sourceTitle: title,
+            dueSourceDocId: docId,
+        });
     }
 
     /** 复习到期题目：不依赖文档，直接按题库排程出题 */

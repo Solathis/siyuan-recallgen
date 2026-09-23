@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n";
+import { dedupeQuestions, planBatches, renumberQuestions } from "./batching";
 import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
 import { buildGenerateMessages, buildReviewMessages, buildRegenerateMessages } from "../ai/prompts";
 import {
@@ -40,35 +41,59 @@ export async function generateQuestions(
     const types = general.allowedTypes;
     const difficulty = general.difficulty;
 
-    // 1. 生成
-    onProgress?.("generating", 1, t("quiz.generating"));
+    // 1. 生成：题量超过单次上限时拆成多批，避免输出过长导致截断或超时
     const genAI = resolveAI(ai, ai.roles.generator);
-    const messages = buildGenerateMessages(prompts, general, content, types, difficulty);
     const callOpts = pickCallOpts(ai.jsonSchemaEnabled, "recallgen_quiz", "生成复习题目", QUIZ_SCHEMA as object);
-    const result = await callLLM(genAI, messages as ChatMessage[], callOpts);
+    const batches = planBatches(difficulty);
 
-    const parsed = parseJsonLoose(result.content) as Record<string, unknown>;
-    // 兼容 AI 返回 {questions:[]} / {data:[]} / 直接返回数组等情况
-    let rawQuestions: unknown[] | null = null;
-    if (Array.isArray(parsed?.questions)) {
-        rawQuestions = parsed.questions;
-    } else if (Array.isArray(parsed?.data)) {
-        rawQuestions = parsed.data;
-    } else if (Array.isArray(parsed)) {
-        rawQuestions = parsed;
-    } else if (Array.isArray(parsed?.items)) {
-        rawQuestions = parsed.items;
-    }
-    if (!rawQuestions) {
-        throw new AIError(t("gen.missingQuestions", parsed === null ? "null" : typeof parsed), undefined, "parse");
-    }
-
+    const collected: Question[] = [];
     let skipped = 0;
-    let questions = validateQuestions(rawQuestions, types, () => {
-        skipped++;
-    });
-    if (skipped > 0) {
-        onProgress?.("generating", 1, t("gen.dropped", String(questions.length), String(skipped)));
+    for (let i = 0; i < batches.length; i++) {
+        onProgress?.(
+            "generating",
+            1,
+            batches.length > 1
+                ? t("gen.batchProgress", String(i + 1), String(batches.length), String(batches[i].total))
+                : t("quiz.generating")
+        );
+
+        const messages = buildGenerateMessages(prompts, general, content, types, batches[i]);
+        const result = await callLLM(genAI, messages as ChatMessage[], callOpts);
+        const parsed = parseJsonLoose(result.content) as Record<string, unknown>;
+
+        // 兼容 AI 返回 {questions:[]} / {data:[]} / 直接返回数组等情况
+        let rawQuestions: unknown[] | null = null;
+        if (Array.isArray(parsed?.questions)) {
+            rawQuestions = parsed.questions;
+        } else if (Array.isArray(parsed?.data)) {
+            rawQuestions = parsed.data;
+        } else if (Array.isArray(parsed)) {
+            rawQuestions = parsed;
+        } else if (Array.isArray(parsed?.items)) {
+            rawQuestions = parsed.items;
+        }
+
+        if (!rawQuestions) {
+            // 分批时单批失败不该作废已成功的批次
+            if (batches.length > 1 && collected.length > 0) {
+                console.warn("[RecallGen] 某一批出题失败，保留已成功的批次", parsed);
+                continue;
+            }
+            throw new AIError(t("gen.missingQuestions", parsed === null ? "null" : typeof parsed), undefined, "parse");
+        }
+
+        collected.push(
+            ...validateQuestions(rawQuestions, types, () => {
+                skipped++;
+            })
+        );
+    }
+
+    // 跨批也可能重复，去重后重新连续编号
+    let questions = renumberQuestions(dedupeQuestions(collected));
+    const discarded = skipped + (collected.length - questions.length);
+    if (discarded > 0) {
+        onProgress?.("generating", 1, t("gen.dropped", String(questions.length), String(discarded)));
     }
 
     // 2. 审题循环（仅当审题者模型存在时执行）
@@ -334,17 +359,16 @@ function coerceByType(base: Omit<Question, never>, type: QuestionType, item: Rec
             const language = String(item.language ?? "python");
             const answer = String(item.answer ?? "");
             const test_cases = Array.isArray(item.test_cases)
-                ? item.test_cases.map((t) => ({
-                      input:
-                          (t as { input?: unknown })?.input !== undefined
-                              ? String((t as { input: unknown }).input)
-                              : undefined,
-                      expected: String((t as { expected: unknown }).expected ?? ""),
-                      description:
-                          (t as { description?: unknown })?.description !== undefined
-                              ? String((t as { description: unknown }).description)
-                              : undefined,
-                  }))
+                ? item.test_cases.map((t) => {
+                      const raw = t as { input?: unknown; args?: unknown; expected?: unknown; description?: unknown };
+                      return {
+                          input: raw.input !== undefined ? String(raw.input) : undefined,
+                          // args 保持原样：它要被当作实参调用入口函数，不能转成字符串
+                          args: Array.isArray(raw.args) ? raw.args : undefined,
+                          expected: String(raw.expected ?? ""),
+                          description: raw.description !== undefined ? String(raw.description) : undefined,
+                      };
+                  })
                 : undefined;
             // 编程题至少要能对照参考答案或测试用例，否则无从判分
             if (!answer.trim() && !test_cases?.length) {
@@ -354,6 +378,7 @@ function coerceByType(base: Omit<Question, never>, type: QuestionType, item: Rec
                 ...base,
                 type,
                 language,
+                entry_point: item.entry_point !== undefined ? String(item.entry_point).trim() || undefined : undefined,
                 starter_code: item.starter_code !== undefined ? String(item.starter_code) : undefined,
                 test_cases,
                 answer,

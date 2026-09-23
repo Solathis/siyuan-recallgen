@@ -26,6 +26,7 @@ export interface PromptScaffold {
     fields: string;
     answerFormat: string;
     tagsInstruction: string;
+    codingInstruction: string;
     langLabel: string;
 
     // ── 判分 ──
@@ -119,6 +120,8 @@ const ZH: PromptScaffold = {
         "single_choice/multiple_choice 的 answer 为选项索引（number 或 number[]）；true_false 为 boolean；fill_blank 的 answer 为每空可接受答案的二维数组；coding 的 answer 为参考答案代码。",
     tagsInstruction:
         "每道题额外给出 1-3 个知识点标签（tags 数组），标签要具体可区分，例如「二叉树遍历」「HTTP 缓存」而不是「编程」「网络」。标签用于统计薄弱知识点。",
+    codingInstruction:
+        "编程题必须给出 entry_point（被调用的函数名），且每个测试用例都要给出 args（调用该函数的参数数组）与 expected（期望返回值，JSON 或字符串）。这样系统才能自动运行测试用例判分。",
     langLabel: "中文",
 
     questionLabel: "题目：{0}",
@@ -209,6 +212,8 @@ const EN: PromptScaffold = {
         "For single_choice/multiple_choice, answer is the option index (number or number[]); for true_false it is a boolean; for fill_blank it is a 2D array of accepted answers per blank; for coding it is the reference code.",
     tagsInstruction:
         'Also give each question 1-3 knowledge-point tags (tags array). Tags must be specific and distinguishable, e.g. "binary tree traversal" or "HTTP caching" rather than "programming" or "network". Tags are used to find weak knowledge points.',
+    codingInstruction:
+        "Coding questions must provide entry_point (the function to call), and each test case must provide args (the argument array) and expected (the expected return value, JSON or string), so the system can run the tests automatically.",
     langLabel: "English",
 
     questionLabel: "Question: {0}",

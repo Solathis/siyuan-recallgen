@@ -4,11 +4,15 @@
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import { t } from "../i18n";
+    import { buildConfigExport, mergeImportedConfig, type ImportResult } from "../quiz/config-io";
+    import type { RecallGenConfig } from "@/types/config";
 
     let {
         onClearScores = async () => {},
         onClearProgress = async () => {},
         onClearBank = async () => {},
+        config,
+        onImportConfig = () => {},
         scoreCount = 0,
         bankSize = 0,
         bankDue = 0,
@@ -16,6 +20,10 @@
         onClearScores?: () => Promise<void>;
         onClearProgress?: () => Promise<void>;
         onClearBank?: () => Promise<void>;
+        /** 当前配置，用于导出与导入合并 */
+        config?: RecallGenConfig;
+        /** 导入合并后的配置回调 */
+        onImportConfig?: (next: RecallGenConfig, result: ImportResult) => void;
         scoreCount?: number;
         bankSize?: number;
         bankDue?: number;
@@ -23,6 +31,50 @@
 
     /** 正在执行的清理动作，用于禁用按钮 */
     let busy = $state<"scores" | "progress" | "bank" | null>(null);
+    /** 导出是否包含 API Key；默认不包含，避免分享配置时泄露密钥 */
+    let includeSecrets = $state(false);
+    let fileInput: HTMLInputElement | null = $state(null);
+
+    function exportConfig() {
+        if (!config) return;
+        try {
+            const content = buildConfigExport(config, includeSecrets);
+            const stamp = new Date().toISOString().slice(0, 10);
+            const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `recallgen-config-${stamp}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showMessage(t("settings.data.configExported"), 4000);
+        } catch (e) {
+            showMessage(t("settings.data.configExportFailed", (e as Error).message), 7000, "error");
+        }
+    }
+
+    async function importConfig(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        const file = input.files?.[0];
+        // 清空 value，使同一个文件再次选择时仍会触发 change
+        input.value = "";
+        if (!file || !config) return;
+
+        try {
+            const text = await file.text();
+            const result = mergeImportedConfig(config, text);
+            onImportConfig(result.config, result);
+            showMessage(
+                result.warnings.length > 0
+                    ? t("settings.data.configImportedWithWarnings", String(result.warnings.length))
+                    : t("settings.data.configImported"),
+                result.warnings.length > 0 ? 8000 : 4000
+            );
+            for (const warning of result.warnings) showMessage(warning, 8000);
+        } catch (e) {
+            showMessage(t("settings.data.configImportFailed", (e as Error).message), 7000, "error");
+        }
+    }
 
     async function run(kind: "scores" | "progress" | "bank", action: () => Promise<void>) {
         busy = kind;
@@ -106,6 +158,39 @@
                     </AlertDialog.Footer>
                 </AlertDialog.Content>
             </AlertDialog.Root>
+        </div>
+
+        <!-- 配置导出/导入：换机器或分享配置时使用 -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-col">
+                <span class="text-sm font-medium">{t("settings.data.config")}</span>
+                <span class="text-muted-foreground text-xs">{t("settings.data.configDesc")}</span>
+                <label class="mt-1 flex items-center gap-2 text-xs">
+                    <input
+                        type="checkbox"
+                        class="accent-primary size-3.5"
+                        checked={includeSecrets}
+                        onchange={(e) => (includeSecrets = e.currentTarget.checked)}
+                    />
+                    {t("settings.data.configIncludeSecrets")}
+                </label>
+            </div>
+            <div class="flex gap-2">
+                <Button variant="outline" onclick={exportConfig} disabled={!config}>
+                    {t("settings.data.configExport")}
+                </Button>
+                <Button variant="outline" onclick={() => fileInput?.click()} disabled={!config}>
+                    {t("settings.data.configImport")}
+                </Button>
+                <!-- 隐藏的文件选择器：思源环境没有可用的原生文件对话框 API -->
+                <input
+                    bind:this={fileInput}
+                    type="file"
+                    accept="application/json,.json"
+                    class="hidden"
+                    onchange={importConfig}
+                />
+            </div>
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3">

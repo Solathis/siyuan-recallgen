@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { AIError } from "@/lib/ai/client";
 import type { Question } from "@/types/quiz";
-import { checkFillBlank, checkObjective, clampScore, gradeObjective, isObjective, setEqual } from "./grader";
+import {
+    blankMatches,
+    clampScore,
+    gradeObjective,
+    isObjective,
+    PASS_SCORE,
+    scoreFillBlank,
+    scoreMultipleChoice,
+    scoreObjective,
+    setEqual,
+} from "./grader";
 
 const single = (answer: number): Question =>
     ({
@@ -69,52 +79,109 @@ describe("setEqual", () => {
     });
 });
 
-describe("checkFillBlank", () => {
+describe("blankMatches / scoreFillBlank", () => {
     it("忽略首尾空格与大小写", () => {
-        expect(checkFillBlank([["Paris"]], ["  paris "])).toBe(true);
+        expect(blankMatches(["Paris"], "  paris ")).toBe(true);
     });
 
     it("任一可接受答案命中即算对", () => {
-        expect(checkFillBlank([["巴黎", "Paris"]], ["Paris"])).toBe(true);
+        expect(blankMatches(["巴黎", "Paris"], "Paris")).toBe(true);
     });
 
-    it("空数不同即判错", () => {
-        expect(checkFillBlank([["a"], ["b"]], ["a"])).toBe(false);
+    it("空串不算答对", () => {
+        expect(blankMatches(["a"], "")).toBe(false);
+        expect(blankMatches(["a"], undefined)).toBe(false);
     });
 
-    it("多空需全部命中", () => {
-        expect(checkFillBlank([["a"], ["b"]], ["a", "x"])).toBe(false);
-        expect(checkFillBlank([["a"], ["b"]], ["a", "B"])).toBe(true);
+    it("全部答对得满分", () => {
+        expect(scoreFillBlank([["a"], ["b"]], ["a", "B"])).toBe(100);
     });
 
-    it("用户答案缺失时按空串比较而非崩溃", () => {
-        expect(checkFillBlank([["a"]], [])).toBe(false);
+    it("按答对的空数给部分分", () => {
+        expect(scoreFillBlank([["a"], ["b"], ["c"], ["d"]], ["a", "b", "", ""])).toBe(50);
+        expect(scoreFillBlank([["a"], ["b"], ["c"]], ["a", "x", "x"])).toBe(33);
+    });
+
+    it("一个空都没答对得 0 分", () => {
+        expect(scoreFillBlank([["a"], ["b"]], ["x", "y"])).toBe(0);
+    });
+
+    it("没有可接受答案时返回 0，不产生 NaN", () => {
+        expect(scoreFillBlank([], ["a"])).toBe(0);
     });
 });
 
-describe("checkObjective", () => {
-    it("单选题索引一致才算对", () => {
-        expect(checkObjective(single(1), { type: "single_choice", value: 1 })).toBe(true);
-        expect(checkObjective(single(1), { type: "single_choice", value: 0 })).toBe(false);
+describe("scoreMultipleChoice", () => {
+    it("全对得满分", () => {
+        expect(scoreMultipleChoice([0, 2], [0, 2])).toBe(100);
+        expect(scoreMultipleChoice([0, 2], [2, 0])).toBe(100);
     });
 
-    it("多选题与顺序无关", () => {
-        expect(checkObjective(multi([0, 2]), { type: "multiple_choice", value: [2, 0] })).toBe(true);
-        expect(checkObjective(multi([0, 2]), { type: "multiple_choice", value: [0] })).toBe(false);
+    it("漏选按命中比例给分", () => {
+        // 正确 4 项中选对 3 项：3/4 = 75
+        expect(scoreMultipleChoice([0, 1, 2, 3], [0, 1, 2])).toBe(75);
     });
 
-    it("判断题布尔值一致才算对", () => {
-        expect(checkObjective(tf(false), { type: "true_false", value: false })).toBe(true);
-        expect(checkObjective(tf(false), { type: "true_false", value: true })).toBe(false);
+    it("错选扣分，避免全选骗分", () => {
+        // 正确 2 项，选了 2 对 + 2 错：(2-2)/2 = 0
+        expect(scoreMultipleChoice([0, 1], [0, 1, 2, 3])).toBe(0);
     });
 
-    it("填空题忽略大小写与空格", () => {
-        expect(checkObjective(blank([["Paris"]]), { type: "fill_blank", value: ["paris"] })).toBe(true);
+    it("错选多于命中时下限为 0，不出现负分", () => {
+        expect(scoreMultipleChoice([0], [1, 2, 3])).toBe(0);
     });
 
-    it("题型不匹配时判错而不是崩溃", () => {
-        expect(checkObjective(single(0), { type: "true_false", value: true })).toBe(false);
-        expect(checkObjective(multi([0]), { type: "single_choice", value: 0 })).toBe(false);
+    it("一个都没选得 0 分", () => {
+        expect(scoreMultipleChoice([0, 1], [])).toBe(0);
+    });
+
+    it("正确项为空时返回 0", () => {
+        expect(scoreMultipleChoice([], [0])).toBe(0);
+    });
+
+    it("结果始终落在 0-100", () => {
+        const cases: [number[], number[]][] = [
+            [[0, 1, 2], []],
+            [[0], [0, 1]],
+            [
+                [0, 1, 2, 3, 4],
+                [4, 3, 2],
+            ],
+            [
+                [1, 2],
+                [1, 2, 3, 4, 5, 6],
+            ],
+        ];
+        for (const [correct, selected] of cases) {
+            const score = scoreMultipleChoice(correct, selected);
+            expect(score).toBeGreaterThanOrEqual(0);
+            expect(score).toBeLessThanOrEqual(100);
+        }
+    });
+});
+
+describe("scoreObjective", () => {
+    it("单选题索引一致才得分", () => {
+        expect(scoreObjective(single(1), { type: "single_choice", value: 1 })).toBe(100);
+        expect(scoreObjective(single(1), { type: "single_choice", value: 0 })).toBe(0);
+    });
+
+    it("多选题允许部分得分", () => {
+        expect(scoreObjective(multi([0, 1, 2, 3]), { type: "multiple_choice", value: [0, 1, 2] })).toBe(75);
+    });
+
+    it("判断题布尔值一致才得分", () => {
+        expect(scoreObjective(tf(false), { type: "true_false", value: false })).toBe(100);
+        expect(scoreObjective(tf(false), { type: "true_false", value: true })).toBe(0);
+    });
+
+    it("填空题按空计分并忽略大小写与空格", () => {
+        expect(scoreObjective(blank([["Paris"], ["France"]]), { type: "fill_blank", value: ["paris", "x"] })).toBe(50);
+    });
+
+    it("题型不匹配时得 0 分而不是崩溃", () => {
+        expect(scoreObjective(single(0), { type: "true_false", value: true })).toBe(0);
+        expect(scoreObjective(multi([0]), { type: "single_choice", value: 0 })).toBe(0);
     });
 
     it("主观题/编程题不走客观题判分", () => {
@@ -125,7 +192,7 @@ describe("checkObjective", () => {
             question: "?",
             reference_answer: "x",
         } as Question;
-        expect(checkObjective(q, { type: "subjective", value: "x" })).toBe(false);
+        expect(scoreObjective(q, { type: "subjective", value: "x" })).toBe(0);
     });
 });
 
@@ -147,6 +214,16 @@ describe("gradeObjective", () => {
             correct: false,
             score: 0,
         });
+    });
+
+    it("部分得分时 correct 为 false，但分数不为 0", () => {
+        const result = gradeObjective(multi([0, 1, 2, 3]), { type: "multiple_choice", value: [0, 1, 2] });
+        expect(result.correct).toBe(false);
+        expect(result.score).toBe(75);
+    });
+
+    it("完全正确时 correct 为 true", () => {
+        expect(gradeObjective(multi([0, 1]), { type: "multiple_choice", value: [1, 0] }).correct).toBe(true);
     });
 });
 
@@ -189,5 +266,11 @@ describe("clampScore", () => {
             expect(e).toBeInstanceOf(AIError);
             expect((e as AIError).kind).toBe("parse");
         }
+    });
+});
+
+describe("PASS_SCORE", () => {
+    it("通过线为 60，与统计口径一致", () => {
+        expect(PASS_SCORE).toBe(60);
     });
 });

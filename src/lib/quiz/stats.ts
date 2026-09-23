@@ -88,8 +88,23 @@ export function buildIndexEntry(record: ScoreRecord): ScoreIndexEntry {
         byType,
         byDifficulty,
         byTag,
+        avgQuestionSeconds: averageQuestionSeconds(results),
+        slowestQuestionSeconds: slowestQuestionSeconds(results),
         hasAnalysis: !!record.analysis,
     };
+}
+
+/** 实测的单题平均耗时；没有单题数据时返回 undefined */
+function averageQuestionSeconds(results: GradingResult[]): number | undefined {
+    const measured = results.map((r) => r.seconds).filter((s): s is number => typeof s === "number" && s > 0);
+    if (measured.length === 0) return undefined;
+    return Math.round(measured.reduce((a, b) => a + b, 0) / measured.length);
+}
+
+/** 最耗时的一题；没有单题数据时返回 undefined */
+function slowestQuestionSeconds(results: GradingResult[]): number | undefined {
+    const measured = results.map((r) => r.seconds).filter((s): s is number => typeof s === "number" && s > 0);
+    return measured.length > 0 ? Math.max(...measured) : undefined;
 }
 
 /** 空字符串答案视为未作答 */
