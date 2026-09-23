@@ -86,7 +86,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 - **Auto-Recording**: On submit the score index and the current month's detail shard are written immediately, independent of subsequent analysis. The history list loads only the lightweight index; detail is fetched on demand when reviewing
 - **History Tab**: open from the top-right icon; it has **Records**, **Statistics** and **Bank** views (the statistics view opens with the activity heatmap)
   - **Records**: group by date/source, thumbnail/list/table views, search by title and source, filter by score band, export as JSON/CSV/Markdown, delete a single record with confirmation, and click a record to replay the full result. The list renders in batches of 60 with load-on-scroll, so a long history does not create a huge DOM at once
-  - **Statistics**: switch the range (last 7/30/90 days or all time) and see a score-trend line, accuracy by question type, score-band distribution, accuracy by difficulty donut, plus summary metrics (quiz and question counts, average/best score, current and longest streak, time per question) and a weakest-areas ranking
+  - **Statistics**: each knowledge point in the weakest-areas ranking has a "Review" action that starts a session on that topic. Switch the range (last 7/30/90 days or all time) and see a score-trend line, accuracy by question type, score-band distribution, accuracy by difficulty donut, plus summary metrics (quiz and question counts, average/best score, current and longest streak, time per question) and a weakest-areas ranking
 
 - **Spaced repetition**: after submitting, questions enter the bank keyed by stem fingerprint and FSRS schedules their next review; review what is due from the command palette or title menu
 
@@ -361,6 +361,7 @@ After submitting, every question enters the question bank keyed by a stem finger
 | 60-74 | Hard | Slower interval growth |
 | Below 60 | Again | Comes back soon |
 
+- **Reviewing ahead of schedule**: when a knowledge-point review has nothing due, the weakest questions on that topic come first — handy when you want to drill a weak area today. When due questions exist, only those are served
 - **Entry point**: command palette or document title menu → "Review due questions"; the document title menu and document tree also offer "Review due questions from this document" to limit it to that document's banked questions. This flow does not call the AI to generate questions; it takes due items straight from the bank. Grading subjective/coding answers still needs AI
 - **Deduplication**: the stem is normalized (case, whitespace and CJK/Latin punctuation removed) before hashing, so "1+1=?" and "1 + 1 = ？" are recognised as the same question
 - **Progress is preserved**: generating again from the same note only updates the stem and source of existing questions; the review schedule and answer history are kept
