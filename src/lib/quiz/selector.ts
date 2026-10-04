@@ -232,7 +232,11 @@ export class QuizSelector {
             showMessage(localeText(this.plugin.i18n, "openDocFirst", t("openDocFirst")));
             return;
         }
-        const rootId = editors[0].protyle.block.rootID;
+        const rootId = editors[0]?.protyle?.block?.rootID;
+        if (!rootId) {
+            showMessage(localeText(this.plugin.i18n, "openDocFirst", t("openDocFirst")));
+            return;
+        }
         await this.run(() => this.fromDoc(rootId));
     }
 
@@ -278,7 +282,7 @@ export class QuizSelector {
     private async fromBlocks(detail: any) {
         const elements: HTMLElement[] = detail.blockElements ?? [];
         const rootId: string = detail.protyle?.block?.rootID;
-        const ids = elements.map((el: HTMLElement) => el?.dataset?.nodeId).filter((id: string): id is string => !!id);
+        const ids = elements.map((el: HTMLElement) => el?.dataset?.nodeId).filter((id): id is string => !!id);
         if (ids.length === 0) return;
 
         const parts: string[] = [];

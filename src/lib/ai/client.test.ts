@@ -377,11 +377,11 @@ describe("取消（AbortSignal）", () => {
     });
 
     it("等待响应期间取消会立刻结束，而不是等到超时", async () => {
-        let resolveResponse: (() => void) | null = null;
+        const deferred: { resolve?: () => void } = {};
         __setFetchSyncPost(
             () =>
                 new Promise<IWebSocketData>((resolve) => {
-                    resolveResponse = () => resolve(proxyOk({ choices: [{ message: { content: "ok" } }] }));
+                    deferred.resolve = () => resolve(proxyOk({ choices: [{ message: { content: "ok" } }] }));
                 })
         );
         const ctrl = new AbortController();
@@ -390,7 +390,7 @@ describe("取消（AbortSignal）", () => {
         ctrl.abort();
         await assertion;
         // 内核请求仍在途，这里只是不再等待它
-        resolveResponse?.();
+        deferred.resolve?.();
     });
 
     it("退避等待期间取消也会立刻结束（不会睡满 3 秒再发下一次）", async () => {

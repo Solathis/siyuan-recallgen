@@ -1,4 +1,4 @@
-import { mount, unmount, type Component } from "svelte";
+import { mount, unmount } from "svelte";
 import { Plugin, showMessage, openTab, Setting, Dialog } from "siyuan";
 import type { Custom } from "siyuan";
 import "./app.css";
@@ -109,7 +109,7 @@ export default class RecallGenPlugin extends Plugin {
                 host.appendChild(div);
                 self.mounted.set(
                     host,
-                    mount(QuizPanel as Component, {
+                    mount(QuizPanel, {
                         target: div,
                         props: {
                             service: self.buildService(),
@@ -135,7 +135,7 @@ export default class RecallGenPlugin extends Plugin {
                 host.appendChild(div);
                 self.mounted.set(
                     host,
-                    mount(HistoryPanel as Component, {
+                    mount(HistoryPanel, {
                         target: div,
                         props: {
                             service: self.buildService(),
@@ -241,7 +241,7 @@ export default class RecallGenPlugin extends Plugin {
             if (!dialog.element.isConnected) return;
             self.mounted.set(
                 host,
-                mount(SettingPanel as Component, {
+                mount(SettingPanel, {
                     target: root,
                     props: {
                         config: self.config,

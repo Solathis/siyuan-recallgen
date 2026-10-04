@@ -99,11 +99,13 @@ describe("AsyncStore.read", () => {
     });
 
     it("读盘期间发生写入时，以内存中的新值为准（回归：旧盘数据会覆盖新状态）", async () => {
-        let release: (() => void) | null = null;
+        // 用持有对象而不是 let 变量：赋值发生在 Promise 执行器里，
+        // TS 会认为外层变量仍是初始值 null
+        const deferred: { release?: () => void } = {};
         const plugin: StoragePlugin = {
             loadData: async () =>
                 new Promise((resolve) => {
-                    release = () => resolve({ a: "磁盘旧值" });
+                    deferred.release = () => resolve({ a: "磁盘旧值" });
                 }),
             saveData: async () => undefined,
         };
@@ -111,7 +113,7 @@ describe("AsyncStore.read", () => {
         const reading = store.readData(null);
         // 读盘尚未返回时写入新值
         const writing = store.writeData({ a: "内存新值" });
-        release?.();
+        deferred.release?.();
         await Promise.all([reading, writing]);
         expect(await store.readData(null)).toEqual({ a: "内存新值" });
     });

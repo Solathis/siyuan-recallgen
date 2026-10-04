@@ -46,12 +46,13 @@ export function aggregateResults(
         const question = byId.get(result.questionId);
         // 判分结果自带 type，因此即使没有题目也能统计题型
         const type = (question?.type ?? result.type) as QuestionType;
-        byType[type] ??= emptyAggregate();
-        accumulate(byType[type], result);
+        // 先落到局部变量：TS 不会因为 ??= 收窄带索引访问的表达式
+        const typeAggregate = (byType[type] ??= emptyAggregate());
+        accumulate(typeAggregate, result);
 
         if (question) {
-            byDifficulty[question.difficulty] ??= emptyAggregate();
-            accumulate(byDifficulty[question.difficulty], result);
+            const difficultyAggregate = (byDifficulty[question.difficulty] ??= emptyAggregate());
+            accumulate(difficultyAggregate, result);
         }
 
         // 同一道题可计入多个知识点标签

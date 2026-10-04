@@ -238,7 +238,9 @@ export class BankStore {
                 return next;
             });
             if (keys === null) return;
-            await this.index.edit((file) => ({ ...file, months: { ...file.months, [month]: keys } }));
+            // 闭包里读 let 会丢掉收窄结果，先固定成 const
+            const remaining = keys;
+            await this.index.edit((file) => ({ ...file, months: { ...file.months, [month]: remaining } }));
             return;
         }
     }
