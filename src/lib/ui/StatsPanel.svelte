@@ -140,7 +140,7 @@
                     <Card.Content class="flex flex-col gap-0.5 pt-4">
                         <span class="text-xl font-bold">{item.value}</span>
                         <span class="text-muted-foreground text-xs">{item.label}</span>
-                        <span class="text-muted-foreground text-[11px]">{item.sub}</span>
+                        <span class="text-muted-foreground text-2xs">{item.sub}</span>
                     </Card.Content>
                 </Card.Root>
             {/each}
@@ -203,7 +203,7 @@
                     <div class="flex h-40 items-end justify-between gap-2">
                         {#each distribution as bucket, i (bucket.key)}
                             <div class="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                                <span class="text-muted-foreground text-[11px]">{bucket.count}</span>
+                                <span class="text-muted-foreground text-2xs">{bucket.count}</span>
                                 <div
                                     class={cn(
                                         "w-full rounded-t",
@@ -213,7 +213,7 @@
                                     title="{bucket.key}: {bucket.count}"
                                     aria-hidden="true"
                                 ></div>
-                                <span class="text-muted-foreground text-[10px]">{bucket.key}</span>
+                                <span class="text-muted-foreground text-3xs">{bucket.key}</span>
                             </div>
                         {/each}
                     </div>
@@ -265,7 +265,7 @@
                                             {#if section.scope === "tag"}
                                                 <button
                                                     type="button"
-                                                    class="text-primary shrink-0 text-[11px] underline-offset-2 hover:underline"
+                                                    class="text-primary shrink-0 text-2xs underline-offset-2 hover:underline"
                                                     title={t("stats.reviewTagHint", group.key)}
                                                     onclick={() => onStartReview({ tag: group.key })}
                                                 >
@@ -277,7 +277,7 @@
                                 </div>
                             {/if}
                         {/each}
-                        <p class="text-muted-foreground text-[11px]">{t("stats.weakNote")}</p>
+                        <p class="text-muted-foreground text-2xs">{t("stats.weakNote")}</p>
                     {/if}
                 </Card.Content>
             </Card.Root>

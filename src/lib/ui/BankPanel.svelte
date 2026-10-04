@@ -333,7 +333,7 @@
                                 <span class="line-clamp-2 text-xs" title={item.question.question}
                                     >{item.question.question}</span
                                 >
-                                <span class="text-muted-foreground text-[11px]">
+                                <span class="text-muted-foreground text-2xs">
                                     {expanded === item.id ? "▾" : "▸"}
                                     {item.sourceTitle}
                                 </span>
@@ -350,13 +350,13 @@
                                         style="width: {Math.max(2, Math.min(100, mastery))}%"
                                     ></span>
                                 </span>
-                                <span class="text-muted-foreground text-[11px]">{mastery}</span>
+                                <span class="text-muted-foreground text-2xs">{mastery}</span>
                             </div>
                         </Table.Cell>
-                        <Table.Cell class="text-muted-foreground text-[11px]">
+                        <Table.Cell class="text-muted-foreground text-2xs">
                             {t("bank.historyValue", String(item.timesPassed), String(item.timesSeen))}
                         </Table.Cell>
-                        <Table.Cell class="text-[11px]">
+                        <Table.Cell class="text-2xs">
                             {#if dueState(item.card) === "overdue"}
                                 <span class="text-warning font-medium">{fmtDue(item.card)}</span>
                             {:else}
@@ -409,7 +409,7 @@
                                             {/if}
                                         </span>
                                         {#if history.length === 0}
-                                            <p class="text-muted-foreground text-[11px]">
+                                            <p class="text-muted-foreground text-2xs">
                                                 {item.timesSeen > 0
                                                     ? t("bank.detailHistoryLegacy", String(item.timesSeen))
                                                     : t("bank.detailHistoryEmpty")}
@@ -433,7 +433,7 @@
                                                 {#each historyNewestFirst(item) as attempt, index (attempt.at)}
                                                     <span
                                                         class={cn(
-                                                            "rounded border px-1.5 py-0.5 text-[11px]",
+                                                            "rounded-sm border px-1.5 py-0.5 text-2xs",
                                                             attempt.percent >= 90
                                                                 ? "border-success/40 text-success"
                                                                 : attempt.percent >= 60
@@ -452,7 +452,7 @@
                                                 {/each}
                                             </div>
                                             {#if history.length >= MAX_BANK_HISTORY}
-                                                <p class="text-muted-foreground text-[11px]">
+                                                <p class="text-muted-foreground text-2xs">
                                                     {t("bank.detailHistoryCap", String(MAX_BANK_HISTORY))}
                                                 </p>
                                             {/if}
@@ -462,7 +462,7 @@
                                     <!-- 间隔重复状态 -->
                                     <div class="flex flex-col gap-2">
                                         <span class="text-xs font-medium">{t("bank.detailSchedule")}</span>
-                                        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                                        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-2xs">
                                             <dt class="text-muted-foreground">{t("bank.detailPhase")}</dt>
                                             <dd>{phaseLabel(item.card)}</dd>
                                             <dt class="text-muted-foreground">{t("bank.detailDue")}</dt>
@@ -480,13 +480,13 @@
                                         </dl>
                                         {#if (item.question.tags ?? []).length > 0}
                                             <div class="flex flex-wrap items-center gap-1">
-                                                <span class="text-muted-foreground text-[11px]">
+                                                <span class="text-muted-foreground text-2xs">
                                                     {t("bank.detailTags")}
                                                 </span>
                                                 {#each item.question.tags ?? [] as tag (tag)}
                                                     <button
                                                         type="button"
-                                                        class="border-border hover:bg-muted rounded border px-1.5 py-0.5 text-[11px]"
+                                                        class="border-border hover:bg-muted rounded-sm border px-1.5 py-0.5 text-2xs"
                                                         onclick={() => (tagFilter = tag)}
                                                     >
                                                         {tag}
@@ -494,7 +494,7 @@
                                                 {/each}
                                             </div>
                                         {/if}
-                                        <p class="text-muted-foreground text-[11px]">
+                                        <p class="text-muted-foreground text-2xs">
                                             {t("bank.detailSource", item.sourceTitle || item.sourceDocId)}
                                         </p>
                                     </div>

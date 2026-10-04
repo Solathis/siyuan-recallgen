@@ -306,7 +306,7 @@
 
     <div class="flex gap-1">
         <!-- 星期标签 -->
-        <div class="py-px text-[10px] leading-none text-muted-foreground">
+        <div class="py-px text-3xs leading-none text-muted-foreground">
             {#each weekdayLabels as label}
                 <div class="flex items-center" style="height: {CELL}px; margin-bottom: 4px">{label}</div>
             {/each}
@@ -315,7 +315,7 @@
         <!-- 热力图主体：窄屏横向滚动 -->
         <div class="min-w-0 flex-1 overflow-x-auto" role="group" aria-label={t("heatmap.ariaLabel")} bind:this={listEl}>
             <div class="w-max">
-                <div class="flex gap-1 pb-1 text-[10px] leading-none text-muted-foreground">
+                <div class="flex gap-1 pb-1 text-3xs leading-none text-muted-foreground">
                     {#each monthLabels as label}
                         <span class="shrink-0" style="width: {CELL}px">{label}</span>
                     {/each}
@@ -332,7 +332,7 @@
                                         data-cell-index={cellIndex(colIndex, rowIndex)}
                                         tabindex={cellIndex(colIndex, rowIndex) === focusIndex ? 0 : -1}
                                         class={cn(
-                                            "rounded-[2px] transition-transform hover:scale-125 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
+                                            "rounded-sm transition-transform hover:scale-125 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
                                             bg === null && "bg-muted"
                                         )}
                                         style="width: {CELL}px; height: {CELL}px;{safeBg
@@ -362,12 +362,12 @@
         </div>
     </div>
 
-    <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
+    <div class="flex items-center gap-1 text-2xs text-muted-foreground">
         <span>{t("heatmap.less")}</span>
-        <span class="bg-muted border-border inline-block size-3 rounded-[2px] border"></span>
+        <span class="bg-muted border-border inline-block size-3 rounded-sm border"></span>
         {#each sortedRanges as r}
             <span
-                class="border-border inline-block size-3 rounded-[2px] border"
+                class="border-border inline-block size-3 rounded-sm border"
                 style="background:{isSafeCssColor(r.color) ? r.color : 'transparent'}"
             ></span>
         {/each}

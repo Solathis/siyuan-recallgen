@@ -91,7 +91,7 @@
                     />
                     <input
                         type="color"
-                        class="border-border h-8 w-10 cursor-pointer rounded border bg-transparent p-0.5"
+                        class="border-border h-8 w-10 cursor-pointer rounded-sm border bg-transparent p-0.5"
                         aria-label={t("settings.heatmap.rangeColor")}
                         value={range.color}
                         oninput={(e) => patchRange(i, { color: e.currentTarget.value })}

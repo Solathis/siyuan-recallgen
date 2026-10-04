@@ -68,7 +68,14 @@
     --input: var(--b3-border-color);
     --ring: var(--b3-theme-primary);
 
-    --radius: var(--b3-border-radius, 4px);
+    /*
+     * 圆角刻度全部由思源的圆角变量派生。
+     *
+     * 注意：bare `rounded` 在 Tailwind 里是写死的 .25rem，不跟随主题，
+     * 与相邻的 rounded-md (= var(--radius)) 在思源默认主题（6px）下会明显不一致，
+     * 因此本项目一律不使用 bare rounded/rounded-t，只用下面这几档。
+     */
+    --radius: var(--b3-border-radius, 6px);
 }
 
 /*
@@ -101,8 +108,32 @@
     --color-input: var(--input);
     --color-ring: var(--ring);
 
-    --radius-sm: calc(var(--radius) - 2px);
+    /* 小元素（标签、热力图格子、色块）：用思源自带的小圆角 */
+    /*
+     * 字号刻度。
+     * 之前散落着 text-[11px] / text-[10px] / text-[9px] / text-[15px] 四种任意值，
+     * 加上 Tailwind 自带的 xs(12px)/sm(14px)，实际用到 6 档，无从判断哪种才是「次要文字」。
+     * 这里把插件实际需要的档位命名下来，任意值一律不再使用：
+     *   3xs  10px  极小：图表刻度、热力图月份
+     *   2xs  11px  次要：密集表格、标签
+     *   xs   12px  次要文字（Tailwind 自带）
+     *   （正文 13px 由 .rg-scope 设定，不额外命名）
+     *   sm   14px  正文强调（Tailwind 自带）
+     *   reading 15px  题干：主要阅读内容，比正文大一号
+     * line-height 显式写成 inherit：这些位置原先只是设了 font-size，
+     * 行高继承自父元素，写死数值会悄悄改变密集布局的高度。
+     */
+    --text-3xs: 0.625rem;
+    --text-3xs--line-height: inherit;
+    --text-2xs: 0.6875rem;
+    --text-2xs--line-height: inherit;
+    --text-reading: 0.9375rem;
+    --text-reading--line-height: inherit;
+
+    --radius-sm: var(--b3-border-radius-s, calc(var(--radius) - 2px));
+    /* 常规容器、输入框、按钮 */
     --radius-md: var(--radius);
+    /* 面板与外层容器：比常规大一号，仍随主题缩放 */
     --radius-lg: calc(var(--radius) * 1.5);
 }
 

@@ -291,7 +291,7 @@
                     </div>
                     {#if modelsOf(endpoint.id).length > 0}
                         <div
-                            class="text-muted-foreground hidden grid-cols-[1fr_5rem_6rem_auto] gap-2 text-[11px] font-semibold sm:grid"
+                            class="text-muted-foreground hidden grid-cols-[1fr_5rem_6rem_auto] gap-2 text-2xs font-semibold sm:grid"
                         >
                             <span>{t("settings.ai.colName")}</span>
                             <span class="text-center">{t("settings.ai.colTemp")}</span>

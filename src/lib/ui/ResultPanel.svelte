@@ -372,7 +372,7 @@
                             turn.role === "user" ? "bg-primary/10 self-end" : "bg-muted self-start"
                         )}
                     >
-                        <span class="text-muted-foreground text-[11px] font-semibold">
+                        <span class="text-muted-foreground text-2xs font-semibold">
                             {turn.role === "user" ? t("common.me") : t("common.ai")}
                         </span>
                         <div class="rg-markdown break-words">{@html renderMarkdownLatex(turn.content)}</div>

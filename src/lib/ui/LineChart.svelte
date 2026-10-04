@@ -82,7 +82,7 @@
             stroke-width="1"
             stroke-dasharray={tick === 0 ? "0" : "3 3"}
         />
-        <text x={padding.left - 6} y={yOf(tick) + 3} text-anchor="end" class="fill-muted-foreground text-[9px]">
+        <text x={padding.left - 6} y={yOf(tick) + 3} text-anchor="end" class="fill-muted-foreground text-3xs">
             {tick}
         </text>
     {/each}
@@ -101,7 +101,7 @@
 
     <!-- 时间轴刻度 -->
     {#each xLabels as label (label.x)}
-        <text x={label.x} y={baseline + 16} text-anchor="middle" class="fill-muted-foreground text-[9px]">
+        <text x={label.x} y={baseline + 16} text-anchor="middle" class="fill-muted-foreground text-3xs">
             {label.text}
         </text>
     {/each}
