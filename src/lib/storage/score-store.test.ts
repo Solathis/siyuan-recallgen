@@ -356,3 +356,45 @@ describe("ScoreStore.exportAll / importMany", () => {
         expect(Object.keys(disk)).toEqual([]);
     });
 });
+
+describe("成绩写入顺序（崩溃时的取舍）", () => {
+    it("先写索引再写明细：索引条目自带标题与聚合，最坏情况是可见的「明细缺失」", async () => {
+        const order: string[] = [];
+        const plugin: StoragePlugin = {
+            loadData: async () => null,
+            saveData: async (name) => {
+                order.push(name);
+            },
+            removeData: async () => {},
+        };
+        await new ScoreStore(plugin).add(record("s-1", MARCH));
+        expect(order[0]).toBe("recallgen-scores-index.json");
+        expect(order[1]).toMatch(/^recallgen-scores-\d{4}-\d{2}\.json$/);
+    });
+
+    it("明细写入失败时，成绩仍出现在列表里（可被用户看到），只是明细缺失", async () => {
+        const failing = new Set([2, 3]); // 索引之后是明细：第 2 次写入及其重试
+        const disk: Record<string, unknown> = {};
+        let calls = 0;
+        const plugin: StoragePlugin = {
+            loadData: async (name) => (name in disk ? disk[name] : null),
+            saveData: async (name, content) => {
+                calls++;
+                if (failing.has(calls)) throw new Error("磁盘写入失败");
+                disk[name] = content;
+            },
+            removeData: async (name) => {
+                delete disk[name];
+            },
+        };
+        const store = new ScoreStore(plugin);
+        await expect(store.add(record("s-1", MARCH, 90))).rejects.toBeTruthy();
+
+        // 换一个 store 从盘上读：索引有这条成绩，明细没有
+        const fresh = new ScoreStore(plugin);
+        const index = await fresh.listIndex();
+        expect(index).toHaveLength(1);
+        expect(index[0]).toMatchObject({ id: "s-1", totalScore: 90 });
+        expect(await fresh.loadDetail("s-1")).toBeNull();
+    });
+});

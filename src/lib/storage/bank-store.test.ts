@@ -409,3 +409,100 @@ describe("BankStore.purgeAll", () => {
         expect(removed).toEqual([INDEX]);
     });
 });
+
+describe("题库索引对账（写入中断后的恢复）", () => {
+    /**
+     * 内存文件系统；可指定哪几次 saveData 失败。
+     * 注意 AsyncStore 自身会重试一次写入，因此「一次崩溃」要同时挡住首次与重试。
+     */
+    function failingPlugin(failOnCalls: number[]) {
+        const failing = new Set(failOnCalls);
+        const disk: Record<string, unknown> = {};
+        let calls = 0;
+        const plugin: StoragePlugin = {
+            loadData: async (name) => (name in disk ? disk[name] : null),
+            saveData: async (name, content) => {
+                calls++;
+                if (failing.has(calls)) throw new Error("磁盘写入失败");
+                disk[name] = content;
+            },
+            removeData: async (name) => {
+                delete disk[name];
+            },
+        };
+        return { plugin, disk, callCount: () => calls };
+    }
+
+    it("索引 id 更新失败时，分片里的题目会在对账后重新可见（孤儿分片恢复）", async () => {
+        // 顺序：① 登记月份 ② 写分片 ③ 更新索引 id（含一次重试）—— 让 ③ 失败
+        const { plugin, disk } = failingPlugin([3, 4]);
+        const store = new BankStore(plugin);
+        const entry = item("孤儿题目");
+
+        await expect(store.upsert(entry)).rejects.toBeTruthy();
+
+        // 断言磁盘状态而不是内存缓存：写入失败时 AsyncStore 的缓存已经是「新值」，
+        // 只有换一个 store 从盘上读，才能看出两次写入之间崩到了哪一步
+        const shardKey = Object.keys(disk).find((k) => k.startsWith("recallgen-bank-2"))!;
+        expect(Object.keys(disk[shardKey] as object)).toContain(entry.id);
+        const diskIndex = disk["recallgen-bank-index.json"] as { months: Record<string, string[]> };
+        expect(diskIndex.months[monthKey(NOW)]).toEqual([]); // 月份已登记，但 id 还没写上
+
+        // 重启后对账：从分片重建索引，题目重新可见
+        const fresh = new BankStore(plugin);
+        expect(await fresh.count()).toBe(0); // 未对账前确实看不见
+        expect(await fresh.reconcile()).toBe(1);
+        expect(await fresh.count()).toBe(1);
+        expect(await fresh.get(entry.id)).toMatchObject({ id: entry.id });
+    });
+
+    it("索引登记了而分片里没有时，对账会把幽灵 id 清掉", async () => {
+        // 只有索引文件、没有分片：索引里的那个指纹是幽灵
+        const { plugin } = memoryPlugin({
+            "recallgen-bank-index.json": { version: 1, months: { [monthKey(NOW)]: ["不存在的指纹"] } },
+        });
+        const store = new BankStore(plugin);
+        expect(await store.count()).toBe(1); // 对账前索引说自己有 1 条
+        expect(await store.reconcile()).toBe(1);
+        expect(await store.count()).toBe(0); // 对账后以分片为准
+    });
+
+    it("一致时不做任何写入", async () => {
+        const { plugin, writes } = memoryPlugin();
+        const store = new BankStore(plugin);
+        await store.upsert(item("已一致"));
+        const before = writes.length;
+        expect(await store.reconcile()).toBe(0);
+        expect(writes.length).toBe(before);
+    });
+
+    it("分片读取失败时跳过该月份，不把 id 清空", async () => {
+        const disk: Record<string, unknown> = {};
+        const plugin: StoragePlugin = {
+            loadData: async (name) => {
+                if (name.startsWith("recallgen-bank-2") && name !== "recallgen-bank-index.json") {
+                    throw new Error("读取失败");
+                }
+                return name in disk ? disk[name] : null;
+            },
+            saveData: async (name, content) => {
+                disk[name] = content;
+            },
+            removeData: async (name) => {
+                delete disk[name];
+            },
+        };
+        disk["recallgen-bank-index.json"] = { version: 1, months: { [monthKey(NOW)]: ["某个指纹"] } };
+        const store = new BankStore(plugin);
+        expect(await store.reconcile()).toBe(0);
+        // 索引保持原样，没有被清空
+        expect(
+            (disk["recallgen-bank-index.json"] as { months: Record<string, string[]> }).months[monthKey(NOW)]
+        ).toEqual(["某个指纹"]);
+    });
+
+    it("空题库不需要对账", async () => {
+        const { plugin } = memoryPlugin();
+        expect(await new BankStore(plugin).reconcile()).toBe(0);
+    });
+});

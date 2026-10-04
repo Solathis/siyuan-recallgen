@@ -168,12 +168,20 @@ export class ScoreStore {
             analysis: record.analysis,
         };
 
-        // 先写明细，再写索引：索引是列表的来源，最后写入可保证「可见即完整」
-        await this.shard(month).edit((map) => ({ ...map, [record.id]: detail }));
+        /*
+         * 先写索引，再写明细。
+         *
+         * 两次写入之间崩溃无法完全避免，因此要选「崩了以后哪种状态更好」：
+         * 索引条目自带标题、分数与各维度聚合，列表与统计都只读它；
+         * 而明细里没有标题与时间戳，一旦索引没写成，这条成绩就再也找不到也恢复不了。
+         * 反过来先写索引，最坏情况是列表里有一条点开提示「明细缺失」的记录——
+         * 用户看得见、也有明确说明，而不是静默少了一条。
+         */
         await this.index.edit((file) => ({
             version: INDEX_VERSION,
             entries: [...file.entries.filter((e) => e.id !== record.id), entry],
         }));
+        await this.shard(month).edit((map) => ({ ...map, [record.id]: detail }));
     }
 
     /** 导出全部成绩（索引 + 明细），用于完整备份 */

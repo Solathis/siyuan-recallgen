@@ -71,6 +71,14 @@ export default class RecallGenPlugin extends Plugin {
             })
             .catch((e) => console.warn("[RecallGen] 成绩存储迁移失败", e));
 
+        // 题库索引只是分片的派生视图：启动时对账一次，修掉两次写入之间崩溃留下的不一致
+        void this.bankStore
+            .reconcile()
+            .then((repaired) => {
+                if (repaired > 0) console.info(`[RecallGen] 已修复 ${repaired} 个月份的题库索引`);
+            })
+            .catch((e) => console.warn("[RecallGen] 题库索引对账失败", e));
+
         // 按保留策略裁剪题库：只删除「长期未考且已掌握」的题目
         void this.bankStore
             .prune()

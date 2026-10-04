@@ -182,8 +182,25 @@ export class BankStore {
     async upsertMany(items: BankItem[]): Promise<void> {
         if (items.length === 0) return;
         const touched = new Map<string, string[]>();
+        const groups = [...groupByMonth(items)];
 
-        for (const [month, list] of groupByMonth(items)) {
+        /*
+         * 先把「这个月份存在」登记进索引，再写分片。
+         * 索引里的 months 就是分片清单；万一分片写完而索引的 id 更新失败，
+         * 启动时的 reconcile 仍能凭登记找到这个分片并把 id 补回来。
+         * 只有新增月份时才会多写一次索引，代价可忽略。
+         */
+        const registered = await this.index.readAll();
+        const fresh = groups.map(([month]) => month).filter((month) => !(month in registered.months));
+        if (fresh.length > 0) {
+            await this.index.edit((file) => {
+                const next = { ...file.months };
+                for (const month of fresh) next[month] = next[month] ?? [];
+                return { ...file, months: next };
+            });
+        }
+
+        for (const [month, list] of groups) {
             const shard = this.shard(month);
             await shard.edit((map) => {
                 const next = { ...map };
@@ -295,6 +312,46 @@ export class BankStore {
         }
         await this.index.edit((file) => ({ ...file, months: { ...file.months, ...Object.fromEntries(touched) } }));
         return removed;
+    }
+
+    /**
+     * 用分片内容重建索引的 id 列表，返回修复的月份数。
+     *
+     * 索引只是分片的派生视图：分片才是题目本体（含排程与复习历史）。
+     * 两次写入之间崩溃会让两者不一致——分片里有而索引没登记（题目看不见），
+     * 或索引登记了而分片里没有（列表里点开是空的）。
+     * 启动时对账一次即可把两个方向都修正过来。
+     *
+     * 读取失败的月份跳过：可能是临时故障，绝不能把它的 id 清空成「没有题目」。
+     */
+    async reconcile(): Promise<number> {
+        const file = await this.index.readAll();
+        const months = Object.keys(file.months);
+        if (months.length === 0) return 0;
+
+        const repaired: Record<string, string[]> = {};
+        for (const month of months) {
+            let keys: string[];
+            try {
+                keys = Object.keys(await this.shard(month).readAll());
+            } catch (e) {
+                console.warn(`[RecallGen] 题库分片 ${month} 读取失败，跳过对账`, e);
+                continue;
+            }
+            const known = file.months[month] ?? [];
+            const same = keys.length === known.length && keys.every((id) => known.includes(id));
+            if (!same) repaired[month] = keys;
+        }
+
+        const count = Object.keys(repaired).length;
+        if (count === 0) return 0;
+
+        await this.index.edit((current) => {
+            const next = { ...current.months };
+            for (const [month, ids] of Object.entries(repaired)) next[month] = ids;
+            return { ...current, months: next };
+        });
+        return count;
     }
 
     /** 卸载插件时删除题库数据 */
