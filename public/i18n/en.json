@@ -111,6 +111,7 @@
     "bank.phase_review": "Review",
     "bank.phase_relearning": "Relearning",
     "bank.loadingDue": "Loading due questions…",
+    "bank.reviewLimitNotice": "Took the first {0} of {1} due questions; adjust the limit in settings",
     "bank.sessionTitle": "Due review ({0} questions)",
     "bank.noDueTitle": "Nothing is due right now",
     "bank.noDueHint": "Take a few quizzes first; questions become due here over time",
@@ -386,6 +387,7 @@
     "settings.general.countdown": "Enable Countdown",
     "settings.general.countdownMinutes": "Duration (minutes)",
     "settings.general.countdownHint": "Set a positive duration, otherwise countdown won't activate",
+    "settings.general.reviewLimit": "Max questions per review",
     "settings.general.storageLocation": "Question Save Location",
     "settings.general.storageSibling": "Sibling of source doc",
     "settings.general.storageNotebook": "Fixed notebook",
@@ -593,5 +595,6 @@
     "config.defaultTestPrompt": "Introduce yourself in one sentence",
     "bank.filterAllDifficulties": "All difficulties",
     "stats.reviewTypeHint": "Review due questions of type \"{0}\"",
-    "stats.reviewDifficultyHint": "Review due {0} questions"
+    "stats.reviewDifficultyHint": "Review due {0} questions",
+    "settings.general.reviewLimitHint": "Upper bound on due questions taken per review session; 0 means no limit"
 }

@@ -262,6 +262,7 @@ function mergeGeneral(current: RecallGenConfig, imported: Partial<RecallGenConfi
     if (typeof incoming.countdownEnabled === "boolean") general.countdownEnabled = incoming.countdownEnabled;
     general.countdownMinutes = clampInt(incoming.countdownMinutes, general.countdownMinutes, 1, 600);
     general.extraScopePct = clampInt(incoming.extraScopePct, general.extraScopePct, 0, 100);
+    general.reviewLimit = clampInt(incoming.reviewLimit, general.reviewLimit, 0, 200);
     general.panelWidth = clampInt(incoming.panelWidth, general.panelWidth, 600, 1600);
     if (incoming.storageLocation === "notebook" || incoming.storageLocation === "sibling") {
         general.storageLocation = incoming.storageLocation;

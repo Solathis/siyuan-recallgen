@@ -93,6 +93,12 @@ export interface GeneralConfig {
     notebookId: string;
     /** 超纲比例（0-100） */
     extraScopePct: number;
+    /**
+     * 单次复习最多取多少题（0 = 不限）。
+     * 到期题目可能积累很多（例如停用一段时间后），一次全取出来会让会话过长、
+     * 面板要渲染几十上百道题；给一个上限让每次复习保持在可完成的规模。
+     */
+    reviewLimit: number;
     /** 答题面板宽度（px） */
     panelWidth: number;
     /** 多选题计分策略 */
@@ -240,6 +246,7 @@ export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     storageLocation: "sibling",
     notebookId: "",
     extraScopePct: 20,
+    reviewLimit: 20,
     panelWidth: 1100,
     multipleChoicePolicy: "partial",
     presets: [],

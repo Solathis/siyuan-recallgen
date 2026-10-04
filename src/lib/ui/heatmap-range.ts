@@ -7,7 +7,6 @@ import type { ScoreIndexEntry } from "@/types/quiz";
 
 /** GitHub 风格最近窗口的周数 */
 export const HEATMAP_WEEKS = 53;
-export const HEATMAP_DAYS = HEATMAP_WEEKS * 7;
 
 /** 'recent' 为最近 53 周滚动窗口，数字为某个自然年 */
 export type HeatmapRange = "recent" | number;

@@ -111,6 +111,7 @@
     "bank.phase_review": "复习中",
     "bank.phase_relearning": "重新学习",
     "bank.loadingDue": "正在读取到期题目…",
+    "bank.reviewLimitNotice": "本次取前 {0} 题（到期共 {1} 题），可在设置中调整上限",
     "bank.sessionTitle": "到期复习（{0} 题）",
     "bank.noDueTitle": "当前没有到期题目",
     "bank.noDueHint": "先做几套复习题，之后到期的题目会自动出现在这里",
@@ -386,6 +387,7 @@
     "settings.general.countdown": "启用倒计时",
     "settings.general.countdownMinutes": "答题时间（分钟）",
     "settings.general.countdownHint": "请设置大于 0 的答题时间，否则倒计时不会生效",
+    "settings.general.reviewLimit": "单次复习题量上限",
     "settings.general.storageLocation": "题目存储位置",
     "settings.general.storageSibling": "源文档同级",
     "settings.general.storageNotebook": "固定笔记本",
@@ -593,5 +595,6 @@
     "config.defaultTestPrompt": "请用一句话简要介绍你自己",
     "bank.filterAllDifficulties": "全部难度",
     "stats.reviewTypeHint": "复习题型「{0}」的到期题目",
-    "stats.reviewDifficultyHint": "复习「{0}」难度的到期题目"
+    "stats.reviewDifficultyHint": "复习「{0}」难度的到期题目",
+    "settings.general.reviewLimitHint": "到期复习一次最多取这么多题；0 表示不限（到期题目较多时建议设上限）"
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getDefaultConfig, type RecallGenConfig } from "@/types/config";
+import { createBankItem, selectReviewItems } from "./bank";
 import { buildConfigExport, CONFIG_EXPORT_VERSION, mergeImportedConfig, parseConfigExport } from "./config-io";
 
 const base = (): RecallGenConfig => {
@@ -414,5 +415,43 @@ describe("热力图配色的安全校验", () => {
     it("颜色前后空白被裁掉", () => {
         const { config } = mergeImportedConfig(base(), withRanges([{ min: 0, max: 100, color: "  #fff  " }]));
         expect(config.heatmap.ranges[0].color).toBe("#fff");
+    });
+});
+
+describe("单次复习题量上限", () => {
+    it("导入时收敛到 0-200（0 表示不限）", () => {
+        const withLimit = (reviewLimit: unknown) =>
+            JSON.stringify({
+                app: "recallgen",
+                version: 1,
+                includesSecrets: true,
+                config: { general: { reviewLimit } },
+            });
+        expect(mergeImportedConfig(base(), withLimit(30)).config.general.reviewLimit).toBe(30);
+        expect(mergeImportedConfig(base(), withLimit(0)).config.general.reviewLimit).toBe(0);
+        expect(mergeImportedConfig(base(), withLimit(9999)).config.general.reviewLimit).toBe(200);
+        expect(mergeImportedConfig(base(), withLimit(-5)).config.general.reviewLimit).toBe(0);
+        expect(mergeImportedConfig(base(), withLimit("很多")).config.general.reviewLimit).toBe(
+            base().general.reviewLimit
+        );
+    });
+
+    it("默认是 20，避免到期题目积累后一次取出上百道", () => {
+        expect(getDefaultConfig().general.reviewLimit).toBe(20);
+    });
+});
+
+describe("题库复习的题量上限生效", () => {
+    it("selectReviewItems 按 limit 截断", () => {
+        const items = [1, 2, 3, 4, 5].map((n) => {
+            const base = createBankItem(
+                { id: `q-${n}`, type: "true_false", difficulty: "easy", question: `第 ${n} 题`, answer: true } as never,
+                { sourceDocId: "d", sourceTitle: "t" },
+                Date.now()
+            );
+            return { ...base, card: { ...base.card, due: Date.now() - 1000 } };
+        });
+        expect(selectReviewItems(items, { limit: 2 })).toHaveLength(2);
+        expect(selectReviewItems(items, { limit: 0 })).toHaveLength(5);
     });
 });

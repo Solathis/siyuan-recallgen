@@ -214,6 +214,24 @@
             {/if}
         </div>
 
+        <!-- 单次复习题量上限 -->
+        <div class="flex flex-col gap-1.5">
+            <Label for="rg-review-limit">{t("settings.general.reviewLimit")}</Label>
+            <Input
+                id="rg-review-limit"
+                type="number"
+                min="0"
+                max="200"
+                class="w-32"
+                value={config.general.reviewLimit}
+                onchange={(e) =>
+                    patchGeneral({
+                        reviewLimit: Math.min(200, Math.max(0, Math.round(Number(e.currentTarget.value) || 0))),
+                    })}
+            />
+            <p class="text-muted-foreground text-xs">{t("settings.general.reviewLimitHint")}</p>
+        </div>
+
         <!-- 存储位置 -->
         <div class="flex flex-col gap-2">
             <Label for="rg-storage">{t("settings.general.storageLocation")}</Label>

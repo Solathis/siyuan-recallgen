@@ -258,7 +258,7 @@
             // 按知识点/题型复习时允许提前复习：用户是想练这一类题，不该被排程挡住，
             // 因此只有题库里根本没有这类题目时才会走到空态
             const due = await service.dueBankQuestions({
-                limit: 0,
+                limit: config.general.reviewLimit,
                 sourceDocId: tabData.dueSourceDocId,
                 tag,
                 type,
@@ -281,6 +281,15 @@
                 panelState = "answering";
                 return;
             }
+            // 被题量上限截断时说明还剩多少，否则用户会以为到期题目只有这些
+            if (config.general.reviewLimit > 0) {
+                const summary = await service.bankSummary().catch(() => null);
+                if (summary && summary.due > due.length) {
+                    showMessage(t("bank.reviewLimitNotice", String(due.length), String(summary.due)), 8000);
+                }
+            }
+            if (cancelled) return;
+
             session = {
                 id: genId(),
                 sourceDocId: tabData.sourceDocId,

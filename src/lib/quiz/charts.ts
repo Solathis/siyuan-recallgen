@@ -1,5 +1,5 @@
 import type { Difficulty, QuestionType, ScoreIndexEntry } from "@/types/quiz";
-import { PASS_SCORE, scorePercent } from "./stats";
+import { scorePercent } from "./stats";
 
 /**
  * 统计图表的数据准备。
@@ -274,9 +274,4 @@ export function weakestGroups(groups: GroupAccuracy[], minCount = 2, limit = 5):
         .map((g) => ({ ...g, rank: g.accuracy }))
         .sort((a, b) => a.accuracy - b.accuracy)
         .slice(0, limit);
-}
-
-/** 得分率是否达到通过线 */
-export function isPass(percent: number): boolean {
-    return percent >= PASS_SCORE;
 }
