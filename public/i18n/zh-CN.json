@@ -56,8 +56,10 @@
     "bank.filterWeak": "薄弱",
     "bank.scopeTag": "知识点「{0}」",
     "bank.scopeType": "题型「{0}」",
+    "bank.scopeDifficulty": "难度「{0}」",
     "bank.sessionTitleType": "复习「{0}」（{1} 题）",
     "bank.noTypeQuestions": "题库里还没有「{0}」类型的题目",
+    "bank.noDifficultyQuestions": "题库里还没有「{0}」难度的题目",
     "bank.filterTag": "按知识点筛选",
     "bank.filterAllTags": "全部知识点",
     "bank.scopeLine": "{0} · {1} 题",
@@ -69,6 +71,7 @@
     "bank.noTagQuestions": "题库里还没有知识点「{0}」的题目",
     "bank.filterAllTypes": "全部题型",
     "bank.filterType": "按题型筛选",
+    "bank.filterDifficulty": "按难度筛选",
     "bank.loadFailed": "加载题库失败：{0}",
     "bank.empty": "题库还是空的：做几套复习题后，题目会自动入库",
     "bank.noMatch": "没有符合筛选条件的题目",
@@ -245,7 +248,7 @@
     "stats.weakByType": "薄弱题型",
     "stats.weakByDifficulty": "薄弱难度",
     "stats.weakByTag": "薄弱知识点",
-    "stats.reviewTag": "复习",
+    "stats.review": "复习",
     "stats.reviewTagHint": "复习知识点「{0}」的到期题目",
     "stats.weakNote": "样本少于 2 题的组合不参与排名，避免小样本得出极端结论；知识点排行依赖题目携带的标签，较早的记录没有标签因而不会出现在这里",
     "stats.samples": "{0} 题",
@@ -587,5 +590,8 @@
     "export.unanswered": "未答",
     "export.duration": "耗时",
     "export.byType": "题型表现",
-    "config.defaultTestPrompt": "请用一句话简要介绍你自己"
+    "config.defaultTestPrompt": "请用一句话简要介绍你自己",
+    "bank.filterAllDifficulties": "全部难度",
+    "stats.reviewTypeHint": "复习题型「{0}」的到期题目",
+    "stats.reviewDifficultyHint": "复习「{0}」难度的到期题目"
 }

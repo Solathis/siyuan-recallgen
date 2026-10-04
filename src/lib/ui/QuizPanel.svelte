@@ -254,7 +254,7 @@
         try {
             // 按知识点复习时允许提前复习：用户是想练这个点，不该被排程挡住，
             // 因此只有题库里根本没有该知识点的题目时才会走到空态
-            const { dueTag: tag, dueType: type } = tabData;
+            const { dueTag: tag, dueType: type, dueDifficulty: difficulty } = tabData;
             // 按知识点/题型复习时允许提前复习：用户是想练这一类题，不该被排程挡住，
             // 因此只有题库里根本没有这类题目时才会走到空态
             const due = await service.dueBankQuestions({
@@ -262,7 +262,8 @@
                 sourceDocId: tabData.dueSourceDocId,
                 tag,
                 type,
-                ahead: Boolean(tag || type),
+                difficulty,
+                ahead: Boolean(tag || type || difficulty),
             });
             if (cancelled) return;
             if (due.length === 0) {
@@ -272,7 +273,9 @@
                         ? t("bank.noTagQuestions", tag)
                         : type
                           ? t("bank.noTypeQuestions", t(`type.${type}`))
-                          : t("bank.noDueHint"),
+                          : difficulty
+                            ? t("bank.noDifficultyQuestions", t(`diff.${difficulty}`))
+                            : t("bank.noDueHint"),
                     detail: t("bank.noDueDetail"),
                 };
                 panelState = "answering";
@@ -285,7 +288,9 @@
                     ? t("bank.sessionTitleTag", tag, String(due.length))
                     : type
                       ? t("bank.sessionTitleType", t(`type.${type}`), String(due.length))
-                      : t("bank.sessionTitle", String(due.length)),
+                      : difficulty
+                        ? t("bank.sessionTitleType", t(`diff.${difficulty}`), String(due.length))
+                        : t("bank.sessionTitle", String(due.length)),
                 questions: due,
                 createdAt: Date.now(),
                 answers: {},

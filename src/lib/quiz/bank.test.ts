@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rating, State } from "ts-fsrs";
-import type { Question } from "@/types/quiz";
+import type { Difficulty, Question } from "@/types/quiz";
 import {
     MAX_BANK_HISTORY,
     appendAttempt,
@@ -657,5 +657,50 @@ describe("applyResult 的得分率收敛", () => {
         const item = createBankItem(question("一致"), { sourceDocId: "d", sourceTitle: "t" }, NOW);
         const next = applyResult(item, 150, NOW);
         expect(next.lastPercent).toBe(next.history?.[next.history.length - 1].percent);
+    });
+});
+
+describe("按难度复习", () => {
+    /** 造一道已到期的题：可指定难度、题型与知识点标签 */
+    const make = (
+        text: string,
+        difficulty: Difficulty,
+        type: Question["type"] = "true_false",
+        tags: string[] = ["代数"]
+    ): BankItem => {
+        const base = createBankItem(question(text), { sourceDocId: "doc-1", sourceTitle: "笔记" }, NOW);
+        return {
+            ...base,
+            question: { ...base.question, difficulty, type, tags } as BankItem["question"],
+            card: { ...base.card, due: NOW - DAY },
+        };
+    };
+
+    const items = [make("难题", "hard", "coding"), make("简单题", "easy")];
+
+    it("只返回指定难度的题目", () => {
+        expect(selectReviewItems(items, { now: NOW, difficulty: "hard" }).map((i) => i.question.question)).toEqual([
+            "难题",
+        ]);
+    });
+
+    it("未指定难度时不筛选", () => {
+        expect(selectReviewItems(items, { now: NOW })).toHaveLength(2);
+    });
+
+    it("可与题型同时限定（难度与题型的组合筛选）", () => {
+        expect(selectReviewItems(items, { now: NOW, difficulty: "hard", type: "coding" })).toHaveLength(1);
+        expect(selectReviewItems(items, { now: NOW, difficulty: "easy", type: "coding" })).toHaveLength(0);
+        expect(selectReviewItems(items, { now: NOW, difficulty: "hard", type: "true_false" })).toHaveLength(0);
+    });
+
+    it("按难度复习同样支持提前复习", () => {
+        const future = [{ ...make("未来的难题", "hard"), card: { ...items[0].card, due: NOW + DAY } }];
+        expect(selectReviewItems(future, { now: NOW, difficulty: "hard" })).toHaveLength(0);
+        expect(selectReviewItems(future, { now: NOW, difficulty: "hard", ahead: true })).toHaveLength(1);
+    });
+
+    it("该难度没有题目时返回空", () => {
+        expect(selectReviewItems(items, { now: NOW, difficulty: "medium" })).toHaveLength(0);
     });
 });

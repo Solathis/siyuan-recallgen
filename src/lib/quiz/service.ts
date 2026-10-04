@@ -1,6 +1,7 @@
 import type { RecallGenConfig } from "@/types/config";
 import type { BankItem, BankSummary } from "./bank";
 import type {
+    Difficulty,
     GradingResult,
     Question,
     QuizSession,
@@ -140,6 +141,8 @@ export interface QuizTabData {
     dueTag?: string;
     /** reviewDue 模式下限定题型，只复习该题型的到期题目 */
     dueType?: QuestionType;
+    /** reviewDue 模式下限定难度，只复习该难度的到期题目 */
+    dueDifficulty?: Difficulty;
     /** review 模式的成绩数据 */
     review?: ReviewPayload;
 }

@@ -16,7 +16,7 @@
         type RangeDays,
     } from "../quiz/charts";
     import { scorePercent } from "../quiz/stats";
-    import type { HeatmapConfig, QuestionType, ScoreIndexEntry } from "@/types/quiz";
+    import type { HeatmapConfig, QuestionType, ScoreIndexEntry, Difficulty } from "@/types/quiz";
     import DonutChart from "./DonutChart.svelte";
     import Heatmap from "./Heatmap.svelte";
     import LineChart from "./LineChart.svelte";
@@ -34,7 +34,7 @@
         heatmapConfig?: HeatmapConfig;
         lang?: "zh" | "en";
         /** 按知识点开始一次复习；由插件层打开新的答题 Tab */
-        onStartReview?: (scope: { tag?: string; type?: QuestionType }) => void;
+        onStartReview?: (scope: { tag?: string; type?: QuestionType; difficulty?: Difficulty }) => void;
     } = $props();
 
     let range = $state<RangeDays>(30);
@@ -241,8 +241,8 @@
                     {#if weakTypes.length === 0 && weakDifficulties.length === 0 && weakTags.length === 0}
                         <p class="text-muted-foreground text-xs">{t("stats.weakEmpty")}</p>
                     {:else}
-                        <!-- 只有知识点维度可以拿去开复习会话；题型/难度不是题库的筛选键 -->
-                        {#each [{ title: t("stats.weakByTag"), groups: weakTags, label: (key: string) => key, wrap: true, scope: "tag" }, { title: t("stats.weakByType"), groups: weakTypes, label: typeLabel, wrap: false, scope: "" }, { title: t("stats.weakByDifficulty"), groups: weakDifficulties, label: difficultyLabel, wrap: false, scope: "" }] as section (section.title)}
+                        <!-- 三个维度都能直接开一次复习：知识点/题型/难度都是题库的筛选键 -->
+                        {#each [{ title: t("stats.weakByTag"), groups: weakTags, label: (key: string) => key, wrap: true, hint: (key: string) => t("stats.reviewTagHint", key), action: (key: string) => onStartReview( { tag: key } ) }, { title: t("stats.weakByType"), groups: weakTypes, label: typeLabel, wrap: false, hint: (key: string) => t("stats.reviewTypeHint", typeLabel(key)), action: (key: string) => onStartReview( { type: key as QuestionType } ) }, { title: t("stats.weakByDifficulty"), groups: weakDifficulties, label: difficultyLabel, wrap: false, hint: (key: string) => t("stats.reviewDifficultyHint", difficultyLabel(key)), action: (key: string) => onStartReview( { difficulty: key as Difficulty } ) }] as section (section.title)}
                             {#if section.groups.length > 0}
                                 <div class="flex flex-col gap-1.5">
                                     <span class="text-muted-foreground text-xs font-semibold">{section.title}</span>
@@ -262,16 +262,14 @@
                                             <span class="text-muted-foreground w-20 shrink-0 text-right text-xs">
                                                 {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
                                             </span>
-                                            {#if section.scope === "tag"}
-                                                <button
-                                                    type="button"
-                                                    class="text-primary shrink-0 text-2xs underline-offset-2 hover:underline"
-                                                    title={t("stats.reviewTagHint", group.key)}
-                                                    onclick={() => onStartReview({ tag: group.key })}
-                                                >
-                                                    {t("stats.reviewTag")}
-                                                </button>
-                                            {/if}
+                                            <button
+                                                type="button"
+                                                class="text-primary shrink-0 text-2xs underline-offset-2 hover:underline"
+                                                title={section.hint(group.key)}
+                                                onclick={() => section.action(group.key)}
+                                            >
+                                                {t("stats.review")}
+                                            </button>
                                         </div>
                                     {/each}
                                 </div>

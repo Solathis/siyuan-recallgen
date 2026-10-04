@@ -56,8 +56,10 @@
     "bank.filterWeak": "Weak",
     "bank.scopeTag": "Knowledge point “{0}”",
     "bank.scopeType": "Question type “{0}”",
+    "bank.scopeDifficulty": "difficulty \"{0}\"",
     "bank.sessionTitleType": "Review “{0}” ({1} questions)",
     "bank.noTypeQuestions": "The bank has no “{0}” questions yet",
+    "bank.noDifficultyQuestions": "The bank has no {0} questions yet",
     "bank.filterTag": "Filter by knowledge point",
     "bank.filterAllTags": "All knowledge points",
     "bank.scopeLine": "{0} · {1} questions",
@@ -69,6 +71,7 @@
     "bank.noTagQuestions": "The bank has no questions on “{0}” yet",
     "bank.filterAllTypes": "All types",
     "bank.filterType": "Filter by type",
+    "bank.filterDifficulty": "Filter by difficulty",
     "bank.loadFailed": "Failed to load the question bank: {0}",
     "bank.empty": "The bank is empty. Take a few quizzes and questions will be banked automatically.",
     "bank.noMatch": "No questions match the current filters",
@@ -245,7 +248,7 @@
     "stats.weakByType": "Weak question types",
     "stats.weakByDifficulty": "Weak difficulty levels",
     "stats.weakByTag": "Weak knowledge points",
-    "stats.reviewTag": "Review",
+    "stats.review": "Review",
     "stats.reviewTagHint": "Review due questions on “{0}”",
     "stats.weakNote": "Groups with fewer than 2 questions are excluded to avoid drawing conclusions from tiny samples. The knowledge-point ranking relies on tags carried by questions, so earlier records without tags do not appear here",
     "stats.samples": "{0} questions",
@@ -587,5 +590,8 @@
     "export.unanswered": "Unanswered",
     "export.duration": "Duration",
     "export.byType": "By type",
-    "config.defaultTestPrompt": "Introduce yourself in one sentence"
+    "config.defaultTestPrompt": "Introduce yourself in one sentence",
+    "bank.filterAllDifficulties": "All difficulties",
+    "stats.reviewTypeHint": "Review due questions of type \"{0}\"",
+    "stats.reviewDifficultyHint": "Review due {0} questions"
 }

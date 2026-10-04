@@ -23,7 +23,7 @@
     } from "../quiz/bank";
     import { nextLimit, PAGE_SIZE } from "../quiz/paging";
     import type { QuizService } from "../quiz/service";
-    import type { QuestionType } from "@/types/quiz";
+    import type { QuestionType, Difficulty } from "@/types/quiz";
 
     let {
         service,
@@ -32,7 +32,7 @@
     }: {
         service: QuizService;
         /** 按知识点或题型开始一次复习；由插件层打开新的答题 Tab */
-        onStartReview?: (scope: { tag?: string; type?: QuestionType }) => void;
+        onStartReview?: (scope: { tag?: string; type?: QuestionType; difficulty?: Difficulty }) => void;
         /** 界面语言；由外层传入，service.getConfig() 本身不是响应式的 */
         lang?: "zh" | "en";
     } = $props();
@@ -45,6 +45,7 @@
     let filter = $state<"all" | "due" | "weak">("all");
     let typeFilter = $state<string>("all");
     let tagFilter = $state<string>("all");
+    let difficultyFilter = $state<string>("all");
     let visible = $state(PAGE_SIZE);
 
     async function load() {
@@ -70,6 +71,7 @@
         void filter;
         void typeFilter;
         void tagFilter;
+        void difficultyFilter;
         visible = PAGE_SIZE;
     });
 
@@ -91,12 +93,22 @@
 
     /**
      * 当前筛选能否直接拿去开一次复习：
-     * 知识点与题型都是题库的筛选键，而「掌握度」不是。
+     * 知识点、题型与难度都是题库的筛选键，而「掌握度」不是。
+     * 多个筛选同时生效时按优先级取一个维度（与界面上的紧凑展示一致）。
      */
-    const reviewScope = $derived.by<{ tag?: string; type?: QuestionType; label: string } | null>(() => {
+    const reviewScope = $derived.by<{
+        tag?: string;
+        type?: QuestionType;
+        difficulty?: Difficulty;
+        label: string;
+    } | null>(() => {
         if (tagFilter !== "all") return { tag: tagFilter, label: t("bank.scopeTag", tagFilter) };
         if (typeFilter !== "all") {
             return { type: typeFilter as QuestionType, label: t("bank.scopeType", typeLabel(typeFilter)) };
+        }
+        if (difficultyFilter !== "all") {
+            const difficulty = difficultyFilter as Difficulty;
+            return { difficulty, label: t("bank.scopeDifficulty", t(`diff.${difficulty}`)) };
         }
         return null;
     });
@@ -108,6 +120,7 @@
         return items.filter((item) => {
             if (scope.tag && !(item.question.tags ?? []).includes(scope.tag)) return false;
             if (scope.type && item.question.type !== scope.type) return false;
+            if (scope.difficulty && item.question.difficulty !== scope.difficulty) return false;
             return true;
         });
     });
@@ -122,6 +135,7 @@
                     if (keyword && !item.question.question.toLowerCase().includes(keyword)) return false;
                     if (typeFilter !== "all" && item.question.type !== typeFilter) return false;
                     if (tagFilter !== "all" && !(item.question.tags ?? []).includes(tagFilter)) return false;
+                    if (difficultyFilter !== "all" && item.question.difficulty !== difficultyFilter) return false;
                     if (filter === "due" && item.card.due > now) return false;
                     if (filter === "weak" && masteryScore(item) >= 60) return false;
                     return true;
@@ -247,6 +261,19 @@
                     </Select.Content>
                 </Select.Root>
             {/if}
+            <Select.Root type="single" value={difficultyFilter} onValueChange={(v) => (difficultyFilter = v)}>
+                <Select.Trigger class="h-8 w-24" aria-label={t("bank.filterDifficulty")}>
+                    {difficultyFilter === "all"
+                        ? t("bank.filterAllDifficulties")
+                        : t(`diff.${difficultyFilter as Difficulty}`)}
+                </Select.Trigger>
+                <Select.Content>
+                    <Select.Item value="all">{t("bank.filterAllDifficulties")}</Select.Item>
+                    {#each ["easy", "medium", "hard"] as const as level (level)}
+                        <Select.Item value={level}>{t(`diff.${level}`)}</Select.Item>
+                    {/each}
+                </Select.Content>
+            </Select.Root>
             {#if tagOptions.length > 0}
                 <Select.Root type="single" value={tagFilter} onValueChange={(v) => (tagFilter = v)}>
                     <Select.Trigger class="h-8 w-32" aria-label={t("bank.filterTag")}>
@@ -283,7 +310,12 @@
             <Button
                 size="sm"
                 variant="outline"
-                onclick={() => onStartReview({ tag: reviewScope?.tag, type: reviewScope?.type })}
+                onclick={() =>
+                    onStartReview({
+                        tag: reviewScope?.tag,
+                        type: reviewScope?.type,
+                        difficulty: reviewScope?.difficulty,
+                    })}
             >
                 {t("bank.reviewScope")}
             </Button>

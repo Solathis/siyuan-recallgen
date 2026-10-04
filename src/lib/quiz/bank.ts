@@ -1,6 +1,6 @@
 import { createEmptyCard, fixDate, fixState, fsrs, Rating, State, type Card } from "ts-fsrs";
 import { PASS_SCORE } from "@/types/quiz";
-import type { Question, QuestionType } from "@/types/quiz";
+import type { Difficulty, Question, QuestionType } from "@/types/quiz";
 
 /**
  * 题库与间隔重复。
@@ -339,6 +339,8 @@ export interface ReviewScope {
     tag?: string;
     /** 限定题型，用于「只练编程题」这类复习方式 */
     type?: QuestionType;
+    /** 限定难度，用于「只练难题」这类复习方式 */
+    difficulty?: Difficulty;
     sourceDocId?: string;
     /**
      * 没有到期题目时是否按掌握度从低到高补题（提前复习）。
@@ -353,11 +355,12 @@ export interface ReviewScope {
  * 抽成纯函数便于单测，也让 index.ts 的实现保持一行。
  */
 export function selectReviewItems(items: BankItem[], scope: ReviewScope = {}): BankItem[] {
-    const { now = Date.now(), limit = 0, tag, type, sourceDocId, ahead = false } = scope;
+    const { now = Date.now(), limit = 0, tag, type, difficulty, sourceDocId, ahead = false } = scope;
     const scoped = items.filter((item) => {
         if (sourceDocId && item.sourceDocId !== sourceDocId) return false;
         if (tag && !(item.question.tags ?? []).includes(tag)) return false;
         if (type && item.question.type !== type) return false;
+        if (difficulty && item.question.difficulty !== difficulty) return false;
         return true;
     });
 

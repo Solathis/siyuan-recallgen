@@ -19,7 +19,7 @@
     import { PAGE_SIZE, limitGroups, nextLimit } from "../quiz/paging";
     import { PASS_SCORE, scorePercent } from "../quiz/stats";
     import type { QuizService } from "../quiz/service";
-    import type { QuestionType, ScoreIndexEntry } from "@/types/quiz";
+    import type { QuestionType, ScoreIndexEntry, Difficulty } from "@/types/quiz";
 
     let {
         service,
@@ -28,8 +28,8 @@
     }: {
         service: QuizService;
         onOpenReview: (entry: ScoreIndexEntry) => void;
-        /** 按知识点或题型开始一次到期复习；由插件层打开新的答题 Tab */
-        onStartReview?: (scope: { tag?: string; type?: QuestionType }) => void;
+        /** 按知识点、题型或难度开始一次到期复习；由插件层打开新的答题 Tab */
+        onStartReview?: (scope: { tag?: string; type?: QuestionType; difficulty?: Difficulty }) => void;
     } = $props();
 
     let records = $state<ScoreIndexEntry[]>([]);
