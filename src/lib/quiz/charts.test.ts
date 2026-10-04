@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ScoreIndexEntry } from "@/types/quiz";
+import { isSafeCssColor } from "@/types/quiz";
 import { scorePercent } from "./stats";
 import {
     accuracyByDifficulty,
@@ -330,5 +331,37 @@ describe("统计容错（导入的脏数据不应让统计页崩掉）", () => {
         // 负数与 0 一样视为不限下界，但未来记录仍被排除
         expect(filterByRange([past], -5, NOW)).toHaveLength(1);
         expect(filterByRange([past], 0, NOW)).toHaveLength(1);
+    });
+});
+
+describe("isSafeCssColor", () => {
+    it("接受常见颜色写法", () => {
+        for (const color of ["#fff", "#ffffff", "#ffffffcc", "rgb(1,2,3)", "rgba(1,2,3,.5)", "hsl(120, 50%, 50%)"]) {
+            expect(isSafeCssColor(color), color).toBe(true);
+        }
+    });
+
+    it("接受思源主题变量", () => {
+        expect(isSafeCssColor("var(--b3-card-success-color)")).toBe(true);
+    });
+
+    it("拒绝可注入额外 CSS 声明的写法", () => {
+        for (const color of [
+            "red;background-image:url(https://evil.example/x)",
+            "}body{display:none",
+            "url(https://evil.example/x)",
+            "expression(alert(1))",
+            "#fff /* 注释 */",
+        ]) {
+            expect(isSafeCssColor(color), color).toBe(false);
+        }
+    });
+
+    it("拒绝空串、非字符串与超长输入", () => {
+        expect(isSafeCssColor("")).toBe(false);
+        expect(isSafeCssColor("   ")).toBe(false);
+        expect(isSafeCssColor(null)).toBe(false);
+        expect(isSafeCssColor(123)).toBe(false);
+        expect(isSafeCssColor("#" + "a".repeat(80))).toBe(false);
     });
 });

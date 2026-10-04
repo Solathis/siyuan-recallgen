@@ -15,6 +15,20 @@ export const PASS_SCORE = 60;
  * 判分与统计必须用同一口径：空串、纯空白、空数组都视为未作答，
  * 否则会出现「统计里算未作答、判分时却送去让 AI 打分」这种自相矛盾的行为。
  */
+/**
+ * 热力图区间颜色是否安全。
+ *
+ * 颜色来自可导入/可分享的配置，而它会被直接写进内联 style：
+ * 不做限制时 `red;background-image:url(...)` 之类的字符串能注入任意 CSS 声明。
+ * 只接受明确的颜色写法与思源主题变量。
+ */
+export function isSafeCssColor(value: unknown): value is string {
+    if (typeof value !== "string") return false;
+    const color = value.trim();
+    if (color.length === 0 || color.length > 64) return false;
+    return /^(#[0-9a-f]{3,8}|rgba?\(\s*[\d.,%\s/]+\)|hsla?\(\s*[\d.,%\s/deg]+\)|var\(--[a-z0-9-]+\))$/i.test(color);
+}
+
 export function hasAnswer(answer: UserAnswer | undefined): boolean {
     if (!answer) return false;
     if (typeof answer.value === "string") return answer.value.trim().length > 0;

@@ -7,7 +7,13 @@ import {
     type QuizPreset,
     type RecallGenConfig,
 } from "@/types/config";
-import type { DifficultyDistribution, HeatmapConfig, QuestionType, ScoreRange } from "@/types/quiz";
+import {
+    isSafeCssColor,
+    type DifficultyDistribution,
+    type HeatmapConfig,
+    type QuestionType,
+    type ScoreRange,
+} from "@/types/quiz";
 
 /**
  * 配置的导出与导入。
@@ -279,15 +285,19 @@ function mergeHeatmap(current: RecallGenConfig, imported: Partial<RecallGenConfi
     if (typeof incoming.enabled === "boolean") heatmap.enabled = incoming.enabled;
     if (incoming.metric === "max" || incoming.metric === "avg") heatmap.metric = incoming.metric;
     if (Array.isArray(incoming.ranges)) {
+        // 颜色会被写进内联 style，必须校验：否则分享的配置能注入任意 CSS 声明
         const ranges = incoming.ranges
-            .filter((r): r is ScoreRange => !!r && typeof r === "object" && typeof (r as ScoreRange).color === "string")
+            .filter((r): r is ScoreRange => !!r && typeof r === "object" && isSafeCssColor((r as ScoreRange).color))
             .map((r) => ({
                 min: clampInt(r.min, 0, 0, 100),
                 max: clampInt(r.max, 100, 0, 100),
-                color: r.color,
+                color: r.color.trim(),
             }));
         if (ranges.length > 0) heatmap.ranges = ranges;
         else warnings.push("配色区间无效，已保留原有配色");
+        if (ranges.length > 0 && ranges.length < incoming.ranges.length) {
+            warnings.push("部分配色区间的颜色写法不安全或无效，已跳过");
+        }
     }
     return heatmap;
 }

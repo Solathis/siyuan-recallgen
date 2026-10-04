@@ -365,3 +365,54 @@ describe("数值与整数收敛的区分", () => {
         expect(config.general.panelWidth).toBe(1101);
     });
 });
+
+describe("热力图配色的安全校验", () => {
+    const withRanges = (ranges: unknown[]) =>
+        JSON.stringify({
+            app: "recallgen",
+            version: 1,
+            includesSecrets: true,
+            config: { heatmap: { ranges } },
+        });
+
+    it("合法的十六进制 / rgb / 主题变量被接受", () => {
+        const { config } = mergeImportedConfig(
+            base(),
+            withRanges([
+                { min: 0, max: 30, color: "#ebedf0" },
+                { min: 31, max: 60, color: "rgb(64, 196, 99)" },
+                { min: 61, max: 100, color: "var(--b3-card-success-color)" },
+            ])
+        );
+        expect(config.heatmap.ranges).toHaveLength(3);
+    });
+
+    it("带分号或花括号的伪装颜色被丢弃（回归：可注入任意 CSS 声明）", () => {
+        const { config, warnings } = mergeImportedConfig(
+            base(),
+            withRanges([
+                { min: 0, max: 50, color: "red;background-image:url(https://evil.example/x.png)" },
+                { min: 51, max: 100, color: "}body{display:none" },
+            ])
+        );
+        expect(config.heatmap.ranges).toEqual(base().heatmap.ranges);
+        expect(warnings.some((w) => w.includes("配色区间无效"))).toBe(true);
+    });
+
+    it("好坏混在一起时只保留合法项并给出提示", () => {
+        const { config, warnings } = mergeImportedConfig(
+            base(),
+            withRanges([
+                { min: 0, max: 50, color: "#ffffff" },
+                { min: 51, max: 100, color: "red;color:red" },
+            ])
+        );
+        expect(config.heatmap.ranges).toHaveLength(1);
+        expect(warnings.some((w) => w.includes("写法不安全"))).toBe(true);
+    });
+
+    it("颜色前后空白被裁掉", () => {
+        const { config } = mergeImportedConfig(base(), withRanges([{ min: 0, max: 100, color: "  #fff  " }]));
+        expect(config.heatmap.ranges[0].color).toBe("#fff");
+    });
+});

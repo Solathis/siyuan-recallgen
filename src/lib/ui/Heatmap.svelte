@@ -3,6 +3,7 @@
     import * as Select from "@/lib/components/ui/select";
     import { HEATMAP_WEEKS, rangeYears, startOfDay, windowBounds, type HeatmapRange } from "./heatmap-range";
     import { t } from "../i18n";
+    import { isSafeCssColor } from "@/types/quiz";
     import type { ScoreIndexEntry, ScoreRange, HeatmapConfig as HMConfig } from "@/types/quiz";
 
     let {
@@ -205,13 +206,16 @@
                             {#each col as cell}
                                 {#if cell.date}
                                     {@const bg = colorFor(cell.score)}
+                                    {@const safeBg = isSafeCssColor(bg) ? bg : null}
                                     <button
                                         type="button"
                                         class={cn(
                                             "rounded-[2px] transition-transform hover:scale-125 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
                                             bg === null && "bg-muted"
                                         )}
-                                        style="width: {CELL}px; height: {CELL}px;{bg ? ` background:${bg};` : ''}"
+                                        style="width: {CELL}px; height: {CELL}px;{safeBg
+                                            ? ` background:${safeBg};`
+                                            : ''}"
                                         title={fmtTip(cell)}
                                         aria-label={fmtTip(cell)}
                                         onmouseenter={() => onEnter(cell)}
@@ -236,7 +240,10 @@
         <span>{t("heatmap.less")}</span>
         <span class="bg-muted border-border inline-block size-3 rounded-[2px] border"></span>
         {#each sortedRanges as r}
-            <span class="border-border inline-block size-3 rounded-[2px] border" style="background:{r.color}"></span>
+            <span
+                class="border-border inline-block size-3 rounded-[2px] border"
+                style="background:{isSafeCssColor(r.color) ? r.color : 'transparent'}"
+            ></span>
         {/each}
         <span>{t("heatmap.more")}</span>
     </div>
