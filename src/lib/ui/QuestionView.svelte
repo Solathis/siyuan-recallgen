@@ -1,3 +1,20 @@
+<script module lang="ts">
+    // 实例 script 里有同名导入，svelte-check 会把两段 script 放到同一作用域，
+    // 因此这里必须用别名
+    import type { Question as QuizQuestion, UserAnswer as QuizAnswer } from "@/types/quiz";
+
+    /**
+     * 代码编辑器应当显示的内容。
+     *
+     * 关键在于区分「未作答」与「作答后清空」：前者回落到初始代码，
+     * 后者必须保持为空。两者用 `||` 合并会让用户永远删不掉初始代码。
+     */
+    export function editorTarget(answer: QuizAnswer | undefined, question: QuizQuestion): string {
+        if (answer?.type === "coding") return answer.value;
+        return question.type === "coding" ? (question.starter_code ?? "") : "";
+    }
+</script>
+
 <script lang="ts">
     import { untrack } from "svelte";
     import { Button } from "@/lib/components/ui/button";
@@ -62,7 +79,13 @@
 
     /* ── 编程题 ──────────────────────────────────────────────────── */
 
-    const codingValue = $derived(answer?.type === "coding" ? answer.value : "");
+    /**
+     * 编程题当前代码。
+     * 刻意用 undefined 表示「还没作答」，与「作答后被清空的空字符串」区分开：
+     * 两者用 `||` 合并时，用户把代码全删掉会被当成未作答而重新填回初始代码，
+     * 等于无法清空编辑器。
+     */
+    const codingValue = $derived(answer?.type === "coding" ? answer.value : undefined);
     let editorEl = $state<HTMLDivElement | null>(null);
     let editor: CodeEditor | null = null;
     let editorReady = $state(false);
@@ -81,7 +104,7 @@
         const coding = question.type === "coding" ? question : null;
         if (!el || !coding) return;
 
-        const initial = untrack(() => codingValue || coding.starter_code || "");
+        const initial = untrack(() => codingValue ?? coding.starter_code ?? "");
         const instance = new CodeEditor(el, coding.language, initial, (doc) => {
             onchange({ type: "coding", value: doc });
         });
@@ -113,7 +136,7 @@
     async function runTests() {
         if (question.type !== "coding") return;
         // 事件处理器不在响应式上下文中，直接读取即可
-        const code = codingValue || question.starter_code || "";
+        const code = codingValue ?? question.starter_code ?? "";
         const entryPoint = resolveEntryPoint(question) ?? "";
         running = true;
         runOutcome = null;
@@ -150,7 +173,7 @@
         const key = `${question.id}:${question.type === "coding" ? question.language : ""}`;
         void key;
         if (!editor || !editorReady) return;
-        const target = codingValue || (question.type === "coding" ? (question.starter_code ?? "") : "");
+        const target = editorTarget(answer, question);
         if (editor.getValue() !== target) editor.setValue(target);
     });
 </script>
