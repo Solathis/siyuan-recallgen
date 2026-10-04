@@ -20,6 +20,15 @@ interface BankIndexFile {
 
 const INDEX_VERSION = 1;
 
+/** 索引形状兜底 */
+function asIndexFile(value: unknown): BankIndexFile {
+    const file = value as Partial<BankIndexFile> | null | undefined;
+    if (!file || typeof file !== "object" || typeof file.months !== "object" || file.months === null) {
+        return { version: INDEX_VERSION, months: {} };
+    }
+    return { version: INDEX_VERSION, months: { ...file.months } };
+}
+
 /** 题库索引：只存月份与指纹，体积很小 */
 class BankIndexStore extends AsyncStore {
     constructor(plugin: StoragePlugin) {
@@ -27,15 +36,16 @@ class BankIndexStore extends AsyncStore {
     }
 
     async readAll(): Promise<BankIndexFile> {
-        const data = await this.read<BankIndexFile>({ version: INDEX_VERSION, months: {} });
-        if (!data || typeof data !== "object" || typeof data.months !== "object" || data.months === null) {
-            return { version: INDEX_VERSION, months: {} };
-        }
-        return { version: INDEX_VERSION, months: data.months };
+        return asIndexFile(await this.read<BankIndexFile>({ version: INDEX_VERSION, months: {} }));
     }
 
     async writeAll(months: Record<string, string[]>): Promise<void> {
         await this.write({ version: INDEX_VERSION, months });
+    }
+
+    /** 原子读改写索引；mutate 返回 null 表示无变化 */
+    edit(mutate: (file: BankIndexFile) => BankIndexFile | null): Promise<void> {
+        return super.update(() => this.readAll(), mutate);
     }
 }
 
@@ -66,6 +76,11 @@ class BankShardStore extends AsyncStore {
 
     async writeAll(map: Record<string, BankItem>): Promise<void> {
         await this.write(map);
+    }
+
+    /** 原子读改写分片；mutate 返回 null 表示无变化 */
+    edit(mutate: (map: Record<string, BankItem>) => Record<string, BankItem> | null): Promise<void> {
+        return super.update(() => this.readAll(), mutate);
     }
 }
 
@@ -166,17 +181,22 @@ export class BankStore {
     /** 批量新增或覆盖：只写涉及的月份分片与索引 */
     async upsertMany(items: BankItem[]): Promise<void> {
         if (items.length === 0) return;
-        const file = await this.index.readAll();
-        const months = { ...file.months };
+        const touched = new Map<string, string[]>();
 
         for (const [month, list] of groupByMonth(items)) {
             const shard = this.shard(month);
-            const map = await shard.readAll();
-            for (const item of list) map[item.id] = item;
-            await shard.writeAll(map);
-            months[month] = Object.keys(map);
+            await shard.edit((map) => {
+                const next = { ...map };
+                for (const item of list) next[item.id] = item;
+                touched.set(month, Object.keys(next));
+                return next;
+            });
         }
-        await this.index.writeAll(months);
+
+        await this.index.edit((file) => ({
+            ...file,
+            months: { ...file.months, ...Object.fromEntries(touched) },
+        }));
     }
 
     /**
@@ -209,11 +229,16 @@ export class BankStore {
         for (const [month, ids] of Object.entries(file.months)) {
             if (!ids.includes(id)) continue;
             const shard = this.shard(month);
-            const map = await shard.readAll();
-            if (!(id in map)) continue;
-            delete map[id];
-            await shard.writeAll(map);
-            await this.index.writeAll({ ...file.months, [month]: Object.keys(map) });
+            let keys: string[] | null = null;
+            await shard.edit((map) => {
+                if (!(id in map)) return null;
+                const next = { ...map };
+                delete next[id];
+                keys = Object.keys(next);
+                return next;
+            });
+            if (keys === null) return;
+            await this.index.edit((file) => ({ ...file, months: { ...file.months, [month]: keys } }));
             return;
         }
     }
@@ -235,32 +260,38 @@ export class BankStore {
         { olderThanMs = BANK_PRUNE_AFTER_MS, masteredAt = BANK_MASTERED_AT } = {}
     ): Promise<number> {
         const file = await this.index.readAll();
-        const months = { ...file.months };
         let removed = 0;
+        const touched = new Map<string, string[]>();
 
-        for (const month of Object.keys(months)) {
+        for (const month of Object.keys(file.months)) {
             const shard = this.shard(month);
-            const map = await shard.readAll();
-            const kept: Record<string, BankItem> = {};
-            let changed = false;
+            await shard.edit((map) => {
+                const kept: Record<string, BankItem> = {};
+                let changed = false;
 
-            for (const [id, item] of Object.entries(map)) {
-                const stale = now - (item.updatedAt || item.createdAt || 0) > olderThanMs;
-                if (stale && masteryScore(item) >= masteredAt) {
-                    removed++;
-                    changed = true;
-                    continue;
+                for (const [id, item] of Object.entries(map)) {
+                    const stale = now - (item.updatedAt || item.createdAt || 0) > olderThanMs;
+                    if (stale && masteryScore(item) >= masteredAt) {
+                        removed++;
+                        changed = true;
+                        continue;
+                    }
+                    kept[id] = item;
                 }
-                kept[id] = item;
-            }
 
-            if (changed) {
-                await shard.writeAll(kept);
-                months[month] = Object.keys(kept);
-            }
+                if (!changed) return null;
+                touched.set(month, Object.keys(kept));
+                return kept;
+            });
         }
 
-        if (removed > 0) await this.index.writeAll(months);
+        if (touched.size === 0) return removed;
+
+        // 索引键取分片的最新内容，避免与并发的入库操作错位
+        for (const month of touched.keys()) {
+            touched.set(month, Object.keys(await this.shard(month).readAll()));
+        }
+        await this.index.edit((file) => ({ ...file, months: { ...file.months, ...Object.fromEntries(touched) } }));
         return removed;
     }
 

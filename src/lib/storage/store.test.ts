@@ -14,6 +14,9 @@ class TestStore extends AsyncStore {
     writeLater(getData: () => unknown, delayMs: number): Promise<void> {
         return this.writeDeferred(getData, delayMs);
     }
+    updateData<T>(read: () => Promise<T>, mutate: (current: T) => T | null): Promise<void> {
+        return this.update(read, mutate);
+    }
     flushNow(): Promise<void> {
         return this.flushDeferred();
     }
@@ -179,6 +182,78 @@ describe("AsyncStore.write", () => {
         void store.writeData({ a: 1 });
         await store.flushAll();
         expect(done).toBe(true);
+    });
+});
+
+describe("AsyncStore.update", () => {
+    it("并发读改写不会互相覆盖（回归：read + write 丢数据）", async () => {
+        const { plugin, getStored } = fakePlugin(null);
+        const store = new TestStore(plugin);
+        const read = () => store.readData<Record<string, number>>({});
+
+        // 三路并发：每路都基于「读到的当前值」追加自己的键。
+        // 若读取不在写入链内串行，后写的会覆盖先写的。
+        await Promise.all([
+            store.updateData(read, (cur) => ({ ...cur, a: 1 })),
+            store.updateData(read, (cur) => ({ ...cur, b: 2 })),
+            store.updateData(read, (cur) => ({ ...cur, c: 3 })),
+        ]);
+
+        expect(getStored()).toEqual({ a: 1, b: 2, c: 3 });
+    });
+
+    it("每次 mutate 都能看到上一次的结果", async () => {
+        const { plugin } = fakePlugin({ n: 0 });
+        const store = new TestStore(plugin);
+        const seen: number[] = [];
+        const read = () => store.readData<{ n: number }>({ n: 0 });
+
+        await Promise.all(
+            [1, 2, 3].map(() =>
+                store.updateData(read, (cur) => {
+                    seen.push(cur.n);
+                    return { n: cur.n + 1 };
+                })
+            )
+        );
+
+        expect(seen).toEqual([0, 1, 2]);
+        expect(await read()).toEqual({ n: 3 });
+    });
+
+    it("mutate 返回 null 时跳过落盘", async () => {
+        const { plugin, saveData } = fakePlugin({ n: 1 });
+        const store = new TestStore(plugin);
+        await store.updateData(
+            () => store.readData<{ n: number }>({ n: 0 }),
+            () => null
+        );
+        expect(saveData).not.toHaveBeenCalled();
+    });
+
+    it("update 与 write 交错时最终值取最后入队的写入", async () => {
+        const { plugin, getStored } = fakePlugin(null);
+        const store = new TestStore(plugin);
+        const read = () => store.readData<Record<string, number>>({});
+
+        await Promise.all([store.writeData({ x: 9 }), store.updateData(read, (cur) => ({ ...cur, y: 1 }))]);
+        expect(getStored()).toEqual({ x: 9, y: 1 });
+    });
+
+    it("update 的写入失败会向上抛出 StorageError", async () => {
+        const plugin: StoragePlugin = {
+            loadData: async () => ({ n: 0 }),
+            saveData: async () => {
+                throw new Error("磁盘满了");
+            },
+        };
+        const store = new TestStore(plugin);
+        await expect(
+            store.updateData(
+                () => store.readData<{ n: number }>({ n: 0 }),
+                (cur) => ({ n: cur.n + 1 })
+            )
+        ).rejects.toBeInstanceOf(StorageError);
     });
 });
 

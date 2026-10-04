@@ -17,6 +17,22 @@ interface IndexFile {
 
 const INDEX_VERSION = 2;
 
+/** 索引形状兜底：结构不对时按空索引处理 */
+function asIndexFile(value: unknown): IndexFile {
+    const file = value as Partial<IndexFile> | null | undefined;
+    if (!file || typeof file !== "object" || !Array.isArray(file.entries)) {
+        return { version: INDEX_VERSION, entries: [] };
+    }
+    return { version: INDEX_VERSION, entries: [...file.entries] };
+}
+
+/** 明细分片形状兜底 */
+function asDetailMap(value: unknown): Record<string, ScoreDetail> {
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? { ...(value as Record<string, ScoreDetail>) }
+        : {};
+}
+
 /** 成绩索引存储：轻量条目列表 */
 class ScoreIndexStore extends AsyncStore {
     constructor(plugin: StoragePlugin) {
@@ -24,15 +40,16 @@ class ScoreIndexStore extends AsyncStore {
     }
 
     async readAll(): Promise<IndexFile> {
-        const data = await this.read<IndexFile>({ version: INDEX_VERSION, entries: [] });
-        if (!data || !Array.isArray(data.entries)) {
-            return { version: INDEX_VERSION, entries: [] };
-        }
-        return data;
+        return asIndexFile(await this.read<IndexFile>({ version: INDEX_VERSION, entries: [] }));
     }
 
     async writeAll(entries: ScoreIndexEntry[]): Promise<void> {
         await this.write({ version: INDEX_VERSION, entries });
+    }
+
+    /** 原子读改写索引；mutate 返回 null 表示无变化 */
+    edit(mutate: (file: IndexFile) => IndexFile | null): Promise<void> {
+        return super.update(() => this.readAll(), mutate);
     }
 }
 
@@ -46,12 +63,16 @@ class ShardStore extends AsyncStore {
     }
 
     async readAll(): Promise<Record<string, ScoreDetail>> {
-        const data = await this.read<Record<string, ScoreDetail>>({});
-        return data && typeof data === "object" && !Array.isArray(data) ? { ...data } : {};
+        return asDetailMap(await this.read<Record<string, ScoreDetail>>({}));
     }
 
     async writeAll(map: Record<string, ScoreDetail>): Promise<void> {
         await this.write(map);
+    }
+
+    /** 原子读改写分片；mutate 返回 null 表示无变化 */
+    edit(mutate: (map: Record<string, ScoreDetail>) => Record<string, ScoreDetail> | null): Promise<void> {
+        return super.update(() => this.readAll(), mutate);
     }
 }
 
@@ -140,22 +161,19 @@ export class ScoreStore {
     async add(record: ScoreRecord): Promise<void> {
         const entry = buildIndexEntry(record);
         const month = monthKey(record.timestamp);
-
-        // 先写明细，再写索引：索引是列表的来源，最后写入可保证「可见即完整」
-        const shard = this.shard(month);
-        const map = await shard.readAll();
-        map[record.id] = {
+        const detail: ScoreDetail = {
             id: record.id,
             detail: record.detail,
             questions: record.questions,
             analysis: record.analysis,
         };
-        await shard.writeAll(map);
 
-        const file = await this.index.readAll();
-        const entries = file.entries.filter((e) => e.id !== record.id);
-        entries.push(entry);
-        await this.index.writeAll(entries);
+        // 先写明细，再写索引：索引是列表的来源，最后写入可保证「可见即完整」
+        await this.shard(month).edit((map) => ({ ...map, [record.id]: detail }));
+        await this.index.edit((file) => ({
+            version: INDEX_VERSION,
+            entries: [...file.entries.filter((e) => e.id !== record.id), entry],
+        }));
     }
 
     /** 导出全部成绩（索引 + 明细），用于完整备份 */
@@ -175,68 +193,74 @@ export class ScoreStore {
     async importMany(items: { entry: ScoreIndexEntry; detail: ScoreDetail | null }[]): Promise<void> {
         if (items.length === 0) return;
 
-        const byMonth = new Map<string, ScoreIndexEntry[]>();
         const detailByMonth = new Map<string, Record<string, ScoreDetail>>();
-
         for (const { entry, detail } of items) {
+            if (!detail) continue;
             const month = monthKey(entry.timestamp);
-            byMonth.set(month, [...(byMonth.get(month) ?? []), entry]);
-            if (detail) {
-                detailByMonth.set(month, { ...(detailByMonth.get(month) ?? {}), [entry.id]: detail });
-            }
+            detailByMonth.set(month, { ...(detailByMonth.get(month) ?? {}), [entry.id]: detail });
         }
 
-        for (const month of byMonth.keys()) {
-            const shard = this.shard(month);
-            const map = await shard.readAll();
-            Object.assign(map, detailByMonth.get(month) ?? {});
-            await shard.writeAll(map);
+        for (const [month, details] of detailByMonth) {
+            await this.shard(month).edit((map) => ({ ...map, ...details }));
         }
 
-        const file = await this.index.readAll();
-        const known = new Set(file.entries.map((e) => e.id));
-        const merged = [...file.entries];
-        for (const entry of byMonth.values()) {
-            for (const item of entry) {
-                if (known.has(item.id)) continue;
-                known.add(item.id);
-                merged.push(item);
+        await this.index.edit((file) => {
+            const known = new Set(file.entries.map((e) => e.id));
+            const merged = [...file.entries];
+            for (const { entry } of items) {
+                if (known.has(entry.id)) continue;
+                known.add(entry.id);
+                merged.push(entry);
             }
-        }
-        await this.index.writeAll(merged);
+            return merged.length === file.entries.length ? null : { version: INDEX_VERSION, entries: merged };
+        });
     }
 
     /** 更新薄弱点分析（写入明细并同步索引的 hasAnalysis 标记） */
     async updateAnalysis(id: string, analysis: string): Promise<void> {
-        const file = await this.index.readAll();
-        const entry = file.entries.find((e) => e.id === id);
-        if (!entry) return;
+        const month = await this.monthOf(id);
+        if (!month) return;
 
-        const shard = this.shard(monthKey(entry.timestamp));
-        const map = await shard.readAll();
-        const detail = map[id];
-        if (detail) {
-            map[id] = { ...detail, analysis };
-            await shard.writeAll(map);
-        }
+        await this.shard(month).edit((map) => {
+            const detail = map[id];
+            if (!detail) return null;
+            return { ...map, [id]: { ...detail, analysis } };
+        });
 
-        entry.hasAnalysis = true;
-        await this.index.writeAll([...file.entries]);
+        await this.index.edit((file) => {
+            const entry = file.entries.find((e) => e.id === id);
+            if (!entry || entry.hasAnalysis) return null;
+            return {
+                version: INDEX_VERSION,
+                entries: file.entries.map((e) => (e.id === id ? { ...e, hasAnalysis: true } : e)),
+            };
+        });
     }
 
     /** 删除单条成绩（索引与明细同时删除） */
     async remove(id: string): Promise<void> {
+        const month = await this.monthOf(id);
+        if (!month) return;
+
+        // 先删索引：条目立刻从列表消失，不会出现「点进去提示明细缺失」
+        await this.index.edit((file) => {
+            if (!file.entries.some((e) => e.id === id)) return null;
+            return { version: INDEX_VERSION, entries: file.entries.filter((e) => e.id !== id) };
+        });
+        // 明细随后清理；即便这里失败也只剩无人引用的残留数据，不影响使用
+        await this.shard(month).edit((map) => {
+            if (!(id in map)) return null;
+            const next = { ...map };
+            delete next[id];
+            return next;
+        });
+    }
+
+    /** 条目所在月份；不存在时返回 null */
+    private async monthOf(id: string): Promise<string | null> {
         const file = await this.index.readAll();
         const entry = file.entries.find((e) => e.id === id);
-        if (!entry) return;
-
-        const shard = this.shard(monthKey(entry.timestamp));
-        const map = await shard.readAll();
-        if (id in map) {
-            delete map[id];
-            await shard.writeAll(map);
-        }
-        await this.index.writeAll(file.entries.filter((e) => e.id !== id));
+        return entry ? monthKey(entry.timestamp) : null;
     }
 
     /** 清空全部成绩（索引与所有已知分片） */

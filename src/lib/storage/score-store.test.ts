@@ -148,6 +148,21 @@ describe("ScoreStore.add / listIndex / loadDetail", () => {
         expect(index).toHaveLength(1);
         expect(index[0].totalScore).toBe(90);
     });
+
+    it("并发交卷不会丢失任何一条（回归：读改写丢数据）", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new ScoreStore(plugin);
+        await Promise.all([
+            store.add(record("s-1", MARCH)),
+            store.add(record("s-2", MARCH)),
+            store.add(record("s-3", APRIL)),
+        ]);
+        const index = await store.listIndex();
+        expect(index.map((e) => e.id).sort()).toEqual(["s-1", "s-2", "s-3"]);
+        expect(await store.loadDetail("s-1")).not.toBeNull();
+        expect(await store.loadDetail("s-2")).not.toBeNull();
+        expect(await store.loadDetail("s-3")).not.toBeNull();
+    });
 });
 
 describe("ScoreStore.updateAnalysis", () => {

@@ -19,14 +19,14 @@ export class ProgressStore extends AsyncStore {
     }
 
     private async readMap(): Promise<Record<string, QuizSession>> {
-        const data = await this.read<Record<string, QuizSession>>({});
-        return data && typeof data === "object" && !Array.isArray(data) ? { ...data } : {};
+        return asMap(await this.read<Record<string, QuizSession>>({}));
     }
 
     async save(session: QuizSession): Promise<void> {
-        const map = await this.readMap();
-        map[session.id] = session;
-        await this.write(map);
+        await this.update(
+            () => this.readMap(),
+            (map) => ({ ...map, [session.id]: session })
+        );
     }
 
     async load(quizId: string): Promise<QuizSession | null> {
@@ -47,9 +47,15 @@ export class ProgressStore extends AsyncStore {
     }
 
     async clear(quizId: string): Promise<void> {
-        const map = await this.readMap();
-        delete map[quizId];
-        await this.write(map);
+        await this.update(
+            () => this.readMap(),
+            (map) => {
+                if (!(quizId in map)) return null;
+                const next = { ...map };
+                delete next[quizId];
+                return next;
+            }
+        );
     }
 
     async clearAll(): Promise<void> {
@@ -61,21 +67,32 @@ export class ProgressStore extends AsyncStore {
      * 由 index.ts 在插件加载时调用一次。
      */
     async pruneExpired(now = Date.now(), ttlMs = PROGRESS_TTL_MS): Promise<number> {
-        const map = await this.readMap();
-        const kept: Record<string, QuizSession> = {};
         let removed = 0;
-        for (const [id, session] of Object.entries(map)) {
-            // createdAt 缺失/非法的脏数据无法用于恢复，同样清理
-            const createdAt = typeof session?.createdAt === "number" ? session.createdAt : 0;
-            if (now - createdAt > ttlMs) {
-                removed++;
-                continue;
+        await this.update(
+            () => this.readMap(),
+            (map) => {
+                const kept: Record<string, QuizSession> = {};
+                let dropped = 0;
+                for (const [id, session] of Object.entries(map)) {
+                    // createdAt 缺失/非法的脏数据无法用于恢复，同样清理
+                    const createdAt = typeof session?.createdAt === "number" ? session.createdAt : 0;
+                    if (now - createdAt > ttlMs) {
+                        dropped++;
+                        continue;
+                    }
+                    kept[id] = session;
+                }
+                removed = dropped;
+                return dropped > 0 ? kept : null;
             }
-            kept[id] = session;
-        }
-        if (removed > 0) {
-            await this.write(kept);
-        }
+        );
         return removed;
     }
+}
+
+/** 读取结果的形状兜底：非对象或数组都当作空表 */
+function asMap(value: unknown): Record<string, QuizSession> {
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? { ...(value as Record<string, QuizSession>) }
+        : {};
 }

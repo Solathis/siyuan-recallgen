@@ -83,6 +83,25 @@ describe("ProgressStore", () => {
         await store.save(session("b", 2000));
         expect(Object.keys(getStored()).sort()).toEqual(["a", "b"]);
     });
+
+    it("并发保存不同会话不会互相覆盖（回归：读改写丢数据）", async () => {
+        const { plugin, getStored } = fakePlugin(null);
+        const store = new ProgressStore(plugin);
+        await Promise.all([
+            store.save(session("a", 1000)),
+            store.save(session("b", 2000)),
+            store.save(session("c", 3000)),
+        ]);
+        expect(Object.keys(getStored()).sort()).toEqual(["a", "b", "c"]);
+    });
+
+    it("保存与清理并发时不会弄丢刚写入的会话", async () => {
+        const now = Date.now();
+        const { plugin } = fakePlugin({ old: session("old", now - PROGRESS_TTL_MS - 1) });
+        const store = new ProgressStore(plugin);
+        await Promise.all([store.pruneExpired(now), store.save(session("fresh", now))]);
+        expect(await store.listIds()).toEqual(["fresh"]);
+    });
 });
 
 describe("ProgressStore.pruneExpired", () => {

@@ -110,17 +110,46 @@ export class AsyncStore {
         this.loaded = true;
         this.version++;
 
-        const next = this.writeChain.then(() =>
-            this.plugin
-                .saveData(this.name, data)
-                .then(() => undefined)
-                .catch((e) => {
-                    throw new StorageError(`写入 ${this.name} 失败`, this.name, e);
-                })
-        );
+        const next = this.writeChain.then(() => this.persist(data));
         // 写失败不阻断后续写链，但错误仍会传给本次调用的等待者
         this.writeChain = next.catch(() => undefined);
         return next;
+    }
+
+    /**
+     * 原子读改写。
+     *
+     * 直接「读 → 改 → 写」会丢数据：两次并发调用各自基于同一份旧值计算，
+     * 后落盘的会覆盖先落盘的。这里把读取也放进写入链，
+     * 于是读改写整体串行，第二次调用一定看到第一次的结果。
+     *
+     * mutate 返回 null 表示「无需变更」，此时跳过落盘。
+     * 返回新对象才视为有变更——不要就地修改入参，否则改动不会被识别。
+     *
+     * read 由子类提供，因为它通常还要做一次结构规范化（见各 readAll）；
+     * 但它必须返回与缓存同形的值，否则写回后缓存形状会与 readAll 的假设不一致。
+     */
+    protected update<T>(read: () => Promise<T>, mutate: (current: T) => T | null): Promise<void> {
+        const next = this.writeChain.then(async () => {
+            const current = await read();
+            const value = mutate(current);
+            if (value === null) return;
+            this.cache = value;
+            this.loaded = true;
+            this.version++;
+            await this.persist(value);
+        });
+        this.writeChain = next.catch(() => undefined);
+        return next;
+    }
+
+    private persist(data: unknown): Promise<void> {
+        return this.plugin
+            .saveData(this.name, data)
+            .then(() => undefined)
+            .catch((e) => {
+                throw new StorageError(`写入 ${this.name} 失败`, this.name, e);
+            });
     }
 
     /**
