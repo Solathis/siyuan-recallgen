@@ -14,6 +14,21 @@
         if (mode === "resume") return "resume";
         return "generate";
     }
+
+    /**
+     * 解析 `<input type="time">` 的值。
+     *
+     * 用户清空输入时 value 是空串，parseInt 得到 NaN，而 `NaN ?? 0` 仍是 NaN
+     * （?? 只拦 null/undefined），NaN 会一路传进日期区间计算并产出非法日期。
+     */
+    export function parseTimeInput(value: string | undefined | null): { hour: number; minute: number } {
+        const toNumber = (part: string | undefined, max: number): number => {
+            const n = Number.parseInt(part ?? "", 10);
+            return Number.isInteger(n) && n >= 0 && n <= max ? n : 0;
+        };
+        const [hour, minute] = String(value ?? "").split(":");
+        return { hour: toNumber(hour, 23), minute: toNumber(minute, 59) };
+    }
 </script>
 
 <script lang="ts">
@@ -80,27 +95,42 @@
     function onBaseTimeChange(e: Event) {
         const value = (e.target as HTMLInputElement).value;
         dateBaseTime = value;
-        const [h, m] = value.split(":").map((x) => parseInt(x, 10));
-        dateCfg = { ...dateCfg, baseHour: h ?? 0, baseMinute: m ?? 0 };
+        const { hour, minute } = parseTimeInput(value);
+        dateCfg = { ...dateCfg, baseHour: hour, baseMinute: minute };
     }
 
     /* ── 倒计时 ──────────────────────────────────────────────────── */
 
-    let countdownLeft = $state(0);
+    /**
+     * 剩余秒数由「截止时间戳」派生，而不是每秒自减。
+     * setInterval 在后台标签页会被节流（Chrome 最慢可到 1 分钟一次），
+     * 自减会让倒计时越走越慢、剩余时间与实际不符。
+     */
+    let countdownDeadline = $state<number | null>(null);
+    /** 由定时器推进的「当前时间」，供派生剩余秒数使用 */
+    let countdownNow = $state(Date.now());
+    /** 上一次生效的时长，用于识别「答题中途改了倒计时」 */
+    let countdownAppliedSec = $state(0);
     let countdownTimer: ReturnType<typeof setInterval> | null = null;
     const countdownEnabled = $derived(config.general.countdownEnabled && config.general.countdownMinutes > 0);
     const countdownSec = $derived(config.general.countdownMinutes * 60);
+    const countdownLeft = $derived(
+        countdownDeadline === null ? 0 : Math.max(0, Math.ceil((countdownDeadline - countdownNow) / 1000))
+    );
 
     function startCountdown() {
-        if (countdownTimer) clearInterval(countdownTimer);
-        countdownLeft = countdownSec;
+        stopCountdown();
+        countdownAppliedSec = countdownSec;
+        countdownDeadline = Date.now() + countdownSec * 1000;
+        countdownNow = Date.now();
+        // 250ms 一跳：节流下也能及时刷新显示，代价可忽略
         countdownTimer = setInterval(() => {
-            countdownLeft -= 1;
-            if (countdownLeft <= 0) {
+            countdownNow = Date.now();
+            if (countdownDeadline !== null && countdownNow >= countdownDeadline) {
                 stopCountdown();
                 void submit();
             }
-        }, 1000);
+        }, 250);
     }
 
     function stopCountdown() {
@@ -108,7 +138,17 @@
             clearInterval(countdownTimer);
             countdownTimer = null;
         }
+        countdownDeadline = null;
+        countdownNow = Date.now();
     }
+
+    /** 答题中途修改倒计时时长时按新时长重新计时（原实现只在开始时读一次配置） */
+    $effect(() => {
+        const sec = countdownSec;
+        if (countdownDeadline === null) return;
+        if (sec === countdownAppliedSec) return;
+        startCountdown();
+    });
 
     const countdownText = $derived(`${Math.floor(countdownLeft / 60)}:${String(countdownLeft % 60).padStart(2, "0")}`);
 

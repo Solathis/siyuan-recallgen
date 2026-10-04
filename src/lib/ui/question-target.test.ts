@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Question, UserAnswer } from "@/types/quiz";
 import { editorTarget } from "./QuestionView.svelte";
-import { retryAction } from "./QuizPanel.svelte";
+import { parseTimeInput, retryAction } from "./QuizPanel.svelte";
 
 const coding = (starter?: string): Question =>
     ({
@@ -57,5 +57,32 @@ describe("retryAction", () => {
         expect(retryAction("generate")).toBe("generate");
         expect(retryAction(undefined)).toBe("generate");
         expect(retryAction("review")).toBe("generate");
+    });
+});
+
+describe("parseTimeInput", () => {
+    it("解析正常时间", () => {
+        expect(parseTimeInput("04:30")).toEqual({ hour: 4, minute: 30 });
+        expect(parseTimeInput("00:00")).toEqual({ hour: 0, minute: 0 });
+        expect(parseTimeInput("23:59")).toEqual({ hour: 23, minute: 59 });
+    });
+
+    it("清空输入得到 0 而不是 NaN（回归：NaN ?? 0 仍是 NaN）", () => {
+        const parsed = parseTimeInput("");
+        expect(Number.isNaN(parsed.hour)).toBe(false);
+        expect(Number.isNaN(parsed.minute)).toBe(false);
+        expect(parsed).toEqual({ hour: 0, minute: 0 });
+    });
+
+    it("缺省值与畸形输入都回落到 0", () => {
+        expect(parseTimeInput(undefined)).toEqual({ hour: 0, minute: 0 });
+        expect(parseTimeInput(null)).toEqual({ hour: 0, minute: 0 });
+        expect(parseTimeInput("abc")).toEqual({ hour: 0, minute: 0 });
+        expect(parseTimeInput(":")).toEqual({ hour: 0, minute: 0 });
+    });
+
+    it("越界的时分被收敛为 0（不会生成非法日期）", () => {
+        expect(parseTimeInput("99:99")).toEqual({ hour: 0, minute: 0 });
+        expect(parseTimeInput("24:00")).toEqual({ hour: 0, minute: 0 });
     });
 });
