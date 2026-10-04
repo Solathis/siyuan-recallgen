@@ -1,6 +1,6 @@
 import { t } from "@/lib/i18n";
-import { dedupeQuestions, planBatches, renumberQuestions } from "./batching";
-import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
+import { dedupeQuestions, planBatches, renumberQuestions, scaleDistribution } from "./batching";
+import { callLLM, isAbortError, resolveAI, AIError, type ChatMessage, type ResolvedAIConfig } from "../ai/client";
 import { activePrompts, buildGenerateMessages, buildReviewMessages, buildRegenerateMessages } from "../ai/prompts";
 import {
     QUIZ_SCHEMA,
@@ -10,7 +10,8 @@ import {
     buildJsonObjectResponseFormat,
     parseJsonLoose,
 } from "../ai/schema";
-import type { RecallGenConfig } from "@/types/config";
+import type { GeneralConfig, PromptConfig, RecallGenConfig } from "@/types/config";
+import type { DifficultyDistribution } from "@/types/quiz";
 import type { Difficulty, Question, QuestionType } from "@/types/quiz";
 
 /** 审题进度回调：phase=当前阶段, round=当前轮次(1-based), detail=描述 */
@@ -56,6 +57,58 @@ export function collectFailedReviews(
 
 const MAX_REVIEW_ROUNDS = 3;
 
+/** 单批请求所需的上下文（参数较多，收成一个对象避免位置参数错配） */
+interface BatchContext {
+    prompts: PromptConfig;
+    general: GeneralConfig;
+    content: string;
+    types: QuestionType[];
+    genAI: ResolvedAIConfig;
+    callOpts: { tools?: unknown[]; toolChoice?: unknown; responseFormat?: unknown };
+    signal?: AbortSignal;
+}
+
+/** 一批的请求结果；missing 表示模型没给出可用的 questions 数组 */
+interface BatchOutcome {
+    questions: Question[];
+    dropped: number;
+    missing?: { rawType: string };
+}
+
+/** 进度文案：常规批次显示「第 i/n 批」，补题批次显示「还差 N 题」 */
+function batchLabel(index: number, count: number, total: number, toppingUp: boolean): string {
+    if (count > 1) return t("gen.batchProgress", String(index + 1), String(count), String(total));
+    return toppingUp ? t("gen.toppingUp", String(total)) : t("quiz.generating");
+}
+
+/** 请求并解析一批题目（不含「缺题是否容忍」的决策，留给调用方） */
+async function requestBatch(ctx: BatchContext, counts: DifficultyDistribution): Promise<BatchOutcome> {
+    const messages = buildGenerateMessages(ctx.prompts, ctx.general, ctx.content, ctx.types, counts);
+    const result = await callLLM(ctx.genAI, messages as ChatMessage[], { ...ctx.callOpts, signal: ctx.signal });
+    const parsed = parseJsonLoose(result.content) as Record<string, unknown> | null;
+
+    // 兼容 AI 返回 {questions:[]} / {data:[]} / {items:[]} / 直接返回数组等情况
+    let rawQuestions: unknown[] | null = null;
+    if (Array.isArray(parsed?.questions)) {
+        rawQuestions = parsed.questions;
+    } else if (Array.isArray(parsed?.data)) {
+        rawQuestions = parsed.data;
+    } else if (Array.isArray(parsed)) {
+        rawQuestions = parsed;
+    } else if (Array.isArray(parsed?.items)) {
+        rawQuestions = parsed.items;
+    }
+    if (!rawQuestions) {
+        return { questions: [], dropped: 0, missing: { rawType: parsed === null ? "null" : typeof parsed } };
+    }
+
+    let dropped = 0;
+    const questions = validateQuestions(rawQuestions, ctx.types, () => {
+        dropped++;
+    });
+    return { questions, dropped };
+}
+
 /** 已取消时抛出统一的取消错误（与 client 层同一类别，便于上层静默忽略） */
 function throwIfAborted(signal?: AbortSignal): void {
     if (signal?.aborted) throw new AIError(t("ai.aborted"), undefined, "aborted");
@@ -86,47 +139,54 @@ export async function generateQuestions(
 
     const collected: Question[] = [];
     let skipped = 0;
-    for (let i = 0; i < batches.length; i++) {
-        // 每批开始前检查：取消后不再发新的请求（在途的那个无法撤回，但不会再有下一批）
-        throwIfAborted(signal);
-        onProgress?.(
-            "generating",
-            1,
-            batches.length > 1
-                ? t("gen.batchProgress", String(i + 1), String(batches.length), String(batches[i].total))
-                : t("quiz.generating")
-        );
+    const ctx: BatchContext = { prompts, general, content, types, genAI, callOpts, signal };
 
-        const messages = buildGenerateMessages(prompts, general, content, types, batches[i]);
-        const result = await callLLM(genAI, messages as ChatMessage[], { ...callOpts, signal });
-        const parsed = parseJsonLoose(result.content) as Record<string, unknown>;
+    /**
+     * 依次请求多批并收集结果。
+     * allowPartial：单批缺题时是否容忍（多批时保住已成功的批次）
+     * toppingUp：仅用于进度文案，区分「首次生成」与「补齐差额」
+     */
+    const runBatches = async (
+        group: DifficultyDistribution[],
+        options: { allowPartial: boolean; toppingUp: boolean }
+    ): Promise<void> => {
+        const { allowPartial, toppingUp } = options;
+        for (let i = 0; i < group.length; i++) {
+            // 每批开始前检查：取消后不再发新的请求（在途的那个无法撤回，但不会再有下一批）
+            throwIfAborted(signal);
+            onProgress?.("generating", 1, batchLabel(i, group.length, group[i].total, toppingUp));
 
-        // 兼容 AI 返回 {questions:[]} / {data:[]} / 直接返回数组等情况
-        let rawQuestions: unknown[] | null = null;
-        if (Array.isArray(parsed?.questions)) {
-            rawQuestions = parsed.questions;
-        } else if (Array.isArray(parsed?.data)) {
-            rawQuestions = parsed.data;
-        } else if (Array.isArray(parsed)) {
-            rawQuestions = parsed;
-        } else if (Array.isArray(parsed?.items)) {
-            rawQuestions = parsed.items;
-        }
-
-        if (!rawQuestions) {
-            // 分批时单批失败不该作废已成功的批次
-            if (batches.length > 1 && collected.length > 0) {
-                console.warn("[RecallGen] 某一批出题失败，保留已成功的批次", parsed);
-                continue;
+            const outcome = await requestBatch(ctx, group[i]);
+            if (outcome.missing) {
+                // 分批时单批失败不该作废已成功的批次
+                if (allowPartial && collected.length > 0) {
+                    console.warn("[RecallGen] 某一批出题失败，保留已成功的批次", outcome.missing.rawType);
+                    continue;
+                }
+                throw new AIError(t("gen.missingQuestions", outcome.missing.rawType), undefined, "parse");
             }
-            throw new AIError(t("gen.missingQuestions", parsed === null ? "null" : typeof parsed), undefined, "parse");
+            skipped += outcome.dropped;
+            collected.push(...outcome.questions);
         }
+    };
 
-        collected.push(
-            ...validateQuestions(rawQuestions, types, () => {
-                skipped++;
-            })
-        );
+    await runBatches(batches, { allowPartial: true, toppingUp: false });
+
+    // 2. 模型常少给题：按差额补一轮，让实际题量尽量贴近用户设置。
+    //    只补一次——模型持续少给时反复请求既费额度又拖时间。
+    const shortfall = Math.max(0, Math.round(difficulty.total) - collected.length);
+    if (shortfall > 0) {
+        throwIfAborted(signal);
+        try {
+            await runBatches(planBatches(scaleDistribution(difficulty, shortfall)), {
+                allowPartial: true,
+                toppingUp: true,
+            });
+        } catch (e) {
+            // 取消要透传；补题本身失败不该作废已经拿到的题目
+            if (isAbortError(e)) throw e;
+            console.warn("[RecallGen] 补题失败，保留已有题目", e);
+        }
     }
 
     // 跨批也可能重复，去重后重新连续编号

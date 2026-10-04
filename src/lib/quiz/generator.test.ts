@@ -432,3 +432,122 @@ describe("generateQuestions 的取消", () => {
         __resetFetchSyncPost();
     });
 });
+
+describe("模型少给题时的补齐", () => {
+    /** 构造 forwardProxy 成功响应（chat 协议：正文在 choices[0].message.content 里） */
+    const proxyBody = (content: string) => ({
+        code: 0,
+        msg: "",
+        data: {
+            body: JSON.stringify({
+                choices: [{ message: { content }, finish_reason: "stop" }],
+            }),
+            status: 200,
+            contentType: "application/json",
+            headers: null,
+            elapsed: 1,
+            url: "",
+        },
+    });
+    const reply = (questions: unknown[]) => proxyBody(JSON.stringify({ questions }));
+    const q = (n: number) => ({ type: "true_false", difficulty: "easy", question: `第 ${n} 题`, answer: true });
+
+    /** 只测补齐，不触发审题循环 */
+    const configWith = (total: number) => {
+        const config = getDefaultConfig();
+        config.general.difficulty = { total, easy: total, medium: 0, hard: 0 };
+        config.ai.roles.reviewer = "";
+        return config;
+    };
+
+    it("少给题时按差额再要一轮，最终题量贴近请求数", async () => {
+        const calls: number[] = [];
+        __setFetchSyncPost(() => {
+            calls.push(calls.length + 1);
+            // 第一次只给 2 题，补题时给满差额
+            return calls.length === 1 ? reply([q(1), q(2)]) : reply([q(3)]);
+        });
+        const questions = await generateQuestions(configWith(3), "笔记内容");
+        expect(calls).toHaveLength(2);
+        expect(questions).toHaveLength(3);
+        __resetFetchSyncPost();
+    });
+
+    it("给足题量时不会多发请求", async () => {
+        const calls: number[] = [];
+        __setFetchSyncPost(() => {
+            calls.push(calls.length + 1);
+            return reply([q(1), q(2), q(3)]);
+        });
+        const questions = await generateQuestions(configWith(3), "笔记内容");
+        expect(calls).toHaveLength(1);
+        expect(questions).toHaveLength(3);
+        __resetFetchSyncPost();
+    });
+
+    it("补题失败不会作废已经拿到的题目", async () => {
+        const calls: number[] = [];
+        __setFetchSyncPost(() => {
+            calls.push(calls.length + 1);
+            return calls.length === 1 ? reply([q(1), q(2)]) : proxyBody("这不是 JSON");
+        });
+        const questions = await generateQuestions(configWith(3), "笔记内容");
+        expect(calls.length).toBeGreaterThanOrEqual(2);
+        // 已有的 2 题必须保留
+        expect(questions).toHaveLength(2);
+        __resetFetchSyncPost();
+    });
+
+    it("补题只补一轮，不会因模型持续少给而反复请求", async () => {
+        const calls: number[] = [];
+        __setFetchSyncPost(() => {
+            calls.push(calls.length + 1);
+            // 每次都只给 1 题
+            return reply([q(calls.length)]);
+        });
+        const questions = await generateQuestions(configWith(5), "笔记内容");
+        // 首批（可能多批）+ 一轮补题；不可能是无限循环
+        expect(calls.length).toBeLessThanOrEqual(4);
+        expect(questions.length).toBeGreaterThanOrEqual(1);
+        __resetFetchSyncPost();
+    });
+});
+
+describe("补齐时的进度文案", () => {
+    it("单批的首次生成显示「正在生成」，不显示补题文案", async () => {
+        const config = getDefaultConfig();
+        config.general.difficulty = { total: 2, easy: 2, medium: 0, hard: 0 };
+        config.ai.roles.reviewer = "";
+        const labels: string[] = [];
+        __setFetchSyncPost(() => ({
+            code: 0,
+            msg: "",
+            data: {
+                body: JSON.stringify({
+                    choices: [
+                        {
+                            message: {
+                                content: JSON.stringify({
+                                    questions: [
+                                        { type: "true_false", difficulty: "easy", question: "甲", answer: true },
+                                        { type: "true_false", difficulty: "easy", question: "乙", answer: true },
+                                    ],
+                                }),
+                            },
+                            finish_reason: "stop",
+                        },
+                    ],
+                }),
+                status: 200,
+                contentType: "application/json",
+                headers: null,
+                elapsed: 1,
+                url: "",
+            },
+        }));
+        await generateQuestions(config, "笔记", (_phase, _round, detail) => labels.push(detail));
+        expect(labels.some((l) => l.includes("补齐"))).toBe(false);
+        expect(labels.some((l) => l.includes("生成"))).toBe(true);
+        __resetFetchSyncPost();
+    });
+});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DifficultyDistribution, Question } from "@/types/quiz";
-import { dedupeQuestions, MAX_QUESTIONS_PER_CALL, planBatches, renumberQuestions } from "./batching";
+import { dedupeQuestions, MAX_QUESTIONS_PER_CALL, planBatches, renumberQuestions, scaleDistribution } from "./batching";
 
 const dist = (total: number, easy: number, medium: number, hard: number): DifficultyDistribution => ({
     total,
@@ -128,5 +128,49 @@ describe("renumberQuestions", () => {
 
     it("空数组返回空数组", () => {
         expect(renumberQuestions([])).toEqual([]);
+    });
+});
+
+describe("scaleDistribution", () => {
+    it("各档之和精确等于新总数（最大余数法）", () => {
+        for (const target of [1, 2, 3, 7, 11, 13, 17, 23, 29]) {
+            const out = scaleDistribution(dist(15, 6, 6, 3), target);
+            expect(out.total).toBe(target);
+            expect(out.easy + out.medium + out.hard, `target=${target}`).toBe(target);
+        }
+    });
+
+    it("保持原始难度比例（6:6:3 缩放后仍接近 2:2:1）", () => {
+        const out = scaleDistribution(dist(15, 6, 6, 3), 10);
+        expect(out.easy).toBe(4);
+        expect(out.medium).toBe(4);
+        expect(out.hard).toBe(2);
+    });
+
+    it("总数为 0 时各档都为 0", () => {
+        expect(scaleDistribution(dist(15, 6, 6, 3), 0)).toEqual({ total: 0, easy: 0, medium: 0, hard: 0 });
+        expect(scaleDistribution(dist(15, 6, 6, 3), -5)).toEqual({ total: 0, easy: 0, medium: 0, hard: 0 });
+    });
+
+    it("各档之和为 0 的异常配置按中级兜底（与 planBatches 一致）", () => {
+        expect(scaleDistribution(dist(10, 0, 0, 0), 4)).toEqual({ total: 4, easy: 0, medium: 4, hard: 0 });
+    });
+
+    it("极端倾斜的分布也不会丢题", () => {
+        const out = scaleDistribution(dist(30, 28, 2, 0), 3);
+        expect(out.easy + out.medium + out.hard).toBe(3);
+        expect(out.easy).toBeGreaterThan(0);
+    });
+
+    it("非整数输入会被规整", () => {
+        const out = scaleDistribution(dist(15.4, 6.6, 5.5, 3.3), 7.2);
+        expect(Number.isInteger(out.total)).toBe(true);
+        expect(out.easy + out.medium + out.hard).toBe(out.total);
+    });
+
+    it("补题差额能直接交给 planBatches 拆批", () => {
+        const scaled = scaleDistribution(dist(15, 6, 6, 3), 20);
+        const batches = planBatches(scaled);
+        expect(batches.reduce((sum, b) => sum + b.total, 0)).toBe(20);
     });
 });

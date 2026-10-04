@@ -498,6 +498,7 @@
     "ai.responseNoContent": "AI response contains no content",
     "ai.testPromptDefault": "Briefly introduce yourself in one sentence.",
     "gen.batchProgress": "Generating batch {0}/{1} ({2} questions)…",
+    "gen.toppingUp": "Still {0} question(s) short — requesting more…",
     "gen.reviewing": "Reviewing (round {0})…",
     "gen.reviewPassed": "Round {0} review passed, {1} question(s) total",
     "gen.reviewSkipped": "Could not parse the review result; this review round was skipped",

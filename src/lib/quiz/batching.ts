@@ -20,6 +20,41 @@ const DIFFICULTIES = ["easy", "medium", "hard"] as const;
  * 且所有批次合并后与原始分布完全一致。
  * 题量为 0 或不超过上限时返回单个批次。
  */
+/**
+ * 按比例把难度分布缩放到新的总数（最大余数法）。
+ *
+ * 用于「模型少给题后补齐差额」：补齐时要沿用原始的难度比例，
+ * 并且各档之和必须正好等于新总数，否则补题批次会与请求数对不上。
+ */
+export function scaleDistribution(dist: DifficultyDistribution, total: number): DifficultyDistribution {
+    const target = Math.max(0, Math.round(total));
+    if (target === 0) return { total: 0, easy: 0, medium: 0, hard: 0 };
+
+    const source = {
+        easy: Math.max(0, dist.easy),
+        medium: Math.max(0, dist.medium),
+        hard: Math.max(0, dist.hard),
+    };
+    const sum = source.easy + source.medium + source.hard;
+    // 与 planBatches 的兜底保持一致：各档之和为 0 时全部按中级处理
+    if (sum === 0) return { total: target, easy: 0, medium: target, hard: 0 };
+
+    const levels = ["easy", "medium", "hard"] as const;
+    const exact = levels.map((level) => (source[level] / sum) * target);
+    const counts = exact.map((value) => Math.floor(value));
+
+    // 余数大的先补，保证总和精确等于 target
+    let left = target - counts.reduce((a, b) => a + b, 0);
+    const order = levels.map((_, index) => index).sort((a, b) => exact[b] - counts[b] - (exact[a] - counts[a]));
+    for (const index of order) {
+        if (left <= 0) break;
+        counts[index] += 1;
+        left -= 1;
+    }
+
+    return { total: target, easy: counts[0], medium: counts[1], hard: counts[2] };
+}
+
 export function planBatches(
     difficulty: DifficultyDistribution,
     maxPerBatch = MAX_QUESTIONS_PER_CALL
