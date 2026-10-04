@@ -98,20 +98,11 @@
 
 /*
  * 收窄版 preflight：只做 Tailwind 工具类真正依赖的重置，且限定在插件容器内。
- * - box-sizing：Tailwind 的 p-*/
-size-*
-    都假定
-    border-box
-    *
-    -
-    border-width/style：`border`
-    工具类只设宽度，样式与颜色需要基线
-    *
-    -
-    表单控件继承字体：否则浏览器默认字体/尺寸会让按钮与输入框对不齐
-    */
-    @layer
-    base {
+ * - box-sizing：Tailwind 的 p-* / size-* 都假定 border-box
+ * - border-width/style：`border` 工具类只设宽度，样式与颜色需要基线
+ * - 表单控件继承字体：否则浏览器默认字体/尺寸会让按钮与输入框对不齐
+ */
+@layer base {
     .rg-scope,
     .rg-scope *,
     .rg-scope *::before,
