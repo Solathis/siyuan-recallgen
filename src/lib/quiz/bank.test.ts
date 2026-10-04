@@ -25,6 +25,7 @@ import {
     selectReviewItems,
     summarizeBank,
     toCardState,
+    toReviewQuestions,
     type BankItem,
 } from "./bank";
 
@@ -588,5 +589,31 @@ describe("dueState", () => {
 
     it("超过 7 天为 later", () => {
         expect(dueState(card(NOW + 30 * DAY), NOW)).toBe("later");
+    });
+});
+
+describe("toReviewQuestions", () => {
+    it("用题库主键（题干指纹）替换会话内序号，避免跨来源重号", () => {
+        const a = createBankItem(question("来自文档 A"), { sourceDocId: "doc-a", sourceTitle: "A" }, NOW);
+        const b = createBankItem(question("来自文档 B"), { sourceDocId: "doc-b", sourceTitle: "B" }, NOW);
+        // 两个来源各自生成的题目 id 都是 q-1，放进同一个复习会话就会撞号
+        expect(a.question.id).toBe("q-1");
+        expect(b.question.id).toBe("q-1");
+
+        const session = toReviewQuestions([a, b]);
+        expect(session.map((q) => q.id)).toEqual([a.id, b.id]);
+        expect(new Set(session.map((q) => q.id)).size).toBe(2);
+        // 题目内容与题库主键之外的字段保持不变
+        expect(session[0].question).toBe("来自文档 A");
+    });
+
+    it("不改动传入的题库条目", () => {
+        const item = createBankItem(question("原始"), { sourceDocId: "d", sourceTitle: "t" }, NOW);
+        toReviewQuestions([item]);
+        expect(item.question.id).toBe("q-1");
+    });
+
+    it("空题库返回空数组", () => {
+        expect(toReviewQuestions([])).toEqual([]);
     });
 });

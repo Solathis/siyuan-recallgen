@@ -8,7 +8,13 @@ import HistoryPanel from "@/lib/ui/HistoryPanel.svelte";
 import SettingPanel from "@/lib/ui/SettingPanel.svelte";
 import { lsNotebooks } from "@/api";
 import { BankStore, ConfigStore, ScoreStore, ProgressStore } from "@/lib/storage";
-import { applyResult, createBankItem, questionFingerprint, selectReviewItems } from "@/lib/quiz/bank";
+import {
+    applyResult,
+    createBankItem,
+    questionFingerprint,
+    selectReviewItems,
+    toReviewQuestions,
+} from "@/lib/quiz/bank";
 import { QuizSelector } from "@/lib/quiz/selector";
 import { generateQuestions, type GenProgressCallback } from "@/lib/quiz/generator";
 import { gradeAll } from "@/lib/quiz/grader";
@@ -321,7 +327,7 @@ export default class RecallGenPlugin extends Plugin {
             },
             dueBankQuestions: async (scope = {}) => {
                 const items = await this.bankStore.list();
-                return selectReviewItems(items, scope).map((item) => item.question);
+                return toReviewQuestions(selectReviewItems(items, scope));
             },
             bankSummary: () => this.bankStore.summary(),
             listBank: () => this.bankStore.list(),

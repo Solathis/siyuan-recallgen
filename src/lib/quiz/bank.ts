@@ -171,6 +171,18 @@ function repairState(value: unknown, fallback: State): State {
     }
 }
 
+/**
+ * 把题库条目变成一次复习会话的题目。
+ *
+ * 题库里存的题目 id 是「生成会话内」的序号（q-1、q-2…），不同文档的题目会重号；
+ * 而一次复习会话会把多个来源的题目放在一起，重号会让作答、判分与结果回写互相串台
+ * （同一 id 的题目共用一个作答、判分结果被复制到多题、成绩回写错行）。
+ * 因此统一改写成题库主键——题干指纹，它在题库内唯一且稳定。
+ */
+export function toReviewQuestions(items: BankItem[]): Question[] {
+    return items.map((item) => ({ ...item.question, id: item.id }));
+}
+
 /** 得分率收敛到 0-100 */
 function clampPercent(value: number): number {
     return Math.max(0, Math.min(100, value));
