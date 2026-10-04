@@ -73,6 +73,17 @@
         localConfig = next;
         onSave(next);
     }
+
+    /**
+     * 导入配置。
+     * 导入不经过 handleSave，但同样会改变真实配置，
+     * 必须同步刷新本地副本：否则面板还显示旧值，用户下一次编辑
+     * 就会拿旧副本覆盖掉刚导入的配置。
+     */
+    function handleImportConfig(next: RecallGenConfig, result: import("../quiz/config-io").ImportResult) {
+        localConfig = next;
+        onImportConfig(next, result);
+    }
 </script>
 
 <div class="rg-scope flex h-full min-h-0 flex-1 overflow-hidden rounded-lg border">
@@ -119,7 +130,7 @@
                     {onExportBank}
                     {onImportBank}
                     config={localConfig}
-                    {onImportConfig}
+                    onImportConfig={handleImportConfig}
                     {onExportScores}
                     {onImportScores}
                     existingScoreIds={scores.map((score) => score.id)}
