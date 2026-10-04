@@ -56,6 +56,11 @@ export function collectFailedReviews(
 
 const MAX_REVIEW_ROUNDS = 3;
 
+/** 已取消时抛出统一的取消错误（与 client 层同一类别，便于上层静默忽略） */
+function throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) throw new AIError(t("ai.aborted"), undefined, "aborted");
+}
+
 /**
  * 调用 AI 生成题目，可选审题循环。
  * 流程：生成 → 审题 → (失败题重新生成 → 再审) × max 3 rounds。
@@ -64,7 +69,9 @@ const MAX_REVIEW_ROUNDS = 3;
 export async function generateQuestions(
     config: RecallGenConfig,
     content: string,
-    onProgress?: GenProgressCallback
+    onProgress?: GenProgressCallback,
+    /** 取消信号：用户点取消后不再发起后续批次与审题轮次 */
+    signal?: AbortSignal
 ): Promise<Question[]> {
     const { general, ai } = config;
     // 提示词默认值分中英两套：未自定义时跟随输出语言，自定义过则原样尊重
@@ -80,6 +87,8 @@ export async function generateQuestions(
     const collected: Question[] = [];
     let skipped = 0;
     for (let i = 0; i < batches.length; i++) {
+        // 每批开始前检查：取消后不再发新的请求（在途的那个无法撤回，但不会再有下一批）
+        throwIfAborted(signal);
         onProgress?.(
             "generating",
             1,
@@ -89,7 +98,7 @@ export async function generateQuestions(
         );
 
         const messages = buildGenerateMessages(prompts, general, content, types, batches[i]);
-        const result = await callLLM(genAI, messages as ChatMessage[], callOpts);
+        const result = await callLLM(genAI, messages as ChatMessage[], { ...callOpts, signal });
         const parsed = parseJsonLoose(result.content) as Record<string, unknown>;
 
         // 兼容 AI 返回 {questions:[]} / {data:[]} / 直接返回数组等情况
@@ -129,7 +138,8 @@ export async function generateQuestions(
 
     // 2. 审题循环（仅当审题者模型存在时执行）
     if (ai.roles.reviewer && ai.models.some((m) => m.id === ai.roles.reviewer)) {
-        questions = await reviewLoop(config, questions, content, onProgress);
+        throwIfAborted(signal);
+        questions = await reviewLoop(config, questions, content, onProgress, signal);
     }
 
     return questions;
@@ -140,7 +150,8 @@ async function reviewLoop(
     config: RecallGenConfig,
     questions: Question[],
     content: string,
-    onProgress?: GenProgressCallback
+    onProgress?: GenProgressCallback,
+    signal?: AbortSignal
 ): Promise<Question[]> {
     const { ai } = config;
     const prompts = activePrompts(config.prompts, config.general.language);
@@ -151,12 +162,14 @@ async function reviewLoop(
     const types = config.general.allowedTypes;
 
     for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
+        throwIfAborted(signal);
         onProgress?.("reviewing", round, t("gen.reviewing", String(round)));
 
         const reviewMessages = buildReviewMessages(prompts, questions, config.general.language);
         const reviewResult = await callLLM(reviewAI, reviewMessages as ChatMessage[], {
             ...reviewOpts,
             temperature: 0.3,
+            signal,
         });
 
         const reviewParsed = parseJsonLoose(reviewResult.content) as { reviews?: unknown } | null;
@@ -186,7 +199,7 @@ async function reviewLoop(
         onProgress?.("regenerating", round, t("gen.regenerating", String(round), String(failedIndices.length)));
         const failedQuestions = failedIndices.map((i) => questions[i]);
         const regenMessages = buildRegenerateMessages(prompts, config.general, failedQuestions, reasons, content);
-        const regenResult = await callLLM(genAI, regenMessages as ChatMessage[], genOpts);
+        const regenResult = await callLLM(genAI, regenMessages as ChatMessage[], { ...genOpts, signal });
 
         const regenParsed = parseJsonLoose(regenResult.content) as { questions?: unknown[] } | null;
         if (!regenParsed || !Array.isArray(regenParsed.questions)) {

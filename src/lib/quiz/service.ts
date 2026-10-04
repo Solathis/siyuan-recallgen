@@ -20,7 +20,7 @@ export interface QuizService {
      * 面板打开期间修改设置需要立即生效，而 getConfig() 单独调用无法被响应式追踪。
      */
     subscribeConfig(listener: (config: RecallGenConfig) => void): () => void;
-    generate(content: string, onProgress?: GenProgressCallback): Promise<Question[]>;
+    generate(content: string, onProgress?: GenProgressCallback, signal?: AbortSignal): Promise<Question[]>;
     /** 加载日期范围内的笔记内容 */
     loadDateRangeContent(
         cfg: DateGenConfig,
@@ -32,7 +32,9 @@ export interface QuizService {
         answers: Record<string, UserAnswer>,
         onProgress: (done: number, total: number) => void,
         /** 每题的作答耗时（秒），会写入对应的判分结果 */
-        secondsByQuestion?: Record<string, number>
+        secondsByQuestion?: Record<string, number>,
+        /** 取消信号：取消后不再排队新的判分请求 */
+        signal?: AbortSignal
     ): Promise<GradingResult[]>;
     analyze(results: GradingResult[], questions: Question[]): Promise<string>;
     /** AI 对话：针对单道题目回答用户追问 */

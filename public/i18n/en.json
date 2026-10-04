@@ -535,5 +535,8 @@
     "gen.unknownReason": "Unknown reason",
     "err.http.hint": "Check the Base URL, model name and request parameters",
     "err.truncated.hint": "Output exceeded MaxTokens — raise it for this model or generate fewer questions",
-    "ai.truncated": "AI output was truncated (hit MaxTokens or max_output_tokens)"
+    "err.aborted.title": "Cancelled",
+    "ai.truncated": "AI output was truncated (hit MaxTokens or max_output_tokens)",
+    "ai.aborted": "Request cancelled",
+    "err.aborted.hint": "The operation was cancelled; you can retry at any time"
 }

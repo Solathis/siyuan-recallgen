@@ -302,10 +302,11 @@ export default class RecallGenPlugin extends Plugin {
                 this.configListeners.add(listener);
                 return () => this.configListeners.delete(listener);
             },
-            generate: (content: string, onProgress?: GenProgressCallback) =>
-                generateQuestions(this.config, content, onProgress),
+            generate: (content: string, onProgress?: GenProgressCallback, signal?: AbortSignal) =>
+                generateQuestions(this.config, content, onProgress, signal),
             loadDateRangeContent: (cfg, range, notebookId) => loadDateRangeNotes(cfg, range, notebookId),
-            grade: (qs, ans, onProgress, seconds) => gradeAll(this.config, qs, ans, onProgress, seconds),
+            grade: (qs, ans, onProgress, seconds, signal) =>
+                gradeAll(this.config, qs, ans, onProgress, seconds, signal),
             analyze: (results, questions) => this.analyze(results, questions),
             chat: (question, result, analysis, history, userMessage) =>
                 this.chat(question, result, analysis, history, userMessage),

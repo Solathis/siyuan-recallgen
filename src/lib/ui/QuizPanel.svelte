@@ -39,6 +39,7 @@
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import { describeError, type ErrorDescription } from "../ai/errors";
+    import { isAbortError } from "../ai/client";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
@@ -64,7 +65,28 @@
     let progressValue = $state<number | null>(null);
     let progressLabel = $state("");
     let duration = $state(0);
+    /**
+     * 取消控制器。
+     * 光置一个标志位只能阻止 UI 更新，在途的批次、重试与审题轮次仍会继续请求；
+     * 用 AbortSignal 才能真正把「不再发新请求」传下去。
+     */
+    let abortCtrl: AbortController | null = null;
     let cancelled = false;
+
+    /** 开始一轮新的生成/取题：先中止上一轮，再新建信号 */
+    function beginRun(): AbortSignal {
+        abortCtrl?.abort();
+        abortCtrl = new AbortController();
+        cancelled = false;
+        return abortCtrl.signal;
+    }
+
+    /** 中止当前轮次（关闭 tab、点取消时调用） */
+    function abortRun(): void {
+        cancelled = true;
+        abortCtrl?.abort();
+        abortCtrl = null;
+    }
 
     /**
      * 配置必须响应式：原实现只在组件初始化时读一次，
@@ -215,7 +237,7 @@
      */
     async function startDueReview() {
         error = null;
-        cancelled = false;
+        beginRun();
         if (!checkAiConfig()) {
             panelState = "answering";
             return;
@@ -268,7 +290,8 @@
             timingSince = Date.now();
             if (countdownEnabled) startCountdown();
         } catch (e) {
-            if (cancelled) return;
+            // 取消（无论来自关闭 tab 还是新一轮开始）都不该弹出错误
+            if (cancelled || isAbortError(e)) return;
             error = describeError(e);
             panelState = "answering";
         }
@@ -286,7 +309,7 @@
 
     /** tab 销毁前由插件调用：中止生成并强制保存进度 */
     export function beforeDestroy() {
-        cancelled = true;
+        abortRun();
         if (saveTimer) {
             clearTimeout(saveTimer);
             saveTimer = null;
@@ -326,7 +349,7 @@
 
     async function startDateGenerate() {
         error = null;
-        cancelled = false;
+        beginRun();
         if (!checkAiConfig()) {
             panelState = "answering";
             return;
@@ -345,7 +368,8 @@
             tabData.sourceTitle = title;
             await startGenerate();
         } catch (e) {
-            if (cancelled) return;
+            // 取消（无论来自关闭 tab 还是新一轮开始）都不该弹出错误
+            if (cancelled || isAbortError(e)) return;
             error = describeError(e);
             panelState = "configuring";
         }
@@ -353,7 +377,7 @@
 
     async function startGenerate() {
         error = null;
-        cancelled = false;
+        const signal = beginRun();
         if (!checkAiConfig()) {
             panelState = "answering";
             return;
@@ -362,10 +386,14 @@
         progressValue = null;
         progressLabel = t("quiz.generating");
         try {
-            const generated = await service.generate(tabData.content ?? "", (phase, round, detail) => {
-                progressLabel = detail;
-                progressValue = phase === "generating" ? null : round * 30;
-            });
+            const generated = await service.generate(
+                tabData.content ?? "",
+                (phase, round, detail) => {
+                    progressLabel = detail;
+                    progressValue = phase === "generating" ? null : round * 30;
+                },
+                signal
+            );
             if (cancelled) return;
             if (generated.length === 0) {
                 error = { title: t("err.generic.title"), hint: t("err.generic.hint"), detail: t("quiz.noQuestions") };
@@ -387,7 +415,8 @@
             panelState = "answering";
             if (countdownEnabled) startCountdown();
         } catch (e) {
-            if (cancelled) return;
+            // 取消（无论来自关闭 tab 还是新一轮开始）都不该弹出错误
+            if (cancelled || isAbortError(e)) return;
             error = describeError(e);
             panelState = "answering";
         }
@@ -503,7 +532,8 @@
                     progressValue = total ? (done / total) * 100 : null;
                     progressLabel = t("quiz.gradingProgress", String(done), String(total));
                 },
-                session.timings
+                session.timings,
+                beginRun()
             );
 
             duration = Math.round((Date.now() - session.createdAt) / 1000);
@@ -764,7 +794,7 @@
                         variant="outline"
                         size="sm"
                         onclick={() => {
-                            cancelled = true;
+                            abortRun();
                             closeTab();
                         }}
                     >

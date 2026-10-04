@@ -31,6 +31,8 @@ export function describeError(error: unknown): ErrorDescription {
                 return { title: t("err.network.title"), hint: t("err.network.hint"), detail };
             case "truncated":
                 return { title: t("err.truncated.title"), hint: t("err.truncated.hint"), detail };
+            case "aborted":
+                return { title: t("err.aborted.title"), hint: t("err.aborted.hint"), detail };
             case "http":
                 return describeHttp(error.status, detail);
         }

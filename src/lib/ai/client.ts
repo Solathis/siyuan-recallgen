@@ -7,7 +7,7 @@ import type { AIConfig, AIProvider, AIProtocol } from "@/types/config";
  * 用类别而非消息文本判断是否可重试——原实现匹配英文 "timeout"，
  * 而超时消息是中文「请求超时」，导致超时永远不会重试。
  */
-export type AIErrorKind = "http" | "timeout" | "network" | "parse" | "config" | "truncated";
+export type AIErrorKind = "http" | "timeout" | "network" | "parse" | "config" | "truncated" | "aborted";
 
 /** AI 调用错误，附带类别与 HTTP 状态便于上层区分 */
 export class AIError extends Error {
@@ -36,6 +36,12 @@ export interface LLMCallOptions {
     toolChoice?: unknown;
     /** 结构化输出约束（当 tools 未使用时） */
     responseFormat?: unknown;
+    /**
+     * 取消信号。
+     * 说明：内核 forwardProxy 一旦发出就无法真正撤回，这里的取消是「停止等待」——
+     * 不再重试、不再发起后续批次，从而避免用户点了取消却仍在持续消耗 token。
+     */
+    signal?: AbortSignal;
 }
 
 export interface LLMResult {
@@ -118,8 +124,33 @@ function safeParse(text: string): unknown {
     }
 }
 
-function sleep(ms: number): Promise<void> {
-    return new Promise((r) => setTimeout(r, ms));
+/** 已取消：调用方通常直接忽略，不当作错误展示 */
+export function isAbortError(error: unknown): boolean {
+    return error instanceof AIError && error.kind === "aborted";
+}
+
+function abortError(): AIError {
+    return new AIError(t("ai.aborted"), undefined, "aborted");
+}
+
+/** 可被取消的等待：退避期间点了取消应当立刻结束，而不是睡满 6 秒再发下一次 */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+    if (!signal) return new Promise((r) => setTimeout(r, ms));
+    return new Promise((resolve, reject) => {
+        if (signal.aborted) {
+            reject(abortError());
+            return;
+        }
+        const timer = setTimeout(() => {
+            signal.removeEventListener("abort", onAbort);
+            resolve();
+        }, ms);
+        const onAbort = () => {
+            clearTimeout(timer);
+            reject(abortError());
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+    });
 }
 
 /**
@@ -128,6 +159,7 @@ function sleep(ms: number): Promise<void> {
  */
 export function isRetryable(err: unknown): boolean {
     if (!(err instanceof AIError)) return false;
+    if (err.kind === "aborted") return false;
     if (err.status === 429) return true;
     if (typeof err.status === "number" && err.status >= 500) return true;
     return err.kind === "timeout" || err.kind === "network";
@@ -138,8 +170,11 @@ async function forward(
     url: string,
     body: Record<string, unknown>,
     headers: Record<string, string>[],
-    timeout: number
+    timeout: number,
+    signal?: AbortSignal
 ): Promise<ForwardResponse> {
+    if (signal?.aborted) throw abortError();
+
     const req: ForwardRequest = {
         url,
         method: "POST",
@@ -165,12 +200,21 @@ async function forward(
         );
     });
 
+    // 取消信号：内核请求无法真正撤回，但可以不再等它——否则取消后仍会串行发完剩余批次
+    let onAbort: (() => void) | undefined;
+    const aborted = new Promise<never>((_, reject) => {
+        if (!signal) return;
+        onAbort = () => reject(abortError());
+        signal.addEventListener("abort", onAbort, { once: true });
+    });
+
     let resp: Awaited<typeof fetchPromise>;
     try {
-        resp = await Promise.race([fetchPromise, watchdog]);
+        resp = await Promise.race([fetchPromise, watchdog, aborted]);
     } finally {
-        // 必须清理看门狗：否则请求成功后定时器仍会 reject，产生未捕获拒绝并拖住事件循环
+        // 必须清理看门狗与中止监听：否则请求成功后定时器仍会 reject，产生未捕获拒绝并拖住事件循环
         clearTimeout(timer);
+        if (onAbort) signal?.removeEventListener("abort", onAbort);
     }
 
     if (resp.code !== 0) {
@@ -276,7 +320,7 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
     } else if (opts.responseFormat) {
         body.response_format = opts.responseFormat;
     }
-    const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
+    const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout, opts.signal);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
     if (parsed === null) throw new AIError(t("ai.responseNotJson"), undefined, "parse");
@@ -325,7 +369,7 @@ async function callResponses(rc: ResolvedAIConfig, messages: ChatMessage[], opts
     };
     const fmt = toResponsesFormat(opts.responseFormat);
     if (fmt) body.text = { format: fmt };
-    const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
+    const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout, opts.signal);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
     if (parsed === null) throw new AIError(t("ai.responseNotJson"), undefined, "parse");
@@ -365,7 +409,7 @@ async function callMessages(rc: ResolvedAIConfig, messages: ChatMessage[], opts:
     };
     if (system) body.system = system;
     body.temperature = opts.temperature ?? rc.temperature;
-    const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout);
+    const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout, opts.signal);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
     if (parsed === null) throw new AIError(t("ai.responseNotJson"), undefined, "parse");
@@ -404,14 +448,18 @@ export async function callLLM(
     messages: ChatMessage[],
     opts: LLMCallOptions = {}
 ): Promise<LLMResult> {
+    const signal = opts.signal;
     let lastError: unknown;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        if (signal?.aborted) throw abortError();
         try {
             return await callOnce(rc, messages, opts);
         } catch (e) {
             lastError = e;
+            // 取消不是「可重试的失败」：直接结束，否则取消后还会再发两次
+            if (isAbortError(e) || signal?.aborted) throw abortError();
             if (attempt < MAX_RETRIES && isRetryable(e)) {
-                await sleep(RETRY_BASE_MS * 2 ** attempt);
+                await sleep(RETRY_BASE_MS * 2 ** attempt, signal);
                 continue;
             }
             throw e;

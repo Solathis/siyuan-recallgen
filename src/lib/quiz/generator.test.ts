@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { AIError } from "@/lib/ai/client";
+import { __resetFetchSyncPost, __setFetchSyncPost } from "@/test/siyuan-stub";
+import { getDefaultConfig } from "@/types/config";
 import type { Question, QuestionType } from "@/types/quiz";
-import { coerceQuestion, collectFailedReviews, toTags, validateQuestions } from "./generator";
+import { coerceQuestion, collectFailedReviews, generateQuestions, toTags, validateQuestions } from "./generator";
 
 const ALL: QuestionType[] = ["single_choice", "multiple_choice", "fill_blank", "true_false", "subjective", "coding"];
 
@@ -385,5 +387,48 @@ describe("collectFailedReviews", () => {
     it("空数组与空题库都安全", () => {
         expect(collectFailedReviews([], 0)).toEqual({ indices: [], reasons: [] });
         expect(collectFailedReviews([{ index: 0, passed: false }], 0)).toEqual({ indices: [], reasons: [] });
+    });
+});
+
+describe("generateQuestions 的取消", () => {
+    it("调用前已取消则不发任何请求", async () => {
+        let calls = 0;
+        __setFetchSyncPost(() => {
+            calls++;
+            return {
+                code: 0,
+                msg: "",
+                data: { body: "{}", status: 200, contentType: "", headers: null, elapsed: 1, url: "" },
+            };
+        });
+        const ctrl = new AbortController();
+        ctrl.abort();
+        await expect(generateQuestions(getDefaultConfig(), "笔记内容", undefined, ctrl.signal)).rejects.toMatchObject({
+            kind: "aborted",
+        });
+        expect(calls).toBe(0);
+        __resetFetchSyncPost();
+    });
+
+    it("取消后不再发起后续批次（题量需要分批时）", async () => {
+        const config = getDefaultConfig();
+        // 30 题会拆成多批
+        config.general.difficulty = { total: 30, easy: 10, medium: 10, hard: 10 };
+        const ctrl = new AbortController();
+        let calls = 0;
+        __setFetchSyncPost(() => {
+            calls++;
+            ctrl.abort(); // 第一批在途时用户点了取消
+            return {
+                code: 0,
+                msg: "",
+                data: { body: "{}", status: 200, contentType: "", headers: null, elapsed: 1, url: "" },
+            };
+        });
+        await expect(generateQuestions(config, "笔记内容", undefined, ctrl.signal)).rejects.toMatchObject({
+            kind: "aborted",
+        });
+        expect(calls).toBe(1);
+        __resetFetchSyncPost();
     });
 });

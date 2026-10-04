@@ -535,5 +535,8 @@
     "gen.unknownReason": "未知原因",
     "err.http.hint": "请检查 Base URL、模型名与请求参数",
     "err.truncated.hint": "输出长度超过 MaxTokens，请调高该模型的 MaxTokens 或减少题目数量",
-    "ai.truncated": "AI 输出被截断（达到 MaxTokens 或 max_output_tokens）"
+    "err.aborted.title": "已取消",
+    "ai.truncated": "AI 输出被截断（达到 MaxTokens 或 max_output_tokens）",
+    "ai.aborted": "请求已取消",
+    "err.aborted.hint": "本次操作已中止，可随时重试"
 }

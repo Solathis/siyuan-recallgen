@@ -24,7 +24,9 @@ export async function gradeAll(
     answers: Record<string, UserAnswer>,
     onProgress?: (done: number, total: number) => void,
     /** 每题的作答耗时（秒），可选；缺失时该题不填 seconds */
-    secondsByQuestion?: Record<string, number>
+    secondsByQuestion?: Record<string, number>,
+    /** 取消信号：取消后不再排队新的判分请求 */
+    signal?: AbortSignal
 ): Promise<GradingResult[]> {
     const policy = config.general.multipleChoicePolicy ?? "partial";
     const results: GradingResult[] = [];
@@ -44,9 +46,14 @@ export async function gradeAll(
             results.push(withSeconds(gradeUnanswered(q, ua), secondsByQuestion));
             done++;
             onProgress?.(done, total);
+        } else if (signal?.aborted) {
+            // 已取消：不再排队判分，直接本地记 0，避免取消后继续消耗额度
+            results.push(withSeconds(gradeUnanswered(q, ua), secondsByQuestion));
+            done++;
+            onProgress?.(done, total);
         } else {
             pool.add(async () => {
-                const r = await gradeAI(config, q, ua).catch((e): GradingResult => ({
+                const r = await gradeAI(config, q, ua, signal).catch((e): GradingResult => ({
                     questionId: q.id,
                     type: q.type,
                     method: "ai",
@@ -184,7 +191,12 @@ export function blankMatches(accepted: string[], value: string | undefined): boo
 }
 
 /** 主观/编程题 AI 判分 */
-async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | undefined): Promise<GradingResult> {
+async function gradeAI(
+    config: RecallGenConfig,
+    q: Question,
+    ua: UserAnswer | undefined,
+    signal?: AbortSignal
+): Promise<GradingResult> {
     const userText = ua?.type === "subjective" || ua?.type === "coding" ? ua.value : "";
     const prompts = activePrompts(config.prompts, config.general.language);
     const messages = buildGradeSubjectiveMessages(prompts, q, userText, config.general.language);
@@ -194,6 +206,7 @@ async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | un
         ...callOpts,
         temperature: 0,
         maxTokens: 512,
+        signal,
     });
     const parsed = parseJsonLoose(result.content) as { score?: unknown; comment?: unknown } | null;
     if (!parsed || typeof parsed !== "object") {

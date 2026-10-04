@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetFetchSyncPost, __setFetchSyncPost, type IWebSocketData } from "@/test/siyuan-stub";
-import { AIError, callLLM, isRetryable, joinUrl, resolveAI, type ResolvedAIConfig } from "./client";
+import { AIError, callLLM, isAbortError, isRetryable, joinUrl, resolveAI, type ResolvedAIConfig } from "./client";
 import { DEFAULT_AI_CONFIG, getDefaultConfig } from "@/types/config";
 
 const rc = (over: Partial<ResolvedAIConfig> = {}): ResolvedAIConfig => ({
@@ -357,5 +357,71 @@ describe("responses 协议正文提取", () => {
         );
         const result = await callLLM(rc({ protocol: "responses" }), messages, {});
         expect(result.content).toBe('{"questions":[]}');
+    });
+});
+
+describe("取消（AbortSignal）", () => {
+    const messages = [{ role: "user" as const, content: "hi" }];
+
+    it("调用前已取消则直接抛 aborted，不发请求", async () => {
+        let called = 0;
+        recordingHandler(() => {
+            called++;
+            return proxyOk({ choices: [{ message: { content: "ok" } }] });
+        });
+        const ctrl = new AbortController();
+        ctrl.abort();
+        await expect(callLLM(rc(), messages, { signal: ctrl.signal })).rejects.toMatchObject({ kind: "aborted" });
+        expect(called).toBe(0);
+    });
+
+    it("等待响应期间取消会立刻结束，而不是等到超时", async () => {
+        let resolveResponse: (() => void) | null = null;
+        __setFetchSyncPost(
+            () =>
+                new Promise<IWebSocketData>((resolve) => {
+                    resolveResponse = () => resolve(proxyOk({ choices: [{ message: { content: "ok" } }] }));
+                })
+        );
+        const ctrl = new AbortController();
+        const pending = callLLM(rc({ timeout: 60_000 }), messages, { signal: ctrl.signal });
+        const assertion = expect(pending).rejects.toMatchObject({ kind: "aborted" });
+        ctrl.abort();
+        await assertion;
+        // 内核请求仍在途，这里只是不再等待它
+        resolveResponse?.();
+    });
+
+    it("退避等待期间取消也会立刻结束（不会睡满 3 秒再发下一次）", async () => {
+        let calls = 0;
+        recordingHandler(() => {
+            calls++;
+            // 429 会触发重试
+            return {
+                code: 0,
+                msg: "",
+                data: { body: "rate limited", status: 429, contentType: "", headers: null, elapsed: 1, url: "" },
+            };
+        });
+        const ctrl = new AbortController();
+        const pending = callLLM(rc(), messages, { signal: ctrl.signal });
+        const assertion = expect(pending).rejects.toMatchObject({ kind: "aborted" });
+        await vi.advanceTimersByTimeAsync(10);
+        expect(calls).toBe(1);
+        ctrl.abort();
+        await assertion;
+        // 取消后没有再发第二次
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(calls).toBe(1);
+    });
+
+    it("取消不会被当成可重试错误", () => {
+        expect(isRetryable(new AIError("x", undefined, "aborted"))).toBe(false);
+    });
+
+    it("isAbortError 只认取消类错误", () => {
+        expect(isAbortError(new AIError("x", undefined, "aborted"))).toBe(true);
+        expect(isAbortError(new AIError("x", undefined, "timeout"))).toBe(false);
+        expect(isAbortError(new Error("x"))).toBe(false);
     });
 });
