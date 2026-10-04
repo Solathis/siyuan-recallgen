@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { __resetFetchSyncPost, __setFetchSyncPost } from "@/test/siyuan-stub";
 import { initI18n } from "@/lib/i18n";
 import type { Question } from "@/types/quiz";
-import { buildQuestionsMarkdown, titleOf } from "./docWriter";
+import { appendAnalysis, buildQuestionsMarkdown, titleOf } from "./docWriter";
 
 beforeEach(() => {
     initI18n({
@@ -220,5 +221,32 @@ describe("文档写入的注入与脏数据防护", () => {
     it("Windows 保留设备名被加前缀规避", () => {
         expect(titleOf("nul")).toContain("_nul");
         expect(titleOf("CON")).toContain("_CON");
+    });
+});
+
+describe("appendAnalysis 的空内容处理", () => {
+    it("分析为空或只有空白时完全不写（回归：会留下空的分析标题）", async () => {
+        const calls: unknown[] = [];
+        __setFetchSyncPost((url, data) => {
+            calls.push({ url, data });
+            return { code: 0, msg: "", data: [{ id: "b1", doOperations: [] }] };
+        });
+        await appendAnalysis("doc-1", "");
+        await appendAnalysis("doc-1", "   \n\t ");
+        expect(calls).toHaveLength(0);
+        __resetFetchSyncPost();
+    });
+
+    it("有内容时仍然追加", async () => {
+        const calls: Array<{ url: string; data: unknown }> = [];
+        __setFetchSyncPost((url, data) => {
+            calls.push({ url, data });
+            return { code: 0, msg: "", data: [{ id: "b1", doOperations: [] }] };
+        });
+        await appendAnalysis("doc-1", "薄弱点在导数应用");
+        expect(calls).toHaveLength(1);
+        expect(calls[0].url).toContain("appendBlock");
+        expect(JSON.stringify(calls[0].data)).toContain("薄弱点在导数应用");
+        __resetFetchSyncPost();
     });
 });

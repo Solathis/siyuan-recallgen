@@ -168,8 +168,12 @@ export async function saveAsNewDoc(
     return createDocWithMd(sourceDocId as NotebookId, `/${title}`, md);
 }
 
-/** 将薄弱点分析追加到文档末尾 */
+/**
+ * 将薄弱点分析追加到文档末尾。
+ * 分析为空（或只有空白）时不写：否则会在用户笔记里留下一个空的分析标题。
+ */
 export async function appendAnalysis(docId: string, analysis: string): Promise<void> {
+    if (!analysis.trim()) return;
     const md = `\n---\n\n${t("doc.analysisTitle")}\n\n${analysis}\n`;
     await appendBlock("markdown", md, docId);
 }

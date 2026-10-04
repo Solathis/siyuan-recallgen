@@ -61,6 +61,12 @@
     let session = $state<QuizSession | null>(null);
     let results = $state<GradingResult[] | null>(null);
     let analysis = $state<string | null>(null);
+    /**
+     * 分析失败的原因。
+     * 失败时不把错误文案塞进 analysis：那份文案要展示给用户，
+     * 但不该被写进笔记，也不该当作「薄弱点分析」喂给答疑模型。
+     */
+    let analysisError = $state<string | null>(null);
     let error = $state<ErrorDescription | null>(null);
     let progressValue = $state<number | null>(null);
     let progressLabel = $state("");
@@ -594,9 +600,11 @@
             progressValue = null;
             try {
                 analysis = await service.analyze(results, session.questions);
+                analysisError = null;
                 await service.updateScoreAnalysis(scoreId, analysis);
             } catch (e) {
-                analysis = t("quiz.analysisFailed", (e as Error).message);
+                analysis = null;
+                analysisError = (e as Error).message;
             }
             panelState = "result";
         } catch (e) {
@@ -640,6 +648,7 @@
         };
         results = null;
         analysis = null;
+        analysisError = null;
         duration = 0;
         error = null;
         panelState = "answering";
@@ -977,6 +986,7 @@
                     {results}
                     questions={session.questions}
                     {analysis}
+                    {analysisError}
                     {duration}
                     onsave={() => void saveToDoc(false)}
                     onsavewrong={() => void saveToDoc(true)}

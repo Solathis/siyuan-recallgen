@@ -17,6 +17,7 @@
         results,
         questions,
         analysis = null,
+        analysisError = null,
         duration = 0,
         onsave = () => {},
         onsavewrong = () => {},
@@ -28,6 +29,8 @@
         results: GradingResult[];
         questions: Question[];
         analysis?: string | null;
+        /** 分析失败的原因：展示给用户，但不作为分析内容参与答疑或写入文档 */
+        analysisError?: string | null;
         duration?: number;
         onsave?: () => void;
         onsavewrong?: () => void;
@@ -344,6 +347,11 @@
                 <Card.Root>
                     <Card.Content class="rg-markdown pt-4 text-sm">{@html renderMarkdownLatex(analysis)}</Card.Content>
                 </Card.Root>
+            {:else if analysisError}
+                <!-- 区分「分析失败」与「没有分析」：前者要给出原因，用户才知道可以重试 -->
+                <div class="text-destructive px-2 py-8 text-center text-sm">
+                    {t("quiz.analysisFailed", analysisError)}
+                </div>
             {:else}
                 <div class="text-muted-foreground py-8 text-center text-sm">{t("result.noAnalysis")}</div>
             {/if}
