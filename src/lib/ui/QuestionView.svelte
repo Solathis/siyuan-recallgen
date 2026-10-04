@@ -86,23 +86,55 @@
      * 等于无法清空编辑器。
      */
     const codingValue = $derived(answer?.type === "coding" ? answer.value : undefined);
+    /** 编辑器的占位容器：始终渲染，编辑器按需挂到它里面 */
     let editorEl = $state<HTMLDivElement | null>(null);
+    /** 占位容器是否已接近视口（进入前不创建 CodeMirror） */
+    let editorNear = $state(false);
     let editor: CodeEditor | null = null;
     let editorReady = $state(false);
 
     /**
+     * 接近视口时才创建编辑器。
+     *
+     * 所有题目渲染在同一页里，一次最多可有 50 道编程题；每道都建一个
+     * CodeMirror（含语法包、按键映射与各类观察器）会让生成/恢复明显变卡。
+     * 这里用 IntersectionObserver 只激活可见附近的那几个。
+     */
+    $effect(() => {
+        const el = editorEl;
+        if (!el || question.type !== "coding") return;
+        if (typeof IntersectionObserver === "undefined") {
+            editorNear = true;
+            return;
+        }
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting)) {
+                    editorNear = true;
+                    observer.disconnect();
+                }
+            },
+            // 提前 400px 预热，滚动到该题时编辑器已就绪
+            { rootMargin: "400px 0px" }
+        );
+        observer.observe(el);
+        return () => observer.disconnect();
+    });
+
+    /**
      * 创建编辑器。
      *
-     * 依赖必须只包含「题目身份 + 语言」：作答内容每次按键都会变，
+     * 依赖必须只包含「题目身份 + 语言 + 是否临近视口」：作答内容每次按键都会变，
      * 若在这里读取它建立依赖，编辑器会在每个字符输入时被销毁重建，
      * 焦点、光标与撤销历史全部丢失，实际无法连续输入。
      * 初始内容用 untrack 读取，既拿到当前值又不建立依赖。
      */
     $effect(() => {
         const el = editorEl;
-        // 通过局部变量收窄类型，同时把依赖固定为「这道题 + 这个语言」
+        const near = editorNear;
+        // 通过局部变量收窄类型，同时把依赖固定为「这道题 + 这个语言 + 是否临近」
         const coding = question.type === "coding" ? question : null;
-        if (!el || !coding) return;
+        if (!el || !coding || !near) return;
 
         const initial = untrack(() => codingValue ?? coding.starter_code ?? "");
         const instance = new CodeEditor(el, coding.language, initial, (doc) => {
@@ -286,7 +318,7 @@
                     </Button>
                 {/if}
             </div>
-            <div class="border-border overflow-hidden rounded-md border" bind:this={editorEl}></div>
+            <div class="border-border min-h-[80px] overflow-hidden rounded-md border" bind:this={editorEl}></div>
 
             {#if runCases}
                 <div class="bg-muted/50 flex flex-col gap-1.5 rounded-md p-2 text-xs">
