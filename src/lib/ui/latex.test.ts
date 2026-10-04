@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { renderMarkdownLatex } from "./latex";
+import { clearMarkdownCache, markdownCacheSize, renderMarkdownLatex } from "./latex";
 
 const PLACEHOLDER_MARK = "\uE000";
 
@@ -122,5 +122,47 @@ describe("renderMarkdownLatex - 边界", () => {
 
     it("纯空白输入不抛错", () => {
         expect(() => renderMarkdownLatex("   ")).not.toThrow();
+    });
+});
+
+describe("渲染结果记忆化", () => {
+    it("同一段文本只渲染一次，重复调用命中缓存", () => {
+        clearMarkdownCache();
+        const first = renderMarkdownLatex("公式 $a^2+b^2=c^2$ 与 **加粗**");
+        const second = renderMarkdownLatex("公式 $a^2+b^2=c^2$ 与 **加粗**");
+        expect(second).toBe(first);
+        expect(markdownCacheSize()).toBe(1);
+    });
+
+    it("不同文本各占一条缓存", () => {
+        clearMarkdownCache();
+        renderMarkdownLatex("A");
+        renderMarkdownLatex("B");
+        expect(markdownCacheSize()).toBe(2);
+    });
+
+    it("空输入不占缓存", () => {
+        clearMarkdownCache();
+        renderMarkdownLatex("");
+        expect(markdownCacheSize()).toBe(0);
+    });
+
+    it("缓存有上限，不会随题量无限增长", () => {
+        clearMarkdownCache();
+        for (let i = 0; i < 450; i++) renderMarkdownLatex(`题目 ${i}`);
+        expect(markdownCacheSize()).toBeLessThanOrEqual(400);
+        // 最近渲染的仍在缓存里
+        const last = renderMarkdownLatex("最近的一条");
+        expect(markdownCacheSize()).toBeLessThanOrEqual(400);
+        expect(last).toBeTruthy();
+    });
+
+    it("命中缓存与首次渲染结果一致（占位符序号只影响中间态）", () => {
+        clearMarkdownCache();
+        const text = "先 $x$ 后 $y$";
+        const fresh = renderMarkdownLatex(text);
+        clearMarkdownCache();
+        const afterClear = renderMarkdownLatex(text);
+        expect(afterClear).toBe(fresh);
     });
 });

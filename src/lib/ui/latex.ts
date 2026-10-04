@@ -108,11 +108,18 @@ function extractMath(text: string): ExtractedMath {
 }
 
 /**
- * 渲染 Markdown + LaTeX 为可安全交给 `{@html}` 的 HTML 字符串。
- * 空输入返回空串。
+ * 渲染结果缓存。
+ *
+ * marked + DOMPurify + KaTeX 都不便宜，而同一段文本会反复渲染：
+ * 切到别的题再切回来、答题面板因作答变化重渲染、结果页来回翻题……
+ * 每道题的题干与选项在一次会话里内容是稳定的，正适合记忆化。
+ * 输出只取决于输入（占位符序号只是内部中间态），因此按原文缓存是安全的。
  */
-export function renderMarkdownLatex(text: string): string {
-    if (!text) return "";
+const CACHE_LIMIT = 400;
+const cache = new Map<string, string>();
+
+/** 空输入直接返回空串，不占缓存 */
+function renderUncached(text: string): string {
     const { processed, rendered, nonce } = extractMath(text);
     const rawHtml = marked.parse(processed, { breaks: true, gfm: true, async: false }) as string;
     let html = DOMPurify.sanitize(rawHtml, PURIFY_CONFIG);
@@ -121,4 +128,33 @@ export function renderMarkdownLatex(text: string): string {
         html = html.split(`${PH_START}${nonce}-${index}${PH_END}`).join(katexHtml);
     });
     return html;
+}
+
+/**
+ * 渲染 Markdown + LaTeX 为可安全交给 `{@html}` 的 HTML 字符串。
+ * 空输入返回空串。
+ */
+export function renderMarkdownLatex(text: string): string {
+    if (!text) return "";
+    const hit = cache.get(text);
+    if (hit !== undefined) return hit;
+
+    const html = renderUncached(text);
+    // Map 保持插入顺序：超上限时淘汰最早的一条
+    if (cache.size >= CACHE_LIMIT) {
+        const oldest = cache.keys().next().value;
+        if (oldest !== undefined) cache.delete(oldest);
+    }
+    cache.set(text, html);
+    return html;
+}
+
+/** 清空渲染缓存（仅测试用） */
+export function clearMarkdownCache(): void {
+    cache.clear();
+}
+
+/** 当前缓存条目数（仅测试与诊断用） */
+export function markdownCacheSize(): number {
+    return cache.size;
 }

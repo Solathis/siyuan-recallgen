@@ -72,6 +72,20 @@
 
     /* ── 主观题 ──────────────────────────────────────────────────── */
 
+    /**
+     * 题干与选项的渲染结果。
+     *
+     * 必须用派生值：直接写在模板里的话，主观题每敲一个字符、编程题每次输入
+     * 都会重跑一次 marked + DOMPurify + KaTeX（5 个选项就是 6 次渲染）——
+     * 这些内容只取决于 question，与作答无关。
+     */
+    const questionHtml = $derived(renderMarkdownLatex(question.question));
+    const optionHtml = $derived(
+        "options" in question && Array.isArray(question.options)
+            ? question.options.map((option) => renderMarkdownLatex(option))
+            : []
+    );
+
     const subjectiveValue = $derived(answer?.type === "subjective" ? answer.value : "");
     /** 必须是派生值：写成普通常量只会渲染一次，输入后预览不会更新 */
     const subjectivePreview = $derived(renderMarkdownLatex(subjectiveValue));
@@ -211,11 +225,11 @@
 </script>
 
 <div class="bg-card text-card-foreground rounded-lg border p-4">
-    <p class="rg-markdown mb-3 text-reading leading-relaxed">{@html renderMarkdownLatex(question.question)}</p>
+    <p class="rg-markdown mb-3 text-reading leading-relaxed">{@html questionHtml}</p>
 
     {#if question.type === "single_choice"}
         <div class="flex flex-col gap-1.5">
-            {#each question.options as option, i (i)}
+            {#each optionHtml as optionMarkup, i (i)}
                 <label
                     class={cn(
                         "hover:bg-accent flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
@@ -229,13 +243,13 @@
                         checked={singleValue === i}
                         onchange={() => setSingle(i)}
                     />
-                    <span class="rg-markdown min-w-0">{@html renderMarkdownLatex(option)}</span>
+                    <span class="rg-markdown min-w-0">{@html optionMarkup}</span>
                 </label>
             {/each}
         </div>
     {:else if question.type === "multiple_choice"}
         <div class="flex flex-col gap-1.5">
-            {#each question.options as option, i (i)}
+            {#each optionHtml as optionMarkup, i (i)}
                 <label
                     class={cn(
                         "hover:bg-accent flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
@@ -248,7 +262,7 @@
                         checked={multiValue.includes(i)}
                         onchange={() => toggleMulti(i)}
                     />
-                    <span class="rg-markdown min-w-0">{@html renderMarkdownLatex(option)}</span>
+                    <span class="rg-markdown min-w-0">{@html optionMarkup}</span>
                 </label>
             {/each}
         </div>
