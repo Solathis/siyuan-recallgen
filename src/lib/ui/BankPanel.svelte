@@ -364,6 +364,8 @@
                                 <AlertDialog.Trigger>
                                     {#snippet child({ props })}
                                         <Button {...props} variant="ghost" size="sm" disabled={deleting === item.id}>
+                                            aria-label={t("common.delete")}
+                                            title={t("common.delete")}
                                             ✕
                                         </Button>
                                     {/snippet}

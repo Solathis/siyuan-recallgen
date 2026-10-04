@@ -4,6 +4,7 @@
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import { t } from "../i18n";
+    import { downloadText, exportStamp } from "./download";
     import { buildBankBackup, parseBankBackup } from "../quiz/bank-backup";
     import { buildConfigExport, mergeImportedConfig, type ImportResult } from "../quiz/config-io";
     import { buildScoreBackup, parseScoreBackup, planBackupImport } from "../quiz/export";
@@ -70,15 +71,11 @@
         backupBusy = true;
         try {
             const { entries, details } = await onExportScores();
-            const content = buildScoreBackup(entries, details);
-            const stamp = new Date().toISOString().slice(0, 10);
-            const blob = new Blob([content], { type: "application/json;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `recallgen-backup-${stamp}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            downloadText(
+                `recallgen-backup-${exportStamp()}.json`,
+                buildScoreBackup(entries, details),
+                "application/json"
+            );
             showMessage(t("settings.data.backupExported", String(entries.length)), 4000);
         } catch (e) {
             showMessage(t("settings.data.backupExportFailed", (e as Error).message), 7000, "error");
@@ -119,14 +116,7 @@
                 showMessage(t("settings.data.bankBackupEmpty"), 4000);
                 return;
             }
-            const stamp = new Date().toISOString().slice(0, 10);
-            const blob = new Blob([buildBankBackup(items)], { type: "application/json;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `recallgen-bank-${stamp}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            downloadText(`recallgen-bank-${exportStamp()}.json`, buildBankBackup(items), "application/json");
             showMessage(t("settings.data.bankBackupExported", String(items.length)), 4000);
         } catch (e) {
             showMessage(t("settings.data.bankBackupExportFailed", (e as Error).message), 7000, "error");
@@ -163,15 +153,11 @@
     function exportConfig() {
         if (!config) return;
         try {
-            const content = buildConfigExport(config, includeSecrets);
-            const stamp = new Date().toISOString().slice(0, 10);
-            const blob = new Blob([content], { type: "application/json;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `recallgen-config-${stamp}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            downloadText(
+                `recallgen-config-${exportStamp()}.json`,
+                buildConfigExport(config, includeSecrets),
+                "application/json"
+            );
             showMessage(t("settings.data.configExported"), 4000);
         } catch (e) {
             showMessage(t("settings.data.configExportFailed", (e as Error).message), 7000, "error");

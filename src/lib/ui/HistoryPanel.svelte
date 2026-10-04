@@ -14,6 +14,7 @@
     import * as Tabs from "@/lib/components/ui/tabs";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
+    import { downloadText, exportStamp } from "./download";
     import { EXPORT_EXTENSION, EXPORT_MIME, buildExport, type ExportFormat } from "../quiz/export";
     import { PAGE_SIZE, limitGroups, nextLimit } from "../quiz/paging";
     import { PASS_SCORE, scorePercent } from "../quiz/stats";
@@ -158,15 +159,7 @@
     function exportAs(format: ExportFormat) {
         try {
             const content = buildExport(filtered, format, t("history.title"));
-            const stamp = new Date().toISOString().slice(0, 10);
-            const blob = new Blob([content], { type: `${EXPORT_MIME[format]};charset=utf-8` });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `recallgen-scores-${stamp}.${EXPORT_EXTENSION[format]}`;
-            a.click();
-            // 立即释放，避免长时间占用内存
-            URL.revokeObjectURL(url);
+            downloadText(`recallgen-scores-${exportStamp()}.${EXPORT_EXTENSION[format]}`, content, EXPORT_MIME[format]);
             showMessage(t("history.exported", String(filtered.length)), 4000);
         } catch (e) {
             showMessage(t("history.exportFailed", (e as Error).message), 7000, "error");
@@ -319,6 +312,8 @@
                                                             size="sm"
                                                             disabled={deleting === r.id}
                                                         >
+                                                            aria-label={t("common.delete")}
+                                                            title={t("common.delete")}
                                                             ✕
                                                         </Button>
                                                     {/snippet}
@@ -438,6 +433,8 @@
                                                             size="sm"
                                                             disabled={deleting === r.id}
                                                         >
+                                                            aria-label={t("common.delete")}
+                                                            title={t("common.delete")}
                                                             ✕
                                                         </Button>
                                                     {/snippet}
