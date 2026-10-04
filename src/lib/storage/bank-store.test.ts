@@ -506,3 +506,101 @@ describe("题库索引对账（写入中断后的恢复）", () => {
         expect(await new BankStore(plugin).reconcile()).toBe(0);
     });
 });
+
+describe("list() 的缓存与失效", () => {
+    it("连续读取只加载一次分片", async () => {
+        const loads: string[] = [];
+        const disk: Record<string, unknown> = {};
+        const plugin: StoragePlugin = {
+            loadData: async (name) => {
+                loads.push(name);
+                return name in disk ? disk[name] : null;
+            },
+            saveData: async (name, content) => {
+                disk[name] = content;
+            },
+            removeData: async (name) => {
+                delete disk[name];
+            },
+        };
+        const store = new BankStore(plugin);
+        await store.upsert(item("甲"));
+        const afterWrite = loads.length;
+
+        await store.list();
+        await store.list();
+        const shardLoads = loads.filter((n) => n.startsWith("recallgen-bank-2"));
+        // 第二次 list 命中缓存，不再读分片
+        expect(loads.length - afterWrite).toBeLessThanOrEqual(shardLoads.length + 1);
+        expect(await store.list()).toHaveLength(1);
+    });
+
+    it("写入后缓存失效，能读到新条目", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        await store.upsert(item("甲"));
+        expect(await store.list()).toHaveLength(1);
+        await store.upsert(item("乙"));
+        const list = await store.list();
+        expect(list).toHaveLength(2);
+        expect(list.map((i) => i.question.question)).toEqual(expect.arrayContaining(["甲", "乙"]));
+    });
+
+    it("删除与清空后缓存同样失效", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        const a = item("甲");
+        await store.upsertMany([a, item("乙")]);
+        await store.list();
+        await store.remove(a.id);
+        expect(await store.list()).toHaveLength(1);
+        await store.clear();
+        expect(await store.list()).toHaveLength(0);
+    });
+
+    it("返回的是浅拷贝，调用方改动不会污染缓存", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        await store.upsert(item("甲"));
+        const first = await store.list();
+        first.pop();
+        expect(await store.list()).toHaveLength(1);
+    });
+
+    it("裁剪掉条目后缓存失效", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        // 已掌握（正确率满分 + 稳定性 60 天）且 400 天未考，才会被裁剪
+        const stale = {
+            ...item("陈旧的"),
+            updatedAt: NOW - 400 * DAY,
+            timesSeen: 10,
+            timesPassed: 10,
+            card: { ...item("陈旧的").card, stability: 60 },
+        };
+        await store.upsertMany([stale, item("新的")]);
+        expect(await store.list()).toHaveLength(2);
+        expect(await store.prune(NOW)).toBe(1);
+        expect(await store.list()).toHaveLength(1);
+    });
+
+    it("对账修复后缓存失效", async () => {
+        const { plugin, disk } = memoryPlugin();
+        const writer = new BankStore(plugin);
+        await writer.upsert(item("已写进分片"));
+
+        // 手工把索引里的 id 清掉，模拟「分片写完、索引 id 更新失败」
+        disk["recallgen-bank-index.json"] = { version: 1, months: { [monthKey(NOW)]: [] } };
+
+        const store = new BankStore(plugin);
+        // list() 直接读分片，本来就看得见；受影响的是按索引查的接口
+        expect(await store.list()).toHaveLength(1);
+        expect(await store.count()).toBe(0);
+        expect(await store.get(item("已写进分片").id)).toBeNull();
+
+        expect(await store.reconcile()).toBe(1);
+        expect(await store.count()).toBe(1);
+        expect(await store.get(item("已写进分片").id)).not.toBeNull();
+        expect(await store.list()).toHaveLength(1); // 对账后缓存也必须失效
+    });
+});

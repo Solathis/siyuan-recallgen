@@ -94,6 +94,8 @@ class BankShardStore extends AsyncStore {
 export class BankStore {
     private readonly index: BankIndexStore;
     private readonly shards = new Map<string, BankShardStore>();
+    /** list() 的结果缓存，写入后失效 */
+    private listCache: BankItem[] | null = null;
 
     constructor(protected readonly plugin: StoragePlugin) {
         this.index = new BankIndexStore(plugin);
@@ -108,13 +110,27 @@ export class BankStore {
         return store;
     }
 
+    /**
+     * 全部题库条目。
+     *
+     * 结果按「写入时失效」缓存：一次面板加载会依次调用 summary() 与 listBank()，
+     * 复习入口也会再读一次，而每次读取都要遍历所有分片并逐条规范化
+     * （实测 5000 条约 8ms）。缓存期间返回浅拷贝，避免调用方改动缓存数组。
+     */
     async list(): Promise<BankItem[]> {
+        if (this.listCache) return [...this.listCache];
         const file = await this.index.readAll();
         const out: BankItem[] = [];
         for (const month of Object.keys(file.months)) {
             out.push(...Object.values(await this.shard(month).readAll()));
         }
-        return out;
+        this.listCache = out;
+        return [...out];
+    }
+
+    /** 任何写入之后都必须让 list() 的缓存失效 */
+    private invalidateList(): void {
+        this.listCache = null;
     }
 
     async count(): Promise<number> {
@@ -214,6 +230,7 @@ export class BankStore {
             ...file,
             months: { ...file.months, ...Object.fromEntries(touched) },
         }));
+        this.invalidateList();
     }
 
     /**
@@ -258,6 +275,7 @@ export class BankStore {
             // 闭包里读 let 会丢掉收窄结果，先固定成 const
             const remaining = keys;
             await this.index.edit((file) => ({ ...file, months: { ...file.months, [month]: remaining } }));
+            this.invalidateList();
             return;
         }
     }
@@ -269,6 +287,7 @@ export class BankStore {
             await this.shard(month).writeAll({});
         }
         await this.index.writeAll({});
+        this.invalidateList();
     }
 
     /**
@@ -311,6 +330,7 @@ export class BankStore {
             touched.set(month, Object.keys(await this.shard(month).readAll()));
         }
         await this.index.edit((file) => ({ ...file, months: { ...file.months, ...Object.fromEntries(touched) } }));
+        this.invalidateList();
         return removed;
     }
 
@@ -351,6 +371,7 @@ export class BankStore {
             for (const [month, ids] of Object.entries(repaired)) next[month] = ids;
             return { ...current, months: next };
         });
+        this.invalidateList();
         return count;
     }
 
@@ -361,6 +382,7 @@ export class BankStore {
             await this.plugin.removeData?.(`${SHARD_PREFIX}${month}.json`).catch(() => undefined);
         }
         await this.plugin.removeData?.(INDEX_NAME).catch(() => undefined);
+        this.invalidateList();
     }
 
     /** 等待索引与全部分片的写入完成 */
