@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { QuestionType, ScoreDetail, ScoreIndexEntry } from "@/types/quiz";
 import { buildIndexEntry, scorePercent } from "./stats";
 
@@ -215,15 +216,15 @@ export function parseScoreBackup(text: string): ScoreBackupFile {
     try {
         raw = JSON.parse(text);
     } catch (e) {
-        throw new Error(`备份不是合法 JSON: ${(e as Error).message}`);
+        throw new Error(t("import.badJson", (e as Error).message));
     }
-    if (!raw || typeof raw !== "object") throw new Error("备份内容不是对象");
+    if (!raw || typeof raw !== "object") throw new Error(t("import.notObject"));
     const file = raw as Partial<ScoreBackupFile>;
-    if (file.app !== "recallgen" || file.kind !== "scores") throw new Error("不是 RecallGen 的成绩备份文件");
+    if (file.app !== "recallgen" || file.kind !== "scores") throw new Error(t("import.wrongFileScores"));
     if (typeof file.version === "number" && file.version > BACKUP_VERSION) {
-        throw new Error(`备份版本 ${file.version} 高于当前支持的 ${BACKUP_VERSION}`);
+        throw new Error(t("import.versionTooNew", String(file.version), String(BACKUP_VERSION)));
     }
-    if (!Array.isArray(file.entries)) throw new Error("备份缺少 entries 数组");
+    if (!Array.isArray(file.entries)) throw new Error(t("import.missingEntries"));
     return {
         app: "recallgen",
         kind: "scores",
@@ -303,7 +304,7 @@ export function planBackupImport(backup: ScoreBackupFile, existingIds: Iterable<
         items.push({ entry: rebuilt, detail });
     }
 
-    if (skipped > 0) warnings.push(`已存在 ${skipped} 条成绩，已跳过（不会覆盖本机数据）`);
-    if (withoutDetail > 0) warnings.push(`${withoutDetail} 条成绩没有明细，只能用于列表与统计，无法回看题目`);
+    if (skipped > 0) warnings.push(t("scoreBackup.skipped", String(skipped)));
+    if (withoutDetail > 0) warnings.push(t("scoreBackup.withoutDetail", String(withoutDetail)));
     return { items, skipped, warnings };
 }

@@ -14,6 +14,7 @@ import {
     type QuestionType,
     type ScoreRange,
 } from "@/types/quiz";
+import { t } from "@/lib/i18n";
 
 /**
  * 配置的导出与导入。
@@ -69,15 +70,15 @@ export function parseConfigExport(text: string): ConfigExportFile {
     try {
         raw = JSON.parse(text);
     } catch (e) {
-        throw new Error(`配置不是合法 JSON: ${(e as Error).message}`);
+        throw new Error(t("import.badJson", (e as Error).message));
     }
-    if (!raw || typeof raw !== "object") throw new Error("配置内容不是对象");
+    if (!raw || typeof raw !== "object") throw new Error(t("import.notObject"));
     const file = raw as Partial<ConfigExportFile>;
-    if (file.app !== "recallgen") throw new Error("不是 RecallGen 的配置文件");
+    if (file.app !== "recallgen") throw new Error(t("import.wrongFileConfig"));
     if (typeof file.version === "number" && file.version > CONFIG_EXPORT_VERSION) {
-        throw new Error(`配置版本 ${file.version} 高于当前支持的 ${CONFIG_EXPORT_VERSION}`);
+        throw new Error(t("import.versionTooNew", String(file.version), String(CONFIG_EXPORT_VERSION)));
     }
-    if (!file.config || typeof file.config !== "object") throw new Error("配置文件缺少 config 字段");
+    if (!file.config || typeof file.config !== "object") throw new Error(t("import.missingConfig"));
     return {
         app: "recallgen",
         version: typeof file.version === "number" ? file.version : CONFIG_EXPORT_VERSION,
@@ -110,7 +111,7 @@ export function sanitizeConfig(
     const fallback = ai.models[0]?.id ?? defaults.ai.models[0].id;
     for (const role of ["generator", "reviewer", "grader"] as const) {
         if (!modelIds.has(ai.roles[role])) {
-            warnings.push(`角色 ${role} 指向的模型不存在，已回落到 ${fallback}`);
+            warnings.push(t("configImport.roleFallback", role, fallback));
             ai.roles[role] = fallback;
         }
     }
@@ -152,19 +153,18 @@ function mergeAI(
             (candidate) => !!candidate.baseUrl && candidate.baseUrl === endpoint.baseUrl
         );
         if (sameAddress?.apiKey) {
-            warnings.push(`端点「${endpoint.name}」沿用本机已有的 API Key`);
+            warnings.push(t("configImport.keyKept", endpoint.name));
             return { ...endpoint, apiKey: sameAddress.apiKey };
         }
 
         const sameId = current.endpoints.find((candidate) => candidate.id === endpoint.id);
         if (sameId?.baseUrl && sameId.baseUrl !== endpoint.baseUrl) {
             warnings.push(
-                `端点「${endpoint.name}」的地址由 ${sameId.baseUrl} 变为 ${endpoint.baseUrl || "（空）"}，` +
-                    `出于安全考虑未沿用本机 API Key，请重新填写`
+                t("configImport.endpointBaseUrlChanged", endpoint.name, sameId.baseUrl, endpoint.baseUrl || "—")
             );
             return endpoint;
         }
-        if (!includesSecrets) warnings.push(`端点「${endpoint.name}」没有 API Key，请补填`);
+        if (!includesSecrets) warnings.push(t("configImport.keyMissing", endpoint.name));
         return endpoint;
     });
 
@@ -186,7 +186,7 @@ function sanitizeEndpoints(value: unknown, warnings: string[]): AIEndpoint[] {
     for (const [index, item] of value.entries()) {
         const candidate = item as Partial<AIEndpoint>;
         if (!candidate || typeof candidate !== "object" || typeof candidate.id !== "string" || !candidate.id) {
-            warnings.push(`第 ${index + 1} 个端点缺少 id，已跳过`);
+            warnings.push(t("configImport.endpointNoId", String(index + 1)));
             continue;
         }
         const protocol = candidate.protocol;
@@ -209,11 +209,11 @@ function sanitizeModels(value: unknown, endpoints: AIEndpoint[], warnings: strin
     for (const [index, item] of value.entries()) {
         const candidate = item as Partial<AIModel>;
         if (!candidate || typeof candidate !== "object" || typeof candidate.id !== "string" || !candidate.id) {
-            warnings.push(`第 ${index + 1} 个模型缺少 id，已跳过`);
+            warnings.push(t("configImport.modelNoId", String(index + 1)));
             continue;
         }
         if (typeof candidate.endpointId !== "string" || !endpointIds.has(candidate.endpointId)) {
-            warnings.push(`模型「${candidate.name ?? candidate.id}」引用的端点不存在，已跳过`);
+            warnings.push(t("configImport.modelBadEndpoint", candidate.name ?? candidate.id));
             continue;
         }
         out.push({
@@ -234,7 +234,7 @@ function mergePrompts(current: RecallGenConfig, imported: Partial<RecallGenConfi
     for (const key of ["generate", "review", "gradeSubjective", "analysis"] as const) {
         const value = incoming[key];
         if (typeof value === "string" && value.trim()) prompts[key] = value;
-        else if (value !== undefined) warnings.push(`提示词 ${key} 为空，已保留原有内容`);
+        else if (value !== undefined) warnings.push(t("configImport.promptEmpty", key));
     }
     return prompts;
 }

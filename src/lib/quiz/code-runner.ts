@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { Question, TestCase } from "@/types/quiz";
 
 /**
@@ -320,19 +321,19 @@ export async function runCodingTests(options: RunOptions): Promise<RunOutcome> {
     const { language, code, entryPoint, cases } = options;
 
     if (!isRunnableLanguage(language)) {
-        return { supported: false, reason: `仅支持直接运行 JavaScript，当前为 ${language || "未知语言"}` };
+        return { supported: false, reason: t("runtime.onlyJs", language || t("runtime.unknownLanguage")) };
     }
     if (!entryPoint) {
-        return { supported: false, reason: "没有识别到入口函数名，无法调用" };
+        return { supported: false, reason: t("runtime.noEntryPoint") };
     }
     if (!isValidIdentifier(entryPoint)) {
-        return { supported: false, reason: `入口函数名不是合法标识符：${entryPoint}` };
+        return { supported: false, reason: t("runtime.badIdentifier", entryPoint) };
     }
     if (cases.length === 0) {
-        return { supported: false, reason: "这道题没有测试用例" };
+        return { supported: false, reason: t("runtime.noCases") };
     }
     if (typeof Worker === "undefined" || typeof Blob === "undefined" || typeof URL?.createObjectURL !== "function") {
-        return { supported: false, reason: "当前环境不支持运行测试（Web Worker 不可用）" };
+        return { supported: false, reason: t("runtime.noWorker") };
     }
 
     const timeoutMs = options.timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
@@ -357,7 +358,7 @@ export async function runCodingTests(options: RunOptions): Promise<RunOutcome> {
         });
 
         if (!raw || !Array.isArray(raw.results)) {
-            return { supported: false, reason: "执行结果格式异常" };
+            return { supported: false, reason: t("runtime.badResult") };
         }
         const results = evaluateCases(cases, raw.results);
         const loadError = typeof raw.loadError === "string" && raw.loadError ? raw.loadError : undefined;

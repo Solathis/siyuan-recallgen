@@ -1,4 +1,5 @@
 import type { BankItem } from "./bank";
+import { t } from "@/lib/i18n";
 import { isPlausibleCard, normalizeBankItem, questionFingerprint } from "./bank";
 
 /**
@@ -49,16 +50,16 @@ export function parseBankBackup(text: string): BankBackupParseResult {
     try {
         raw = JSON.parse(text);
     } catch (e) {
-        throw new Error(`题库备份不是合法 JSON: ${(e as Error).message}`);
+        throw new Error(t("import.badJson", (e as Error).message));
     }
-    if (!raw || typeof raw !== "object") throw new Error("题库备份内容不是对象");
+    if (!raw || typeof raw !== "object") throw new Error(t("import.notObject"));
 
     const file = raw as Partial<BankBackupFile>;
-    if (file.app !== "recallgen" || file.kind !== "bank") throw new Error("不是 RecallGen 的题库备份文件");
+    if (file.app !== "recallgen" || file.kind !== "bank") throw new Error(t("import.wrongFileBank"));
     if (typeof file.version === "number" && file.version > BANK_BACKUP_VERSION) {
-        throw new Error(`备份版本 ${file.version} 高于当前支持的 ${BANK_BACKUP_VERSION}`);
+        throw new Error(t("import.versionTooNew", String(file.version), String(BANK_BACKUP_VERSION)));
     }
-    if (!Array.isArray(file.items)) throw new Error("题库备份缺少 items 数组");
+    if (!Array.isArray(file.items)) throw new Error(t("import.missingItems"));
 
     const warnings: string[] = [];
     const items: BankItem[] = [];
@@ -90,10 +91,10 @@ export function parseBankBackup(text: string): BankBackupParseResult {
         items.push(normalized);
     }
 
-    if (dropped > 0) warnings.push(`有 ${dropped} 条记录结构不完整，已跳过`);
-    if (repaired > 0) warnings.push(`有 ${repaired} 条记录的题目指纹与题干不符，已按题干重新计算`);
-    if (rescheduled > 0) warnings.push(`有 ${rescheduled} 条记录的复习排程缺失或非法，已重置为待复习`);
-    if (duplicated > 0) warnings.push(`备份内有 ${duplicated} 条重复题目，已合并为一条`);
+    if (dropped > 0) warnings.push(t("bankBackup.dropped", String(dropped)));
+    if (repaired > 0) warnings.push(t("bankBackup.repaired", String(repaired)));
+    if (rescheduled > 0) warnings.push(t("bankBackup.rescheduled", String(rescheduled)));
+    if (duplicated > 0) warnings.push(t("bankBackup.duplicated", String(duplicated)));
 
     return {
         file: {

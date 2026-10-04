@@ -1,3 +1,5 @@
+import { t } from "@/lib/i18n";
+
 /** 思源 Plugin 中存储相关方法的最小接口，解耦具体 Plugin 类型 */
 export interface StoragePlugin {
     loadData: (name: string) => Promise<any>;
@@ -74,7 +76,7 @@ export class AsyncStore {
         try {
             raw = await this.plugin.loadData(this.name);
         } catch (e) {
-            throw new StorageError(`读取 ${this.name} 失败`, this.name, e);
+            throw new StorageError(t("storage.readFailed", this.name), this.name, e);
         }
 
         let value: unknown;
@@ -148,7 +150,7 @@ export class AsyncStore {
             .saveData(this.name, data)
             .then(() => undefined)
             .catch((e) => {
-                throw new StorageError(`写入 ${this.name} 失败`, this.name, e);
+                throw new StorageError(t("storage.writeFailed", this.name), this.name, e);
             });
     }
 
