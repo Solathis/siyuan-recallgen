@@ -18,7 +18,7 @@ import {
 import { QuizSelector } from "@/lib/quiz/selector";
 import { generateQuestions, type GenProgressCallback } from "@/lib/quiz/generator";
 import { gradeAll } from "@/lib/quiz/grader";
-import { buildAnalysisMessages, buildChatMessages, buildGlobalChatMessages } from "@/lib/ai/prompts";
+import { activePrompts, buildAnalysisMessages, buildChatMessages, buildGlobalChatMessages } from "@/lib/ai/prompts";
 import { callLLM, resolveAI, testConnection as aiTestConnection, type ChatMessage } from "@/lib/ai/client";
 import { saveAsNewDoc, appendAnalysis } from "@/lib/quiz/docWriter";
 import type { QuizService, QuizTabData } from "@/lib/quiz/service";
@@ -386,7 +386,8 @@ export default class RecallGenPlugin extends Plugin {
     }
 
     private async analyze(results: GradingResult[], questions: Question[]): Promise<string> {
-        const messages = buildAnalysisMessages(this.config.prompts, results, questions, this.config.general.language);
+        const prompts = activePrompts(this.config.prompts, this.config.general.language);
+        const messages = buildAnalysisMessages(prompts, results, questions, this.config.general.language);
         const rc = resolveAI(this.config.ai, this.config.ai.roles.grader);
         const res = await callLLM(rc, messages as ChatMessage[], {
             temperature: 0.5,
@@ -423,7 +424,7 @@ export default class RecallGenPlugin extends Plugin {
         userMessage: string
     ): Promise<string> {
         const messages = buildChatMessages(
-            this.config.prompts,
+            activePrompts(this.config.prompts, this.config.general.language),
             question,
             result,
             analysis,
@@ -447,7 +448,7 @@ export default class RecallGenPlugin extends Plugin {
         userMessage: string
     ): Promise<string> {
         const messages = buildGlobalChatMessages(
-            this.config.prompts,
+            activePrompts(this.config.prompts, this.config.general.language),
             questions,
             results,
             analysis,

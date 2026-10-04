@@ -164,7 +164,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
 
 /** 语言相关的默认值 */
 
-const DEFAULT_PROMPTS_ZH: PromptConfig = {
+export const DEFAULT_PROMPTS_ZH: PromptConfig = {
     generate: `你是一位资深的出题专家。根据用户提供的笔记内容，按照指定的题型、难度分布生成复习题目。
 要求：
 1. 题目必须紧扣笔记内容，不得编造笔记中未涉及的知识点。

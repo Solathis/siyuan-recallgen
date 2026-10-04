@@ -1,7 +1,7 @@
 import { t } from "@/lib/i18n";
 import { dedupeQuestions, planBatches, renumberQuestions } from "./batching";
 import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
-import { buildGenerateMessages, buildReviewMessages, buildRegenerateMessages } from "../ai/prompts";
+import { activePrompts, buildGenerateMessages, buildReviewMessages, buildRegenerateMessages } from "../ai/prompts";
 import {
     QUIZ_SCHEMA,
     REVIEW_SCHEMA,
@@ -66,7 +66,9 @@ export async function generateQuestions(
     content: string,
     onProgress?: GenProgressCallback
 ): Promise<Question[]> {
-    const { prompts, general, ai } = config;
+    const { general, ai } = config;
+    // 提示词默认值分中英两套：未自定义时跟随输出语言，自定义过则原样尊重
+    const prompts = activePrompts(config.prompts, general.language);
     const types = general.allowedTypes;
     const difficulty = general.difficulty;
 
@@ -140,7 +142,8 @@ async function reviewLoop(
     content: string,
     onProgress?: GenProgressCallback
 ): Promise<Question[]> {
-    const { ai, prompts } = config;
+    const { ai } = config;
+    const prompts = activePrompts(config.prompts, config.general.language);
     const reviewAI = resolveAI(ai, ai.roles.reviewer);
     const genAI = resolveAI(ai, ai.roles.generator);
     const reviewOpts = pickCallOpts(ai.jsonSchemaEnabled, "recallgen_review", "审核题目质量", REVIEW_SCHEMA as object);

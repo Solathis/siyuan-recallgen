@@ -1,7 +1,7 @@
 import { t } from "@/lib/i18n";
 import PromiseLimitPool from "@/libs/promise-pool";
 import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
-import { buildGradeSubjectiveMessages } from "../ai/prompts";
+import { activePrompts, buildGradeSubjectiveMessages } from "../ai/prompts";
 import {
     GRADING_SCHEMA,
     buildTools,
@@ -186,7 +186,8 @@ export function blankMatches(accepted: string[], value: string | undefined): boo
 /** 主观/编程题 AI 判分 */
 async function gradeAI(config: RecallGenConfig, q: Question, ua: UserAnswer | undefined): Promise<GradingResult> {
     const userText = ua?.type === "subjective" || ua?.type === "coding" ? ua.value : "";
-    const messages = buildGradeSubjectiveMessages(config.prompts, q, userText, config.general.language);
+    const prompts = activePrompts(config.prompts, config.general.language);
+    const messages = buildGradeSubjectiveMessages(prompts, q, userText, config.general.language);
     const callOpts = pickGradingOpts(config.ai.jsonSchemaEnabled);
     const rc = resolveAI(config.ai, config.ai.roles.grader);
     const result = await callLLM(rc, messages as ChatMessage[], {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getDefaultConfig } from "@/types/config";
+import { DEFAULT_PROMPTS_EN, DEFAULT_PROMPTS_ZH, getDefaultConfig, getDefaultPrompts } from "@/types/config";
 import type { DifficultyDistribution, GradingResult, Question, UserAnswer } from "@/types/quiz";
 import {
+    activePrompts,
     buildAnalysisMessages,
     buildGenerateMessages,
     buildGlobalChatMessages,
@@ -380,5 +381,38 @@ describe("buildChatMessages / buildGlobalChatMessages", () => {
         const messages = buildGlobalChatMessages(prompts, [single(1)], [result], "分析", history, "第二问", "zh");
         expect(messages.slice(1, 3)).toEqual(history);
         expect(messages.at(-1)).toEqual({ role: "user", content: "第二问" });
+    });
+});
+
+describe("activePrompts - 提示词跟随输出语言", () => {
+    it("未自定义时切到英文，出题提示词变为英文默认值", () => {
+        const resolved = activePrompts(getDefaultPrompts("zh"), "en");
+        expect(resolved.generate).toBe(DEFAULT_PROMPTS_EN.generate);
+        expect(resolved.analysis).toBe(DEFAULT_PROMPTS_EN.analysis);
+    });
+
+    it("未自定义时保持中文，仍是中文默认值", () => {
+        const resolved = activePrompts(getDefaultPrompts("zh"), "zh");
+        expect(resolved.generate).toBe(DEFAULT_PROMPTS_ZH.generate);
+    });
+
+    it("用户自定义过的提示词一律原样保留（不被语言切换覆盖）", () => {
+        const custom = { ...getDefaultPrompts("zh"), generate: "我的自定义出题提示词" };
+        const resolved = activePrompts(custom, "en");
+        expect(resolved.generate).toBe("我的自定义出题提示词");
+        // 其余未自定义的字段仍跟随语言
+        expect(resolved.analysis).toBe(DEFAULT_PROMPTS_EN.analysis);
+    });
+
+    it("从英文默认值切回中文同样跟随", () => {
+        const resolved = activePrompts(getDefaultPrompts("en"), "zh");
+        expect(resolved.generate).toBe(DEFAULT_PROMPTS_ZH.generate);
+    });
+
+    it("四个提示词都参与解析", () => {
+        const resolved = activePrompts(getDefaultPrompts("zh"), "en");
+        for (const key of ["generate", "review", "gradeSubjective", "analysis"] as const) {
+            expect(resolved[key]).toBe(DEFAULT_PROMPTS_EN[key]);
+        }
     });
 });

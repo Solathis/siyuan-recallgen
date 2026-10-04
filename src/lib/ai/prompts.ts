@@ -1,9 +1,41 @@
-import type { AIConfig, GeneralConfig, PromptConfig } from "@/types/config";
+import {
+    DEFAULT_PROMPTS_EN,
+    DEFAULT_PROMPTS_ZH,
+    getDefaultPrompts,
+    type AIConfig,
+    type GeneralConfig,
+    type PromptConfig,
+} from "@/types/config";
 import type { DifficultyDistribution, GradingResult, Question, QuestionType, UserAnswer } from "@/types/quiz";
 import { PASS_SCORE } from "@/types/quiz";
 import { fill, scaffoldOf, type PromptLang, type PromptScaffold } from "./scaffold";
 
 export type { AIConfig };
+
+/**
+ * 按输出语言解析实际生效的提示词。
+ *
+ * 提示词默认值分中英两套。用户没改过默认值时，切换输出语言应当让提示词跟着切；
+ * 一旦用户自己写过内容，就完全尊重用户文本。
+ * 放在调用时解析而不是改写配置：既不需要迁移存储，也不会覆盖用户的编辑。
+ */
+export function activePrompts(prompts: PromptConfig, lang: PromptLang): PromptConfig {
+    const base = getDefaultPrompts(lang);
+    const zh = DEFAULT_PROMPTS_ZH;
+    const en = DEFAULT_PROMPTS_EN;
+    const pick = <K extends keyof PromptConfig>(key: K): PromptConfig[K] => {
+        const value = prompts[key];
+        // 与任一语言的默认值相同 → 视为未自定义，跟随当前语言
+        const untouched = value === zh[key] || value === en[key];
+        return untouched ? base[key] : value;
+    };
+    return {
+        generate: pick("generate"),
+        review: pick("review"),
+        gradeSubjective: pick("gradeSubjective"),
+        analysis: pick("analysis"),
+    };
+}
 
 /** 生成题目的消息序列 */
 export function buildGenerateMessages(
