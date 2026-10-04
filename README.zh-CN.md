@@ -156,7 +156,7 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 - **异步存储基类**：`AsyncStore` 统一处理读串行化、写串行化、读写不互相覆盖、写入失败上抛；配置写入按 400ms 合并，避免每次按键都重写配置文件；答题进度按 30 天 TTL 自动清理
 - **Tab 状态机**：`configuring → loading_generating → answering → loading_grading → result`
 - **UI 组件**：全部使用 shadcn-svelte 组件（Button/Card/Badge/Input/Select/Switch/Tabs/Table/AlertDialog/DropdownMenu/Progress/Skeleton 等，基于 bits-ui）。shadcn 的语义变量映射到思源 `--b3-*`，因此明暗主题自动跟随；`dark:` 变体绑定思源的 `.theme-dark`
-- **样式隔离**：**刻意不引入 Tailwind 的 preflight**——思源本体与插件共享同一文档，全局重置会破坏思源界面。只引入 theme 与 utilities 两个 layer，并把工具类依赖的重置收窄到插件容器 `.rg-scope` 内；KaTeX 自带的 `body{counter-reset}` 规则也改写为容器作用域，保证对思源全局样式零侵入
+- **样式隔离**：**刻意不引入 Tailwind 的 preflight**——思源本体与插件共享同一文档，全局重置会破坏思源界面。只引入 theme 与 utilities 两个 layer，并把工具类依赖的重置收窄到插件容器 `.rg-scope` 内；KaTeX 自带的 `body{counter-reset}` 规则也改写为容器作用域。KaTeX 样式表本身仍是全局注入的（随插件一起打包以保证离线公式正常），这是本插件唯一新增的全局样式
 - **Tab 恢复**：思源重启时恢复自定义 Tab，`mode='generate'` 的 Tab 自动检测已有进度并恢复为答题状态，避免重新生成
 - **公式渲染**：KaTeX 样式与字体随插件打包（仅 woff2，共约 296KB），不再依赖 CDN，离线可用；渲染走「marked → DOMPurify 净化 → 回填 KaTeX」的顺序，净化时公式还是占位符，既拦住了笔记/AI 文本里的脚本注入，又不会误伤 KaTeX 生成的 MathML
 
@@ -242,10 +242,10 @@ tests/                          # 与源码同目录的 *.test.ts（30 个文件
 # 安装依赖
 pnpm install
 
-# 开发模式（watch + livereload）
+# 开发模式（改动后重新构建；插件重载由思源自己完成）
 pnpm run dev
 
-# 生产构建（输出到 dist/ 和思源插件目录）
+# 生产构建（输出到 dist/；在 .env.local 里设了 OUTPUT_DIR 时输出到该目录）
 pnpm run build
 
 # 创建开发链接（链接到思源插件目录）
@@ -267,7 +267,7 @@ pnpm run make-install
 ### 开发注意事项
 
 - **npm/npx 不可用**：本环境 MSYS2 bash 中 npm 路径不可执行，必须使用 `pnpm` 或 `pnpm exec`
-- **SiYuan SDK 补丁**：`siyuan@1.2.3` 存在 TS6196 未使用导入问题，通过 `patches/siyuan@1.2.3.patch` 修复（`pnpm-workspace.yaml` 配置 `patchedDependencies`）
+- **SiYuan 类型包**：`siyuan@^1.2.9` 只提供类型声明，无需补丁（1.2.3 的 TS6196 未使用导入问题上游已修，原先的 `patches/` 与 `patchedDependencies` 已删除）
 - **Vite 配置**：`output.inlineDynamicImports: true` 强制单文件输出；`viteStaticCopy` 复制 `icon.png`；`optimizeDeps.include` 预打包 CodeMirror 语言包
 - **Svelte 5**：组件挂载用 `mount`/`unmount`（`new Component()` 与 `$destroy()` 已不可用）；`mount()` 不再暴露 `$on`，插件入口与组件之间统一改用回调属性（`onsave`、`onchange` 等）；新组件一律使用 runes（`$props`/`$state`/`$derived`/`$effect`）
 - **质量门禁**：`pnpm run typecheck`（svelte-check）、`pnpm run format:check`（prettier）、`pnpm test`（vitest）、`pnpm run build`；CI 在 push/PR 上全部执行，并在 tag 发布前校验 tag 与 `plugin.json` 版本一致
@@ -317,7 +317,7 @@ ResultPanel (三标签: 题目列表/薄弱点分析/学习建议)
     └─ 放弃保存 (关闭Tab)
     │
     ▼
-成绩记录 → recallgen-scores-index.json + recallgen-scores-YYYY-MM.json（按月分片）
+成绩记录 → 索引 recallgen-scores-index.json + 按月分片 recallgen-scores-YYYY-MM.json
     ├─ 热力图 (SettingsHeatmap)
     └─ 历史记录 (HistoryPanel → review 回看)
 ```
@@ -374,6 +374,11 @@ ResultPanel (三标签: 题目列表/薄弱点分析/学习建议)
 - 题目可单独计时：以「切换题目或交卷」为结算点累计，单段最多计 5 分钟以避免挂着页面的空闲时间被计入；统计页的「每题平均耗时」优先使用该实测值
 - 答题时可给不确定的题**打标记**，标记随进度一起保存，关面板后恢复仍在
 - 结果面板可**重做错题**：就地生成只含未达标题目的新会话，两次尝试各自记录成绩
+
+## 🌐 语言支持
+
+- **AI 输出语言**：在「设置 → 题目与答题」中切换（中文/英文），控制生成的题目、判分评语与分析文本的语言；提示词若未被自定义，也会跟随该设置切换
+- **界面语言**：跟随思源自身的界面语言，插件随包提供 `i18n/zh-CN.json` 与 `i18n/en.json` 两份词典，插件内没有单独的界面语言开关
 
 ## ▶️ 编程题运行测试
 

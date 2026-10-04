@@ -155,7 +155,7 @@ Left sidebar navigation + right content area, 6 independent sections:
 - **Async Store Base**: `AsyncStore` handles serialized reads/writes, prevents a read from clobbering a concurrent write, and propagates write failures. Config writes are coalesced over a 400ms window so typing in a field no longer rewrites the whole file; quiz progress expires after 30 days
 - **Tab State Machine**: `configuring → loading_generating → answering → loading_grading → result`
 - **UI Components**: all built on shadcn-svelte (Button/Card/Badge/Input/Select/Switch/Tabs/Table/AlertDialog/DropdownMenu/Progress/Skeleton, powered by bits-ui). shadcn semantic variables are mapped to SiYuan's `--b3-*`, so light/dark follow the host theme, and the `dark:` variant is bound to SiYuan's `.theme-dark`
-- **Style isolation**: Tailwind's preflight is **deliberately not imported** — SiYuan and the plugin share one document, and a global reset would break SiYuan's own UI. Only the theme and utilities layers are imported, with the resets Tailwind relies on narrowed to the plugin container `.rg-scope`. KaTeX's own `body{counter-reset}` rule is rewritten to that scope too, so the plugin makes zero global style changes
+- **Style isolation**: Tailwind's preflight is **deliberately not imported** — SiYuan and the plugin share one document, and a global reset would break SiYuan's own UI. Only the theme and utilities layers are imported, with the resets Tailwind relies on narrowed to the plugin container `.rg-scope`. KaTeX's own `body{counter-reset}` rule is rewritten to that scope too. KaTeX's stylesheet itself is still appended globally (it ships with the plugin so formulas render offline), which is the only global style the plugin adds
 - **Tab Restore**: SiYuan restores custom tabs on restart; `mode='generate'` tabs auto-detect existing progress and resume to answering state
 - **Formula rendering**: KaTeX styles and fonts ship with the plugin (woff2 only, ~296KB) instead of a CDN, so formulas render offline. The pipeline is `marked → DOMPurify → restore KaTeX`: at sanitize time formulas are still placeholders, which blocks script injection from notes/AI text without damaging KaTeX's own MathML
 
@@ -202,16 +202,16 @@ src/
 # Install dependencies
 pnpm install
 
-# Development mode (watch + livereload)
+# Development mode (rebuild on change; SiYuan reloads the plugin itself)
 pnpm run dev
 
-# Production build (outputs to dist/ and SiYuan plugin dir)
+# Production build (outputs to dist/, or to $OUTPUT_DIR when set in .env.local)
 pnpm run build
 
 # Create dev link (link to SiYuan plugins dir)
 pnpm run make-link
 
-# One-step install (build + install to SiYuan)
+# One-step install (build, then copy the output into the SiYuan plugin dir)
 pnpm run make-install
 ```
 
@@ -227,7 +227,7 @@ pnpm run make-install
 ### Development Notes
 
 - **npm/npx unavailable**: In MSYS2 bash, npm path is not executable; use `pnpm` or `pnpm exec`
-- **SiYuan SDK patch**: `siyuan@1.2.3` has a TS6196 unused import issue, fixed via `patches/siyuan@1.2.3.patch` (configured in `pnpm-workspace.yaml` `patchedDependencies`)
+- **SiYuan types**: `siyuan@^1.2.9` is types-only and needs no patch (the TS6196 unused-import issue in 1.2.3 was fixed upstream, so the `patches/` directory and `patchedDependencies` entry were removed)
 - **Vite config**: `output.inlineDynamicImports: true` forces single-file output; `viteStaticCopy` copies `icon.png`; `optimizeDeps.include` pre-bundles CodeMirror language packs
 - **Svelte 5**: components are mounted with `mount`/`unmount` (`new Component()` and `$destroy()` no longer work). `mount()` does not expose `$on`, so plugin-to-component communication uses callback props (`onsave`, `onchange`, ...). New components use runes (`$props`/`$state`/`$derived`/`$effect`)
 - **Quality gates**: `pnpm run typecheck` (svelte-check), `pnpm run format:check` (prettier), `pnpm test` (vitest), `pnpm run build`; CI runs all of them on push/PR and verifies the release tag matches `plugin.json`
@@ -277,7 +277,8 @@ ResultPanel (3 tabs: Question List / Weakness Analysis / Study Advice)
     └─ Discard (close tab)
     │
     ▼
-Score record → recallgen-scores.json
+Score record → index (recallgen-scores-index.json)
+              + monthly shards (recallgen-scores-YYYY-MM.json)
     ├─ Heatmap (SettingsHeatmap)
     └─ History (HistoryPanel → review replay)
 ```
@@ -322,8 +323,8 @@ Score record → recallgen-scores.json
 
 ## 🌐 Language Support
 
-- **AI Output Language**: Configurable (Chinese/English) — controls the language of generated questions, grading comments, and analysis
-- **UI Language**: Chinese and English are both available, switchable in Settings → Quiz & Answer
+- **AI Output Language**: Configurable (Chinese/English) in Settings → Quiz & Answer — controls the language of generated questions, grading comments and analysis, and the default prompts used for them
+- **UI Language**: follows SiYuan's own interface language (Chinese and English dictionaries are shipped as `i18n/zh-CN.json` and `i18n/en.json`); there is no separate language switch inside the plugin
 
 ## 📊 Grading & Scoring
 
