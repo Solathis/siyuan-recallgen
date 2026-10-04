@@ -90,9 +90,14 @@ export function summarize(entries: ScoreIndexEntry[], now = Date.now()): StatsSu
         .filter((e) => (e.duration ?? 0) > 0)
         .reduce((s, e) => s + e.questionCount, 0);
     // 优先用实测的单题耗时：它不含中途离开、思考停顿等空白时间
-    const measured = entries
-        .map((e) => e.avgQuestionSeconds)
-        .filter((value): value is number => typeof value === "number" && value > 0);
+    /*
+     * 单题耗时按「题数」加权，不能对各次记录的单题均值再取平均。
+     * 一次 20 题 30 秒/题 与一次 2 题 60 秒/题，简单平均会得出 45 秒，
+     * 而真实口径应当是 (20×30 + 2×60) / 22 ≈ 32.7 秒/题。
+     */
+    const measured = entries.filter(
+        (e) => typeof e.avgQuestionSeconds === "number" && e.avgQuestionSeconds > 0 && e.questionCount > 0
+    );
 
     const days = [...new Set(entries.map((e) => dayKey(e.timestamp)))].sort();
     const { current, longest } = streaks(days, now);
@@ -107,11 +112,23 @@ export function summarize(entries: ScoreIndexEntry[], now = Date.now()): StatsSu
         longestStreak: longest,
         secondsPerQuestion:
             measured.length > 0
-                ? measured.reduce((a, b) => a + b, 0) / measured.length
+                ? weightPerQuestion(measured)
                 : totalQuestionsWithDuration > 0
                   ? totalDuration / totalQuestionsWithDuration
                   : null,
     };
+}
+
+/** 以题数为权重求「平均每题耗时」，结果保留一位小数 */
+function weightPerQuestion(entries: ScoreIndexEntry[]): number {
+    let seconds = 0;
+    let questions = 0;
+    for (const entry of entries) {
+        seconds += (entry.avgQuestionSeconds ?? 0) * entry.questionCount;
+        questions += entry.questionCount;
+    }
+    if (questions === 0) return 0;
+    return Math.round((seconds / questions) * 10) / 10;
 }
 
 /** 由有序日期集合计算当前/最长连续天数 */

@@ -365,3 +365,64 @@ describe("isSafeCssColor", () => {
         expect(isSafeCssColor("#" + "a".repeat(80))).toBe(false);
     });
 });
+
+describe("单题耗时的加权口径", () => {
+    /** 一条只关心耗时口径的记录 */
+    const timed = (avgQuestionSeconds: number, questionCount: number): ScoreIndexEntry =>
+        ({
+            id: `s-${avgQuestionSeconds}-${questionCount}`,
+            timestamp: NOW,
+            title: "t",
+            totalScore: 80,
+            maxScore: 100,
+            questionCount,
+            passedCount: questionCount,
+            unanswered: 0,
+            avgQuestionSeconds,
+        }) as unknown as ScoreIndexEntry;
+
+    it("按题数加权，而不是对各次均值再取平均", () => {
+        // 20 题 × 30 秒 + 2 题 × 60 秒 = 720 秒 / 22 题 ≈ 32.7 秒
+        const summary = summarize([timed(30, 20), timed(60, 2)], NOW);
+        expect(summary.secondsPerQuestion).toBeCloseTo(32.7, 1);
+        // 简单平均会得到 45，明显偏离
+        expect(summary.secondsPerQuestion).not.toBeCloseTo(45, 0);
+    });
+
+    it("只有一条记录时就是它自己的值", () => {
+        expect(summarize([timed(42, 10)], NOW).secondsPerQuestion).toBe(42);
+    });
+
+    it("题数为 0 的记录不参与加权（避免除零）", () => {
+        expect(summarize([timed(30, 0), timed(10, 5)], NOW).secondsPerQuestion).toBe(10);
+    });
+
+    it("没有单题耗时时回落到「总时长 / 总题数」", () => {
+        const entry = {
+            id: "s-1",
+            timestamp: NOW,
+            title: "t",
+            totalScore: 80,
+            maxScore: 100,
+            questionCount: 10,
+            passedCount: 8,
+            unanswered: 0,
+            duration: 500,
+        } as unknown as ScoreIndexEntry;
+        expect(summarize([entry], NOW).secondsPerQuestion).toBe(50);
+    });
+
+    it("两者都没有时为 null，而不是 0", () => {
+        const entry = {
+            id: "s-2",
+            timestamp: NOW,
+            title: "t",
+            totalScore: 80,
+            maxScore: 100,
+            questionCount: 10,
+            passedCount: 8,
+            unanswered: 0,
+        } as unknown as ScoreIndexEntry;
+        expect(summarize([entry], NOW).secondsPerQuestion).toBeNull();
+    });
+});

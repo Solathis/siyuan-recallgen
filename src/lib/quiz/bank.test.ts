@@ -644,3 +644,18 @@ describe("normalizeText - 全角字符不能被当成标点删掉", () => {
         expect(questionFingerprint(a)).not.toBe(questionFingerprint(b));
     });
 });
+
+describe("applyResult 的得分率收敛", () => {
+    it("lastPercent 被收敛到 0-100（回归：判分异常时列表会显示 >100%）", () => {
+        const item = createBankItem(question("收敛"), { sourceDocId: "d", sourceTitle: "t" }, NOW);
+        expect(applyResult(item, 130, NOW).lastPercent).toBe(100);
+        expect(applyResult(item, -20, NOW).lastPercent).toBe(0);
+        expect(applyResult(item, 87, NOW).lastPercent).toBe(87);
+    });
+
+    it("lastPercent 与历史记录用同一口径", () => {
+        const item = createBankItem(question("一致"), { sourceDocId: "d", sourceTitle: "t" }, NOW);
+        const next = applyResult(item, 150, NOW);
+        expect(next.lastPercent).toBe(next.history?.[next.history.length - 1].percent);
+    });
+});

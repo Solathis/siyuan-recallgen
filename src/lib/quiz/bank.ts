@@ -389,7 +389,8 @@ export function applyResult(item: BankItem, percent: number, now = Date.now()): 
         card: scheduleReview(item.card, percent, now),
         timesSeen: item.timesSeen + 1,
         timesPassed: item.timesPassed + (percent >= PASS_SCORE ? 1 : 0),
-        lastPercent: percent,
+        // lastPercent 与历史记录用同一口径收敛：判分异常给出 >100 时不该原样显示在题库列表里
+        lastPercent: clampPercent(percent),
         history: appendAttempt(item.history, { at: now, percent: clampPercent(percent) }),
     };
 }
