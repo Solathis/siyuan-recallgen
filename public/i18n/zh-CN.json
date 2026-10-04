@@ -493,6 +493,7 @@
     "ai.endpointNotFound": "模型 {0} 引用的端点不存在: {1}",
     "ai.timeout": "请求超时（{0} 秒）",
     "ai.proxyFailed": "内核网络代理失败: {0}",
+    "config.defaultEndpointName": "默认端点",
     "ai.proxyBadResponse": "内核网络代理返回了意外的结构",
     "ai.responseNotJson": "AI 响应不是 JSON",
     "ai.responseNoContent": "AI 响应缺少内容",
@@ -585,5 +586,6 @@
     "export.correct": "正确",
     "export.unanswered": "未答",
     "export.duration": "耗时",
-    "export.byType": "题型表现"
+    "export.byType": "题型表现",
+    "config.defaultTestPrompt": "请用一句话简要介绍你自己"
 }

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { __resetFetchSyncPost, __setFetchSyncPost } from "@/test/siyuan-stub";
 import { initI18n } from "@/lib/i18n";
 import type { Question } from "@/types/quiz";

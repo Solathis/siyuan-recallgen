@@ -42,6 +42,18 @@ export function t(key: string, ...args: (string | number)[]): string {
 }
 
 /**
+ * 带兜底取词。
+ *
+ * 用于「初始值」这类场景：调用发生在 getDefaultConfig() 里，
+ * 而字典可能尚未注入（单测、或字典缺键）。此时不能把 key 本身当成文案，
+ * 否则默认端点会被命名成 "config.defaultEndpointName" 并被持久化到配置里。
+ */
+export function tOr(key: string, fallbackText: string): string {
+    const value = current[key] ?? fallback[key];
+    return typeof value === "string" && value.length > 0 ? value : fallbackText;
+}
+
+/**
  * 取插件自带 i18n 字典里的文案。
  *
  * 思源把插件词典声明为 Record<string, JSONValue>，直接当 string 用在新版

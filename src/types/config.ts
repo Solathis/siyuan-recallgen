@@ -1,3 +1,4 @@
+import { tOr } from "@/lib/i18n";
 import type { DifficultyDistribution, HeatmapConfig, QuestionType } from "./quiz";
 
 /** AI 服务提供商（仅影响认证行为：ollama 无 key 时跳过认证头） */
@@ -244,16 +245,29 @@ export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     presets: [],
 };
 
+/**
+ * 默认端点名与默认测试提示词是「初始值」，会作为数据出现在界面上并被持久化，
+ * 因此跟随界面语言；字典未就绪时退回中性英文，绝不把 i18n key 当文案。
+ * 注意：必须在函数里解析，模块级常量在 i18n 注入之前就已求值。
+ */
+function defaultEndpointName(): string {
+    return tOr("config.defaultEndpointName", "Default");
+}
+
+function defaultTestPrompt(): string {
+    return tOr("config.defaultTestPrompt", "Introduce yourself in one sentence");
+}
+
 export function getDefaultConfig(): RecallGenConfig {
     return {
         ai: {
-            endpoints: DEFAULT_AI_CONFIG.endpoints.map((e) => ({ ...e })),
+            endpoints: DEFAULT_AI_CONFIG.endpoints.map((e) => ({ ...e, name: defaultEndpointName() })),
             models: DEFAULT_AI_CONFIG.models.map((m) => ({ ...m })),
             roles: { ...DEFAULT_AI_CONFIG.roles },
             timeout: DEFAULT_AI_CONFIG.timeout,
             jsonSchemaEnabled: DEFAULT_AI_CONFIG.jsonSchemaEnabled,
             testModelId: DEFAULT_AI_CONFIG.testModelId,
-            testPrompt: DEFAULT_AI_CONFIG.testPrompt,
+            testPrompt: defaultTestPrompt(),
         },
         prompts: { ...DEFAULT_PROMPTS },
         general: {

@@ -99,3 +99,34 @@ describe("英文界面下导出的 Markdown 表头", () => {
         expect(md).toContain("| 时间 | 标题 | 来源 |");
     });
 });
+
+describe("默认值的语言", () => {
+    it("英文界面下默认端点名与测试提示词是英文", async () => {
+        const { getDefaultConfig } = await import("@/types/config");
+        const config = getDefaultConfig();
+        expect(config.ai.endpoints[0].name).toBe("Default endpoint");
+        expect(config.ai.testPrompt).toBe("Introduce yourself in one sentence");
+    });
+
+    it("中文界面下保持中文，且绝不会把 i18n key 当文案", async () => {
+        const zh = (await import("@/../public/i18n/zh-CN.json")).default as Record<string, string>;
+        const { initI18n, setFallback } = await import("@/lib/i18n");
+        initI18n(zh);
+        setFallback(zh);
+        const { getDefaultConfig } = await import("@/types/config");
+        const config = getDefaultConfig();
+        expect(config.ai.endpoints[0].name).toBe("默认端点");
+        expect(config.ai.testPrompt).toBe("请用一句话简要介绍你自己");
+    });
+
+    it("字典未注入时回落到中性英文，而不是 key（回归：默认端点会被命名成 key 并落盘）", async () => {
+        const { initI18n, setFallback } = await import("@/lib/i18n");
+        initI18n({});
+        setFallback({});
+        const { getDefaultConfig } = await import("@/types/config");
+        const config = getDefaultConfig();
+        expect(config.ai.endpoints[0].name).toBe("Default");
+        expect(config.ai.endpoints[0].name).not.toContain("config.");
+        expect(config.ai.testPrompt).not.toContain("config.");
+    });
+});

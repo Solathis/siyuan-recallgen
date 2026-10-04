@@ -493,6 +493,7 @@
     "ai.endpointNotFound": "Endpoint referenced by model {0} does not exist: {1}",
     "ai.timeout": "Request timed out after {0}s",
     "ai.proxyFailed": "Kernel network proxy failed: {0}",
+    "config.defaultEndpointName": "Default endpoint",
     "ai.proxyBadResponse": "The kernel network proxy returned an unexpected payload",
     "ai.responseNotJson": "AI response is not JSON",
     "ai.responseNoContent": "AI response contains no content",
@@ -585,5 +586,6 @@
     "export.correct": "Correct",
     "export.unanswered": "Unanswered",
     "export.duration": "Duration",
-    "export.byType": "By type"
+    "export.byType": "By type",
+    "config.defaultTestPrompt": "Introduce yourself in one sentence"
 }

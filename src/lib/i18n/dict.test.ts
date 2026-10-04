@@ -35,7 +35,8 @@ function collectReferencedKeys(): { literal: Set<string>; prefixes: Set<string> 
 
     for (const file of walk(SRC_DIR)) {
         const code = readFileSync(file, "utf8");
-        for (const match of code.matchAll(/\bt\(\s*"([^"]+)"/g)) {
+        // tOr(key, fallback) 也引用字典键，收集器必须一并识别，否则会被误报为死 key
+        for (const match of code.matchAll(/\b(?:t|tOr)\(\s*"([^"]+)"/g)) {
             literal.add(match[1]);
         }
         for (const match of code.matchAll(/\bt\(\s*`([^`$]*)\$\{/g)) {
