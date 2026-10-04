@@ -1,3 +1,61 @@
+<script module lang="ts">
+    /** 可聚焦的格子：index 是 DOM 顺序下标，col/row 是网格坐标 */
+    export interface FocusCell {
+        index: number;
+        col: number;
+        row: number;
+    }
+
+    /**
+     * 键盘漫游的目标格子。
+     *
+     * 只在「有日期的格子」集合内移动：窗口前后有补位格（渲染成 span、不可聚焦），
+     * 按几何位置直接加减会让焦点落到不存在的元素上，表现为按键没反应。
+     */
+    export function nextFocusCell(
+        cells: FocusCell[],
+        from: { col: number; row: number },
+        key: string
+    ): FocusCell | null {
+        if (cells.length === 0) return null;
+        const at = (col: number, row: number) => cells.find((cell) => cell.col === col && cell.row === row);
+
+        switch (key) {
+            case "ArrowUp":
+                for (let r = from.row - 1; r >= 0; r--) {
+                    const hit = at(from.col, r);
+                    if (hit) return hit;
+                }
+                return null;
+            case "ArrowDown":
+                for (let r = from.row + 1; r <= 6; r++) {
+                    const hit = at(from.col, r);
+                    if (hit) return hit;
+                }
+                return null;
+            case "ArrowLeft":
+                for (let c = from.col - 1; c >= 0; c--) {
+                    const hit = at(c, from.row);
+                    if (hit) return hit;
+                }
+                return null;
+            case "ArrowRight":
+                for (let c = from.col + 1; ; c++) {
+                    const hit = at(c, from.row);
+                    if (hit) return hit;
+                    // 右侧已无列可找
+                    if (c > cells[cells.length - 1].col) return null;
+                }
+            case "Home":
+                return cells[0];
+            case "End":
+                return cells[cells.length - 1];
+            default:
+                return null;
+        }
+    }
+</script>
+
 <script lang="ts">
     import { cn } from "@/lib/utils";
     import * as Select from "@/lib/components/ui/select";
@@ -73,6 +131,58 @@
     const years = $derived(rangeYears(records, today));
 
     let range = $state<HeatmapRange>("recent");
+
+    /**
+     * 键盘漫游位置（roving tabindex）。
+     * 一屏三百多个格子若都在 Tab 序列里，键盘用户要按几百次才能走过热力图，
+     * 因此只让一个格子可 Tab 聚焦，格内用方向键移动。
+     */
+    let focusIndex = $state(0);
+    /** 热力图主体容器，供键盘漫游定位格子 */
+    let listEl: HTMLElement | null = $state(null);
+
+    /** 第几列第几行 → 线性下标（与 DOM 顺序一致） */
+    function cellIndex(colIndex: number, rowIndex: number): number {
+        return colIndex * 7 + rowIndex;
+    }
+
+    /**
+     * 真正可聚焦的格子（有日期的）。
+     * 窗口前后的补位格渲染成 span，不在 Tab 序列里，
+     * 因此方向键只能在可聚焦集合内移动，否则会走到没有对应元素的格子上。
+     */
+    const focusableCells = $derived.by(() => {
+        const out: FocusCell[] = [];
+        cols.forEach((column, col) =>
+            column.forEach((cell, row) => {
+                if (cell.date) out.push({ index: cellIndex(col, row), col, row });
+            })
+        );
+        return out;
+    });
+
+    /** 当前 Tab 停靠的格子必须存在（数据或范围变化后可能要重算） */
+    $effect(() => {
+        const list = focusableCells;
+        if (list.length === 0) return;
+        if (!list.some((cell) => cell.index === focusIndex)) {
+            // 回落到最新的一天：热力图右端是「最近」，比跳到最左更有用
+            focusIndex = list[list.length - 1].index;
+        }
+    });
+
+    /** 方向键在 7 行 × N 列的网格里移动焦点（跳过补位格） */
+    function onCellKeydown(event: KeyboardEvent, colIndex: number, rowIndex: number): void {
+        const target = nextFocusCell(focusableCells, { col: colIndex, row: rowIndex }, event.key);
+        if (!target) return;
+        event.preventDefault();
+        const next = target.index;
+        focusIndex = next;
+        // 焦点跟随：tabindex 更新后再把焦点移到新格子
+        queueMicrotask(() => {
+            listEl?.querySelector<HTMLElement>(`[data-cell-index="${next}"]`)?.focus();
+        });
+    }
 
     function onRangeChange(v: string) {
         range = v === "recent" ? "recent" : Number(v);
@@ -203,7 +313,7 @@
         </div>
 
         <!-- 热力图主体：窄屏横向滚动 -->
-        <div class="min-w-0 flex-1 overflow-x-auto" role="group" aria-label={t("heatmap.ariaLabel")}>
+        <div class="min-w-0 flex-1 overflow-x-auto" role="group" aria-label={t("heatmap.ariaLabel")} bind:this={listEl}>
             <div class="w-max">
                 <div class="flex gap-1 pb-1 text-[10px] leading-none text-muted-foreground">
                     {#each monthLabels as label}
@@ -211,14 +321,16 @@
                     {/each}
                 </div>
                 <div class="flex gap-1">
-                    {#each cols as col}
+                    {#each cols as col, colIndex (colIndex)}
                         <div class="flex flex-col gap-1">
-                            {#each col as cell}
+                            {#each col as cell, rowIndex (rowIndex)}
                                 {#if cell.date}
                                     {@const bg = colorFor(cell.score)}
                                     {@const safeBg = isSafeCssColor(bg) ? bg : null}
                                     <button
                                         type="button"
+                                        data-cell-index={cellIndex(colIndex, rowIndex)}
+                                        tabindex={cellIndex(colIndex, rowIndex) === focusIndex ? 0 : -1}
                                         class={cn(
                                             "rounded-[2px] transition-transform hover:scale-125 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
                                             bg === null && "bg-muted"
@@ -230,9 +342,13 @@
                                         aria-label={fmtTip(cell)}
                                         onmouseenter={() => onEnter(cell)}
                                         onmouseleave={onLeave}
-                                        onfocus={() => onEnter(cell)}
+                                        onfocus={() => {
+                                            focusIndex = cellIndex(colIndex, rowIndex);
+                                            onEnter(cell);
+                                        }}
                                         onblur={onLeave}
                                         onclick={() => onEnter(cell)}
+                                        onkeydown={(e) => onCellKeydown(e, colIndex, rowIndex)}
                                     ></button>
                                 {:else}
                                     <span class="block" style="width: {CELL}px; height: {CELL}px" aria-hidden="true"

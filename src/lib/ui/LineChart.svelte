@@ -70,7 +70,7 @@
     }
 </script>
 
-<svg viewBox="0 0 {width} {height}" class="h-auto w-full" role="img" aria-label={ariaLabel} preserveAspectRatio="none">
+<svg viewBox="0 0 {width} {height}" class="h-auto w-full" role="img" aria-label={ariaLabel}>
     <!-- 水平网格与 y 轴刻度 -->
     {#each yTicks as tick (tick)}
         <line
