@@ -1,3 +1,21 @@
+<script module lang="ts">
+    /** 「重试」需要重跑的流程 */
+    export type RetryAction = "reviewDue" | "dateGenerate" | "resume" | "generate";
+
+    /**
+     * 错误页的「重试」应当重跑哪条流程。
+     *
+     * 此前一律重跑「出题」：从题库复习或按日期范围进入时失败，
+     * 重试会拿着空的 tabData.content 去请求一次出题。
+     */
+    export function retryAction(mode: string | undefined): RetryAction {
+        if (mode === "reviewDue") return "reviewDue";
+        if (mode === "dateGenerate") return "dateGenerate";
+        if (mode === "resume") return "resume";
+        return "generate";
+    }
+</script>
+
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
     import { showMessage } from "siyuan";
@@ -332,6 +350,28 @@
             if (cancelled) return;
             error = describeError(e);
             panelState = "answering";
+        }
+    }
+
+    /**
+     * 按当前 tab 的进入方式重试。
+     *
+     * 错误页的「重试」原先一律调用 startGenerate()：复习到期题目或按日期范围
+     * 进入时失败，重试会拿空的 tabData.content 去重新出题（等于发一次空内容请求）。
+     */
+    async function retry() {
+        switch (retryAction(tabData.mode)) {
+            case "reviewDue":
+                await startDueReview();
+                return;
+            case "dateGenerate":
+                await startDateGenerate();
+                return;
+            case "resume":
+                await resume();
+                return;
+            default:
+                await startGenerate();
         }
     }
 
@@ -699,7 +739,7 @@
                     <pre
                         class="bg-muted text-muted-foreground max-h-32 w-full overflow-auto rounded-md p-3 text-left text-xs">{error.detail}</pre>
                     <p class="text-muted-foreground text-sm">{error.hint}</p>
-                    <Button onclick={() => void startGenerate()}>{t("common.retry")}</Button>
+                    <Button onclick={() => void retry()}>{t("common.retry")}</Button>
                 </div>
             {:else if questions.length === 0}
                 <!-- 补齐空态：恢复到一个空会话时原实现会整屏空白 -->

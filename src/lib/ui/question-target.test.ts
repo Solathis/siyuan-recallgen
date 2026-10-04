@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Question, UserAnswer } from "@/types/quiz";
 import { editorTarget } from "./QuestionView.svelte";
+import { retryAction } from "./QuizPanel.svelte";
 
 const coding = (starter?: string): Question =>
     ({
@@ -36,5 +37,25 @@ describe("editorTarget", () => {
         const choice = { id: "q-2", type: "true_false", difficulty: "easy", question: "1=1", answer: true } as Question;
         expect(editorTarget(undefined, choice)).toBe("");
         expect(editorTarget({ type: "single_choice", value: 0 }, choice)).toBe("");
+    });
+});
+
+describe("retryAction", () => {
+    it("复习到期题目失败后重试仍走复习流程（回归：曾改为重新出题）", () => {
+        expect(retryAction("reviewDue")).toBe("reviewDue");
+    });
+
+    it("按日期范围进入时重试回到日期范围流程", () => {
+        expect(retryAction("dateGenerate")).toBe("dateGenerate");
+    });
+
+    it("恢复进度失败时重试仍去恢复", () => {
+        expect(retryAction("resume")).toBe("resume");
+    });
+
+    it("普通出题与未知模式回落到出题流程", () => {
+        expect(retryAction("generate")).toBe("generate");
+        expect(retryAction(undefined)).toBe("generate");
+        expect(retryAction("review")).toBe("generate");
     });
 });
