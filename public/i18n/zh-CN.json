@@ -118,6 +118,7 @@
     "quiz.gradingProgress": "判分中 {0}/{1}",
     "quiz.analyzing": "正在生成薄弱点分析…",
     "quiz.noQuestions": "AI 未生成任何题目，请检查内容或重试",
+    "quiz.fewerQuestions": "请求 {0} 题，实际生成 {1} 题（其余被判定为不合格或模型未给足）",
     "quiz.emptySession": "这份试卷没有题目，请关闭后重新生成",
     "quiz.confirmSubmitUnanswered": "还有 {0} 题未作答，确定要交卷吗？未作答的题目将计 0 分。",
     "quiz.navLabel": "题号导航",

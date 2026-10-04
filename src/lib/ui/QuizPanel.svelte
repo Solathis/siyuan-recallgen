@@ -412,6 +412,12 @@
                 panelState = "answering";
                 return;
             }
+            // 模型少给题时原先只是静默少给：这里按请求题数对比并提示，
+            // 让用户知道可以重试或降低题量，而不是以为设置没生效
+            const requested = config.general.difficulty.total;
+            if (tabData.mode !== "reviewDue" && generated.length < requested) {
+                showMessage(t("quiz.fewerQuestions", String(requested), String(generated.length)), 8000);
+            }
             const id = genId();
             session = {
                 id,
