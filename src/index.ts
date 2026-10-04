@@ -37,10 +37,13 @@ export default class RecallGenPlugin extends Plugin {
     private selector: QuizSelector | null = null;
     /** 配置变化订阅者（答题面板等），保存配置后统一通知 */
     private readonly configListeners = new Set<(config: RecallGenConfig) => void>();
-    /** mount() 返回的是组件的导出成员（含 beforeDestroy 等），不是组件实例 */
-    private quizComp: { beforeDestroy?: () => void } | null = null;
-    private settingComp: Record<string, unknown> | null = null;
-    private historyComp: Record<string, unknown> | null = null;
+    /**
+     * 当前已挂载的组件，按宿主元素索引。
+     * mount() 返回的是组件的导出成员（含 beforeDestroy 等），不是组件实例。
+     * 同一类型的 tab / 对话框可以同时打开多个，所以必须逐个记录，
+     * 否则后开的会覆盖引用，先关的那个既不会 unmount 也不会清理自己的监听。
+     */
+    private readonly mounted = new Map<HTMLElement, Record<string, unknown>>();
 
     async onload() {
         this.addIcons(ICON);
@@ -91,50 +94,57 @@ export default class RecallGenPlugin extends Plugin {
             type: QUIZ_TAB,
             init: function () {
                 const c = this as unknown as Custom;
+                const host = c.element as HTMLElement;
                 const div = document.createElement("div");
                 div.style.height = "100%";
-                (c.element as HTMLElement).appendChild(div);
-                self.quizComp = mount(QuizPanel as Component, {
-                    target: div,
-                    props: {
-                        service: self.buildService(),
-                        tabData: c.data as QuizTabData,
-                        closeTab: () => c.tab.close(),
-                    },
-                }) as { beforeDestroy?: () => void };
+                host.appendChild(div);
+                self.mounted.set(
+                    host,
+                    mount(QuizPanel as Component, {
+                        target: div,
+                        props: {
+                            service: self.buildService(),
+                            tabData: c.data as QuizTabData,
+                            closeTab: () => c.tab.close(),
+                        },
+                    }) as Record<string, unknown>
+                );
             },
-            destroy: () => {
-                self.quizComp?.beforeDestroy?.();
-                self.quizComp = null;
+            destroy: function () {
+                self.destroyMounted((this as unknown as Custom).element as HTMLElement);
             },
         });
         this.addTab({
             type: HISTORY_TAB,
             init: function () {
                 const c = this as unknown as Custom;
+                const host = c.element as HTMLElement;
                 const div = document.createElement("div");
                 div.style.height = "100%";
                 div.style.overflow = "auto";
-                (c.element as HTMLElement).appendChild(div);
-                self.historyComp = mount(HistoryPanel as Component, {
-                    target: div,
-                    props: {
-                        service: self.buildService(),
-                        onOpenReview: (entry: ScoreIndexEntry) => void self.openReviewTab(entry),
-                        onStartReview: (scope: { tag?: string; type?: QuestionType }) =>
-                            self.openQuizTab({
-                                mode: "reviewDue",
-                                sourceDocId: "",
-                                sourceTitle: scope.tag ?? (scope.type ? t(`type.${scope.type}`) : t("bank.reviewDue")),
-                                dueTag: scope.tag,
-                                dueType: scope.type,
-                            }),
-                    },
-                });
+                host.appendChild(div);
+                self.mounted.set(
+                    host,
+                    mount(HistoryPanel as Component, {
+                        target: div,
+                        props: {
+                            service: self.buildService(),
+                            onOpenReview: (entry: ScoreIndexEntry) => void self.openReviewTab(entry),
+                            onStartReview: (scope: { tag?: string; type?: QuestionType }) =>
+                                self.openQuizTab({
+                                    mode: "reviewDue",
+                                    sourceDocId: "",
+                                    sourceTitle:
+                                        scope.tag ?? (scope.type ? t(`type.${scope.type}`) : t("bank.reviewDue")),
+                                    dueTag: scope.tag,
+                                    dueType: scope.type,
+                                }),
+                        },
+                    }) as Record<string, unknown>
+                );
             },
-            destroy: () => {
-                if (self.historyComp) unmount(self.historyComp);
-                self.historyComp = null;
+            destroy: function () {
+                self.destroyMounted((this as unknown as Custom).element as HTMLElement);
             },
         });
         // 仅创建 Setting 实例以在插件列表显示齿轮图标，不使用 addItem 避免被 fn__flex-center/fn__size200 限制宽度
@@ -156,14 +166,23 @@ export default class RecallGenPlugin extends Plugin {
         this.selector?.unregister();
         // 先把合并窗口内待写的配置落盘，避免刚改完设置就退出导致丢失
         await this.configStore.flushDeferred().catch((e) => console.warn("[RecallGen] 配置落盘失败", e));
-        await this.scoreStore.flush().catch((e) => console.warn("[RecallGen] 成绩落盘失败", e));
-        if (this.quizComp) unmount(this.quizComp);
-        if (this.settingComp) unmount(this.settingComp);
-        if (this.historyComp) unmount(this.historyComp);
-        this.quizComp = null;
-        this.settingComp = null;
-        this.historyComp = null;
+        // 各面板的 beforeDestroy 会做最后一次进度保存，因此先卸载组件再冲刷
+        for (const host of [...this.mounted.keys()]) this.destroyMounted(host);
+        await Promise.all([
+            this.scoreStore.flush().catch((e) => console.warn("[RecallGen] 成绩落盘失败", e)),
+            this.progressStore.flush().catch((e) => console.warn("[RecallGen] 答题进度落盘失败", e)),
+            this.bankStore.flush().catch((e) => console.warn("[RecallGen] 题库落盘失败", e)),
+        ]);
         showMessage(this.i18n.byePlugin ?? t("byePlugin"));
+    }
+
+    /** 卸载并登记注销：先跑组件自己的 beforeDestroy，再交给 Svelte 卸载 */
+    private destroyMounted(host: HTMLElement): void {
+        const comp = this.mounted.get(host);
+        if (!comp) return;
+        this.mounted.delete(host);
+        (comp as { beforeDestroy?: () => void }).beforeDestroy?.();
+        unmount(comp);
     }
 
     async uninstall() {
@@ -203,63 +222,66 @@ export default class RecallGenPlugin extends Plugin {
             height: "70vh",
             destroyCallback: () => closeSetting(),
         });
+        const host = dialog.element as HTMLElement;
         const root = dialog.element.querySelector(".rg-scope") as HTMLElement;
         if (!root) return;
-        const closeSetting = () => {
-            if (self.settingComp) unmount(self.settingComp);
-            self.settingComp = null;
-        };
+        const closeSetting = () => self.destroyMounted(host);
         void this.scoreStore.listIndex().then((scores) => {
-            self.settingComp = mount(SettingPanel as Component, {
-                target: root,
-                props: {
-                    config: self.config,
-                    service: self.buildService(),
-                    scores,
-                    onTestConnection: () => aiTestConnection(self.config.ai),
-                    onClearScores: async () => {
-                        await self.scoreStore.clear();
+            // 对话框可能在成绩加载期间就被关闭
+            if (!dialog.element.isConnected) return;
+            self.mounted.set(
+                host,
+                mount(SettingPanel as Component, {
+                    target: root,
+                    props: {
+                        config: self.config,
+                        service: self.buildService(),
+                        scores,
+                        onTestConnection: () => aiTestConnection(self.config.ai),
+                        onClearScores: async () => {
+                            await self.scoreStore.clear();
+                        },
+                        onClearProgress: async () => {
+                            await self.progressStore.clearAll();
+                        },
+                        onExportBank: () => this.bankStore.list(),
+                        onImportBank: (items) => this.bankStore.importItems(items),
+                        onClearBank: async () => {
+                            await self.bankStore.clear();
+                        },
+                        onExportScores: () => self.scoreStore.exportAll(),
+                        onImportScores: async (items) => {
+                            const before = (await self.scoreStore.listIndex()).length;
+                            await self.scoreStore.importMany(items);
+                            const after = (await self.scoreStore.listIndex()).length;
+                            return { added: after - before, skipped: items.length - (after - before) };
+                        },
+                        onImportConfig: async (next, result) => {
+                            // 导入的配置立即生效并落盘；warnings 由设置面板逐条提示
+                            self.config = next;
+                            for (const listener of self.configListeners) listener(next);
+                            try {
+                                await self.configStore.set(next, { immediate: true });
+                            } catch (err) {
+                                console.error("[RecallGen] 导入配置落盘失败", err);
+                                showMessage(t("settings.saveFailed", (err as Error).message), 7000, "error");
+                            }
+                            console.info("[RecallGen] 配置导入完成", result.warnings);
+                        },
+                        onSave: async (next: RecallGenConfig) => {
+                            self.config = next;
+                            for (const listener of self.configListeners) listener(next);
+                            try {
+                                await self.configStore.set(self.config);
+                            } catch (err) {
+                                // 写盘失败不能再静默吞掉：否则用户以为设置已保存
+                                console.error("[RecallGen] 保存配置失败", err);
+                                showMessage(t("settings.saveFailed", (err as Error).message), 7000, "error");
+                            }
+                        },
                     },
-                    onClearProgress: async () => {
-                        await self.progressStore.clearAll();
-                    },
-                    onExportBank: () => this.bankStore.list(),
-                    onImportBank: (items) => this.bankStore.importItems(items),
-                    onClearBank: async () => {
-                        await self.bankStore.clear();
-                    },
-                    onExportScores: () => self.scoreStore.exportAll(),
-                    onImportScores: async (items) => {
-                        const before = (await self.scoreStore.listIndex()).length;
-                        await self.scoreStore.importMany(items);
-                        const after = (await self.scoreStore.listIndex()).length;
-                        return { added: after - before, skipped: items.length - (after - before) };
-                    },
-                    onImportConfig: async (next, result) => {
-                        // 导入的配置立即生效并落盘；warnings 由设置面板逐条提示
-                        self.config = next;
-                        for (const listener of self.configListeners) listener(next);
-                        try {
-                            await self.configStore.set(next, { immediate: true });
-                        } catch (err) {
-                            console.error("[RecallGen] 导入配置落盘失败", err);
-                            showMessage(t("settings.saveFailed", (err as Error).message), 7000, "error");
-                        }
-                        console.info("[RecallGen] 配置导入完成", result.warnings);
-                    },
-                    onSave: async (next: RecallGenConfig) => {
-                        self.config = next;
-                        for (const listener of self.configListeners) listener(next);
-                        try {
-                            await self.configStore.set(self.config);
-                        } catch (err) {
-                            // 写盘失败不能再静默吞掉：否则用户以为设置已保存
-                            console.error("[RecallGen] 保存配置失败", err);
-                            showMessage(t("settings.saveFailed", (err as Error).message), 7000, "error");
-                        }
-                    },
-                },
-            });
+                }) as Record<string, unknown>
+            );
         });
     }
 
