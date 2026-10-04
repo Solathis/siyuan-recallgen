@@ -626,13 +626,19 @@
         if (countdownEnabled) startCountdown();
     }
 
+    /** 保存进行中：连点两次会各建一篇文档，因此期间禁用按钮 */
+    let savingDoc = $state(false);
+
     async function saveToDoc(wrongOnly: boolean) {
-        if (!session || !results) return;
+        if (!session || !results || savingDoc) return;
+        savingDoc = true;
         try {
             await service.saveResultToDoc(session, analysis ?? "", results, wrongOnly);
             showMessage(wrongOnly ? t("quiz.savedWrongDoc") : t("quiz.savedDoc"));
         } catch (e) {
             error = describeError(e);
+        } finally {
+            savingDoc = false;
         }
     }
 
@@ -951,6 +957,7 @@
                     {duration}
                     onsave={() => void saveToDoc(false)}
                     onsavewrong={() => void saveToDoc(true)}
+                    {savingDoc}
                     onretrywrong={retryWrong}
                     ondiscard={closeTab}
                 />

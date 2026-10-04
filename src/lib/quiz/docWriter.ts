@@ -10,9 +10,14 @@ function diffLabel(diff: Question["difficulty"]): string {
     return t(`diff.${diff}`);
 }
 
+/**
+ * 文件名里的时间戳 `YYYYMMDD-HHMMSS`。
+ * 只到天的话，同一天从同一篇笔记保存两次会落到同一个 hpath：
+ * 思源会再建一篇同名文档，用户莫名其妙多出一份。
+ */
 function fmtDate(d = new Date()): string {
     const p = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
 /**

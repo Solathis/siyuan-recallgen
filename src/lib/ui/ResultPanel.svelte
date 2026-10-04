@@ -20,6 +20,7 @@
         duration = 0,
         onsave = () => {},
         onsavewrong = () => {},
+        savingDoc = false,
         onretrywrong = () => {},
         ondiscard = () => {},
     }: {
@@ -30,6 +31,8 @@
         duration?: number;
         onsave?: () => void;
         onsavewrong?: () => void;
+        /** 保存到文档进行中：按钮置灰，避免重复建文档 */
+        savingDoc?: boolean;
         /** 只重做未达标的题目 */
         onretrywrong?: () => void;
         ondiscard?: () => void;
@@ -329,8 +332,10 @@
                     >
                 {/if}
                 <Button variant="ghost" size="sm" onclick={() => ondiscard()}>{t("result.discard")}</Button>
-                <Button variant="outline" size="sm" onclick={() => onsavewrong()}>{t("result.saveWrong")}</Button>
-                <Button size="sm" onclick={() => onsave()}>{t("result.save")}</Button>
+                <Button variant="outline" size="sm" disabled={savingDoc} onclick={() => onsavewrong()}
+                    >{t("result.saveWrong")}</Button
+                >
+                <Button size="sm" disabled={savingDoc} onclick={() => onsave()}>{t("result.save")}</Button>
             </div>
         </Tabs.Content>
 

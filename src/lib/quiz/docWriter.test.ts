@@ -31,31 +31,39 @@ const q = (over: Partial<Question> & Pick<Question, "type">): Question =>
 describe("titleOf", () => {
     const date = new Date(2026, 8, 23);
 
-    it("包含前缀、日期与来源标题", () => {
-        expect(titleOf("我的笔记", date)).toBe("复习题_20260923_我的笔记");
+    it("包含前缀、日期时间与来源标题", () => {
+        expect(titleOf("我的笔记", date)).toBe("复习题_20260923-000000_我的笔记");
+    });
+
+    it("同一天不同时刻保存得到不同标题（回归：只到天会导致重复建文档）", () => {
+        const morning = new Date(2026, 8, 23, 9, 15, 30);
+        const afternoon = new Date(2026, 8, 23, 14, 5, 6);
+        expect(titleOf("我的笔记", morning)).not.toBe(titleOf("我的笔记", afternoon));
+        expect(titleOf("我的笔记", morning)).toBe("复习题_20260923-091530_我的笔记");
+        expect(titleOf("我的笔记", afternoon)).toBe("复习题_20260923-140506_我的笔记");
     });
 
     it("替换路径非法字符", () => {
-        expect(titleOf('a/b\\c:d*e?f"g<h>i|j', date)).toBe("复习题_20260923_a_b_c_d_e_f_g_h_i_j");
+        expect(titleOf('a/b\\c:d*e?f"g<h>i|j', date)).toBe("复习题_20260923-000000_a_b_c_d_e_f_g_h_i_j");
     });
 
     it("剔除控制字符", () => {
-        expect(titleOf("前\u0000中\u001f后", date)).toBe("复习题_20260923_前中后");
+        expect(titleOf("前\u0000中\u001f后", date)).toBe("复习题_20260923-000000_前中后");
     });
 
     it("折叠连续空白并去掉结尾的点与空格（Windows 不允许）", () => {
-        expect(titleOf("标题. .  ", date)).toBe("复习题_20260923_标题");
-        expect(titleOf("  a   b  ", date)).toBe("复习题_20260923_a b");
+        expect(titleOf("标题. .  ", date)).toBe("复习题_20260923-000000_标题");
+        expect(titleOf("  a   b  ", date)).toBe("复习题_20260923-000000_a b");
     });
 
     it("超长标题被截断到 40 字符", () => {
         const title = titleOf("长".repeat(100), date);
-        expect(title).toBe(`复习题_20260923_${"长".repeat(40)}`);
+        expect(title).toBe(`复习题_20260923-000000_${"长".repeat(40)}`);
     });
 
     it("来源标题清洗后为空时退化为前缀", () => {
-        expect(titleOf("...", date)).toBe("复习题_20260923_复习题");
-        expect(titleOf("", date)).toBe("复习题_20260923_复习题");
+        expect(titleOf("...", date)).toBe("复习题_20260923-000000_复习题");
+        expect(titleOf("", date)).toBe("复习题_20260923-000000_复习题");
     });
 });
 
@@ -204,7 +212,9 @@ describe("文档写入的注入与脏数据防护", () => {
             });
         const title = titleOf("🎓".repeat(60));
         expect(hasLoneSurrogate(title)).toBe(false);
-        expect([...title].length).toBeLessThan(60);
+        // 源标题部分按码点截到 40（emoji 算一个码点，不是 UTF-16 的两个）
+        expect(title.endsWith("🎓".repeat(40))).toBe(true);
+        expect(title).not.toContain("🎓".repeat(41));
     });
 
     it("Windows 保留设备名被加前缀规避", () => {
