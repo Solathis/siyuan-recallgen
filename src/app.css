@@ -261,9 +261,12 @@
     animation: rg-indeterminate 1.2s ease-in-out infinite;
 }
 
-/* 尊重系统的「减少动态效果」设置 */
+/* 尊重系统的「减少动态效果」设置：把动画彻底停掉，而不是放慢（放慢仍会动） */
 @media (prefers-reduced-motion: reduce) {
     .rg-indeterminate-bar {
-        animation-duration: 3s;
+        animation: none;
+        /* 停掉动画后给一条静态提示，否则进度条看起来是空的 */
+        transform: none;
+        opacity: 0.6;
     }
 }

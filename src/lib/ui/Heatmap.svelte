@@ -3,8 +3,9 @@
     import * as Select from "@/lib/components/ui/select";
     import { HEATMAP_WEEKS, rangeYears, startOfDay, windowBounds, type HeatmapRange } from "./heatmap-range";
     import { t } from "../i18n";
+    import { createClock } from "./clock.svelte";
     import { isSafeCssColor } from "@/types/quiz";
-    import type { ScoreIndexEntry, ScoreRange, HeatmapConfig as HMConfig } from "@/types/quiz";
+    import type { ScoreIndexEntry, HeatmapConfig as HMConfig } from "@/types/quiz";
 
     let {
         records = [],
@@ -60,7 +61,13 @@
         return out;
     }
 
-    const today = startOfDay(new Date());
+    /**
+     * 今天的零点。
+     * 面板可能被长期打开（思源不重启），若只算一次，跨过午夜后
+     * 「最近一年」的窗口会一直停在昨天，因此跟随共享时钟推进。
+     */
+    const clock = createClock();
+    const today = $derived(startOfDay(new Date(clock.now)));
 
     /** 有记录的自然年 + 今年，倒序；用于范围选择器 */
     const years = $derived(rangeYears(records, today));
@@ -116,10 +123,13 @@
      * 无记录的格子不再硬编码 #ebedf0（该颜色在暗色主题下与背景冲突），
      * 返回 null 表示交给 .bg-muted 跟随主题。
      */
+    /** 色阶按 min 降序，取第一个命中的区间 */
+    const rangesDesc = $derived([...(config?.ranges ?? [])].sort((a, b) => b.min - a.min));
+
     function colorFor(score: number | null): string | null {
         if (score === null) return null;
-        const ranges: ScoreRange[] = [...(config?.ranges ?? [])].sort((a, b) => b.min - a.min);
-        for (const r of ranges) {
+        // 复用派生值：每个格子都重新排序会让约 371 个格子各排一次
+        for (const r of rangesDesc) {
             if (score >= r.min) return r.color;
         }
         return null;

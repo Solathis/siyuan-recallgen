@@ -10,6 +10,7 @@
     import * as Table from "@/lib/components/ui/table";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
+    import { createClock } from "./clock.svelte";
     import { lineGeometry } from "../quiz/chart-geometry";
     import {
         MAX_BANK_HISTORY,
@@ -72,9 +73,12 @@
         visible = PAGE_SIZE;
     });
 
+    /** 到期数量与时间相关：读共享时钟，面板长期打开时也会随过期题目更新 */
+    const clock = createClock();
+
     const counts = $derived({
         total: items.length,
-        due: items.filter((item) => item.card.due <= Date.now()).length,
+        due: items.filter((item) => item.card.due <= clock.now).length,
         weak: items.filter((item) => masteryScore(item) < 60).length,
     });
 
@@ -107,7 +111,7 @@
             return true;
         });
     });
-    const scopeDueCount = $derived(scopeItems.filter((item) => item.card.due <= Date.now()).length);
+    const scopeDueCount = $derived(scopeItems.filter((item) => item.card.due <= clock.now).length);
 
     const filtered = $derived.by(() => {
         const keyword = query.trim().toLowerCase();
