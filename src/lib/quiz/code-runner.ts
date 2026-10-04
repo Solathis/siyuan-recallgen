@@ -30,8 +30,10 @@ export interface RunUnsupported {
 export interface RunSupported {
     supported: true;
     results: CaseOutcome[];
-    /** 实际执行的用例数 */
+    /** 实际跑出结果的用例数（不含因加载失败/抛错而未产出值的用例） */
     executed: number;
+    /** 入口函数未能加载时的原因；正常时为 undefined */
+    loadError?: string;
 }
 
 export type RunOutcome = RunSupported | RunUnsupported;
@@ -133,42 +135,149 @@ export function looseEqual(actual: unknown, expected: unknown): boolean {
 }
 
 /**
+ * 执行用户代码前会删除并以形参遮蔽的全局入口。
+ *
+ * 学生代码可能由 AI 依据笔记内容生成，必须按不可信代码对待：
+ * Worker 只能保证「不会卡死主线程」，挡不住网络访问，
+ * 于是它既能向任意地址发请求，也能对本地思源内核发起 CSRF。
+ */
+export const BLOCKED_GLOBALS = [
+    "fetch",
+    "XMLHttpRequest",
+    "WebSocket",
+    "EventSource",
+    "importScripts",
+    "Worker",
+    "SharedWorker",
+    "indexedDB",
+    "caches",
+] as const;
+
+/**
  * 生成 Worker 内运行的脚本。
  *
- * 学生代码与题目提供的入口函数名会被拼进来，因此这里只用于本地执行用户自己写的代码，
- * 不是安全沙箱：真正的隔离来自 Worker 可被终止，而不是作用域限制。
+ * 三层处理：
+ * 1. 在全局对象及其原型链上把上表中的入口改写成 undefined。
+ *    只 `delete self.fetch` 是不够的：fetch 挂在 WorkerGlobalScope 的原型上，
+ *    删掉自有属性后 `globalThis.fetch` 依然能拿到（已在真实浏览器中验证过）。
+ * 2. 再把这些名字作为形参遮蔽进用户代码所在的作用域，
+ *    这样 `fetch(...)` 与被返回的入口函数内部都拿不到它们。
+ * 3. 入口函数可能是 async，必须 await 后再回传；Promise 无法结构化克隆，
+ *    否则每个用例都会以「执行出错」告终。
+ *
+ * 需要说明的是这仍不是完整的沙箱：真正不可绕过需要 iframe + 严格 CSP。
+ * 这里的定位是「执行自己写的练习代码」时的兜底，不是对抗恶意代码的边界。
  */
 export function buildRunnerSource(code: string, entryPoint: string, cases: TestCase[]): string {
     const args = cases.map((testCase) => testCase.args ?? []);
+    const blocked = JSON.stringify(BLOCKED_GLOBALS);
+    const codeLiteral = JSON.stringify(code);
+    const entryLiteral = JSON.stringify(entryPoint);
+
     return `
-const code = ${JSON.stringify(code)};
-const entryPoint = ${JSON.stringify(entryPoint)};
-const cases = ${JSON.stringify(args)};
+"use strict";
+const post = self.postMessage.bind(self);
+const rawCases = ${JSON.stringify(args)};
+const blocked = ${blocked};
 
-const results = [];
-let fn = null;
-let loadError = "";
-try {
-    const factory = new Function(code + "\\n;return typeof " + entryPoint + ' === "function" ? ' + entryPoint + " : null;");
-    fn = factory();
-} catch (e) {
-    loadError = (e && e.message) ? e.message : String(e);
-}
-if (!fn && !loadError) loadError = "没有找到可调用的函数：" + entryPoint;
-
-if (loadError) {
-    cases.forEach((_, index) => results.push({ index, error: loadError }));
-} else {
-    cases.forEach((caseArgs, index) => {
-        try {
-            results.push({ index, actual: fn.apply(null, caseArgs) });
-        } catch (e) {
-            results.push({ index, error: (e && e.message) ? e.message : String(e) });
+/** 在全局对象与原型链上把某个入口彻底改写掉 */
+function blockGlobal(key) {
+    let target = self;
+    while (target) {
+        let desc = null;
+        try { desc = Object.getOwnPropertyDescriptor(target, key); } catch (e) { desc = null; }
+        if (desc) {
+            if (desc.configurable) {
+                try { delete target[key]; } catch (e) { /* 交给下面的改写 */ }
+            }
+            try {
+                Object.defineProperty(target, key, { value: undefined, writable: false, configurable: false });
+            } catch (e) { /* 不可配置且不可写时只能靠形参遮蔽 */ }
+            return;
         }
-    });
+        target = Object.getPrototypeOf(target);
+    }
+    try {
+        Object.defineProperty(self, key, { value: undefined, writable: false, configurable: false });
+    } catch (e) { /* 同上 */ }
 }
-self.postMessage(results);
+
+for (const key of blocked) blockGlobal(key);
+if (self.navigator) {
+    try {
+        Object.defineProperty(self.navigator, "sendBeacon", { value: undefined, writable: false, configurable: false });
+    } catch (e) { /* 只读属性，忽略 */ }
+}
+
+function describe(e) {
+    return e && e.message ? String(e.message) : String(e);
+}
+
+/** 转成可结构化克隆的值：Promise/BigInt/循环引用/超大对象都会让 postMessage 抛错 */
+function safe(value, level) {
+    const depth = level || 0;
+    if (value === null || value === undefined) return value;
+    const kind = typeof value;
+    if (kind === "number") return Number.isFinite(value) ? value : String(value);
+    if (kind === "string" || kind === "boolean") return value;
+    if (kind === "bigint") return value.toString() + "n";
+    if (kind === "symbol" || kind === "function") return String(value);
+    if (value instanceof Date) return value.toISOString();
+    if (depth >= 5) return "[层级过深]";
+    if (Array.isArray(value)) return value.slice(0, 500).map(function (v) { return safe(v, depth + 1); });
+    if (value instanceof Map) return Array.from(value.entries()).slice(0, 200).map(function (p) { return safe(p, depth + 1); });
+    if (value instanceof Set) return Array.from(value.values()).slice(0, 200).map(function (v) { return safe(v, depth + 1); });
+    if (kind === "object") {
+        const out = {};
+        for (const key of Object.keys(value).slice(0, 200)) out[key] = safe(value[key], depth + 1);
+        return out;
+    }
+    return String(value);
+}
+
+(async function () {
+    const results = [];
+    let fn = null;
+    let loadError = "";
+
+    try {
+        const body =
+            "return (function () {\\n" + ${codeLiteral} +
+            "\\n;return typeof " + ${entryLiteral} + ' === "function" ? ' + ${entryLiteral} + " : null;\\n})();";
+        const build = new Function(blocked.join(", "), body);
+        fn = build.apply(null, blocked.map(function () { return undefined; }));
+    } catch (e) {
+        loadError = describe(e);
+    }
+    if (!fn && !loadError) loadError = "没有找到可调用的函数：" + ${entryLiteral};
+
+    if (loadError) {
+        post({
+            loadError: loadError,
+            results: rawCases.map(function (_, index) { return { index: index, error: loadError }; }),
+        });
+        return;
+    }
+
+    for (let index = 0; index < rawCases.length; index++) {
+        try {
+            // await 让 async 入口函数也能正确取到结果
+            const actual = await fn.apply(null, rawCases[index]);
+            results.push({ index: index, actual: safe(actual) });
+        } catch (e) {
+            results.push({ index: index, error: describe(e) });
+        }
+    }
+
+    post({ loadError: "", results: results });
+})();
 `;
+}
+
+/** Worker 回传的负载 */
+interface RawRunPayload {
+    loadError?: string;
+    results?: RawCaseResult[];
 }
 
 /** Worker 回传的原始结果 */
@@ -180,9 +289,10 @@ interface RawCaseResult {
 
 /** 把原始执行结果与期望值比对 */
 export function evaluateCases(cases: TestCase[], raw: RawCaseResult[]): CaseOutcome[] {
+    const byIndex = new Map(raw.map((item) => [item.index, item]));
     return cases.map((testCase, index) => {
         const expected = normalizeExpected(testCase.expected);
-        const result = raw.find((item) => item.index === index);
+        const result = byIndex.get(index);
         if (!result) {
             return { index, passed: false, expected, error: "没有得到执行结果" };
         }
@@ -234,11 +344,11 @@ export async function runCodingTests(options: RunOptions): Promise<RunOutcome> {
         objectUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
         worker = new Worker(objectUrl);
 
-        const raw = await new Promise<RawCaseResult[]>((resolve, reject) => {
+        const raw = await new Promise<RawRunPayload>((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error(`执行超时（${timeoutMs / 1000} 秒）`)), timeoutMs);
             worker!.onmessage = (event) => {
                 clearTimeout(timer);
-                resolve(event.data as RawCaseResult[]);
+                resolve(event.data as RawRunPayload);
             };
             worker!.onerror = (event) => {
                 clearTimeout(timer);
@@ -246,7 +356,17 @@ export async function runCodingTests(options: RunOptions): Promise<RunOutcome> {
             };
         });
 
-        return { supported: true, results: evaluateCases(cases, raw), executed: cases.length };
+        if (!raw || !Array.isArray(raw.results)) {
+            return { supported: false, reason: "执行结果格式异常" };
+        }
+        const results = evaluateCases(cases, raw.results);
+        const loadError = typeof raw.loadError === "string" && raw.loadError ? raw.loadError : undefined;
+        return {
+            supported: true,
+            results,
+            executed: results.filter((r) => r.error === undefined).length,
+            loadError,
+        };
     } catch (e) {
         return { supported: false, reason: (e as Error).message };
     } finally {

@@ -133,6 +133,8 @@
     const runCases = $derived(isRunSupported(runOutcome) ? runOutcome.results : null);
     const runFailure = $derived(runOutcome && !isRunSupported(runOutcome) ? runOutcome.reason : null);
     const passedCount = $derived(runCases ? runCases.filter((r) => r.passed).length : 0);
+    /** 入口函数没加载成功时单独提示，避免只看到一堆一模一样的用例报错 */
+    const runLoadError = $derived(isRunSupported(runOutcome) ? (runOutcome.loadError ?? null) : null);
 
     function formatValue(value: unknown): string {
         if (value === undefined) return "undefined";
@@ -268,6 +270,11 @@
                     <span class="font-semibold">
                         {t("question.runSummary", String(passedCount), String(runCases.length))}
                     </span>
+                    {#if runLoadError}
+                        <span class="text-destructive font-mono break-all">
+                            {t("question.runLoadFailed", runLoadError)}
+                        </span>
+                    {/if}
                     {#each runCases as outcome (outcome.index)}
                         <div class="flex flex-col gap-0.5">
                             <span class={outcome.passed ? "text-success" : "text-destructive"}>

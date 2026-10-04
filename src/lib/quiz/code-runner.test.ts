@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Question, TestCase } from "@/types/quiz";
 import {
+    BLOCKED_GLOBALS,
     buildRunnerSource,
     evaluateCases,
     inferEntryPoint,
@@ -175,11 +176,14 @@ describe("buildRunnerSource", () => {
 
     it("代码里的引号与换行被正确转义，不会破坏脚本", () => {
         const source = buildRunnerSource('const s = "a\\nb"; function f(){return s}', "f", [testCase()]);
-        expect(source).toContain('const code = "const s = \\"a\\\\nb\\"; function f(){return s}";');
+        // 代码以 JSON 字面量形式内联，因此引号与换行都是转义后的形态
+        expect(source).toContain('const s = \\"a\\\\nb\\"; function f(){return s}');
     });
 
     it("会向 worker 回传结果", () => {
-        expect(buildRunnerSource("function f(){}", "f", [testCase()])).toContain("self.postMessage(results)");
+        expect(buildRunnerSource("function f(){}", "f", [testCase()])).toContain(
+            'post({ loadError: "", results: results })'
+        );
     });
 });
 
@@ -292,5 +296,55 @@ describe("runCodingTests - 非法入口函数名", () => {
             cases: [testCase()],
         });
         expect(isRunSupported(outcome) ? "" : outcome.reason).toContain("合法标识符");
+    });
+});
+
+describe("buildRunnerSource - 不可信代码的执行隔离", () => {
+    const source = () => buildRunnerSource("function f() { return 1 }", "f", [testCase()]);
+
+    it("网络与嵌套 Worker 入口被删除", () => {
+        const src = source();
+        for (const name of BLOCKED_GLOBALS) {
+            expect(src).toContain('"' + name + '"');
+        }
+        expect(src).toContain("for (const key of blocked) blockGlobal(key)");
+    });
+
+    it("沿原型链改写全局入口（只 delete self.fetch 挡不住 globalThis.fetch）", () => {
+        const src = source();
+        expect(src).toContain("Object.getOwnPropertyDescriptor(target, key)");
+        expect(src).toContain("target = Object.getPrototypeOf(target)");
+        expect(src).toContain(
+            "Object.defineProperty(target, key, { value: undefined, writable: false, configurable: false })"
+        );
+    });
+
+    it("navigator.sendBeacon 也被改写", () => {
+        expect(source()).toContain('"sendBeacon"');
+    });
+
+    it("被阻断的入口同时作为形参遮蔽进用户代码作用域", () => {
+        const src = source();
+        expect(src).toContain('new Function(blocked.join(", "), body)');
+        expect(src).toContain("build.apply(null, blocked.map(function () { return undefined; }))");
+    });
+
+    it("用户代码被包在函数体内，形参遮蔽才会生效", () => {
+        expect(source()).toContain("return (function () {");
+    });
+
+    it("await 入口函数返回值，async 入口才不会整体失败", () => {
+        expect(source()).toContain("await fn.apply(null, rawCases[index])");
+    });
+
+    it("回传前做安全序列化（BigInt / 循环引用 / 超大对象）", () => {
+        const src = source();
+        expect(src).toContain("bigint");
+        expect(src).toContain("层级过深");
+        expect(src).toContain("slice(0, 500)");
+    });
+
+    it("回传负载带 loadError 字段，供调用方区分加载失败与用例失败", () => {
+        expect(source()).toContain("loadError: loadError");
     });
 });
