@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AIError } from "@/lib/ai/client";
 import type { Question, QuestionType } from "@/types/quiz";
-import { coerceQuestion, toTags, validateQuestions } from "./generator";
+import { coerceQuestion, collectFailedReviews, toTags, validateQuestions } from "./generator";
 
 const ALL: QuestionType[] = ["single_choice", "multiple_choice", "fill_blank", "true_false", "subjective", "coding"];
 
@@ -328,5 +328,62 @@ describe("toTags - 知识点标签归一化", () => {
     it("没有标签时 tags 为 undefined，不写空数组", () => {
         const result = coerceQuestion({ type: "true_false", question: "x", answer: true }, "q-1", ALL);
         expect(result.question?.tags).toBeUndefined();
+    });
+});
+
+describe("collectFailedReviews", () => {
+    it("挑出未通过的题目并保留原因", () => {
+        const result = collectFailedReviews(
+            [
+                { index: 0, passed: true },
+                { index: 1, passed: false, reason: "答案有误" },
+                { index: 2, passed: false },
+            ],
+            3
+        );
+        expect(result.indices).toEqual([1, 2]);
+        expect(result.reasons[0]).toBe("答案有误");
+        expect(result.reasons[1]).toBe("未通过审核");
+    });
+
+    it("忽略 null / 非对象元素（回归：曾直接读 r.passed 抛异常）", () => {
+        expect(() => collectFailedReviews([null, undefined, 42, "x", { index: 0, passed: false }], 1)).not.toThrow();
+        expect(collectFailedReviews([null, undefined, 42, "x", { index: 0, passed: false }], 1).indices).toEqual([0]);
+    });
+
+    it("丢掉小数与越界下标（回归：index=1.5 会取到 undefined 后崩溃）", () => {
+        const result = collectFailedReviews(
+            [
+                { index: 1.5, passed: false },
+                { index: -1, passed: false },
+                { index: 9, passed: false },
+                { index: "1", passed: false },
+                { index: NaN, passed: false },
+            ],
+            3
+        );
+        expect(result.indices).toEqual([]);
+    });
+
+    it("同一题被报多次时只取一次", () => {
+        const result = collectFailedReviews(
+            [
+                { index: 1, passed: false, reason: "第一次" },
+                { index: 1, passed: false, reason: "第二次" },
+            ],
+            3
+        );
+        expect(result.indices).toEqual([1]);
+        expect(result.reasons).toEqual(["第一次"]);
+    });
+
+    it("原因不是字符串时回落到默认文案", () => {
+        const result = collectFailedReviews([{ index: 0, passed: false, reason: 42 }], 1);
+        expect(result.reasons).toEqual(["未通过审核"]);
+    });
+
+    it("空数组与空题库都安全", () => {
+        expect(collectFailedReviews([], 0)).toEqual({ indices: [], reasons: [] });
+        expect(collectFailedReviews([{ index: 0, passed: false }], 0)).toEqual({ indices: [], reasons: [] });
     });
 });

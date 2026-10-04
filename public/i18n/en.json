@@ -3,7 +3,6 @@
     "generateNotebookQuiz": "📚 Generate from Notebook",
     "openDocFirst": "Please open a document first",
     "byePlugin": "Bye, RecallGen",
-
     "common.true": "True",
     "common.false": "False",
     "common.refresh": "Refresh",
@@ -18,7 +17,6 @@
     "common.thinking": "Thinking…",
     "common.blank": "Blank {0}",
     "common.seeAnswer": "See reference answer",
-
     "type.single_choice": "Single Choice",
     "type.multiple_choice": "Multiple Choice",
     "type.fill_blank": "Fill-in-the-blank",
@@ -31,17 +29,14 @@
     "type.true_false_short": "T/F",
     "type.subjective_short": "Essay",
     "type.coding_short": "Code",
-
     "diff.easy": "Easy",
     "diff.medium": "Medium",
     "diff.hard": "Hard",
-
     "chat.globalTitle": "💬 AI Q&A",
     "chat.globalHint": "Ask about this quiz",
     "chat.globalEmpty": "Ask AI any question about this quiz",
     "chat.errorReply": "(Request failed: {0})",
     "chat.globalPlaceholder": "Type your question...",
-
     "quiz.answered": "Answered {0} / {1}",
     "quiz.regenerate": "Regenerate",
     "quiz.submit": "Submit",
@@ -158,7 +153,6 @@
     "quiz.aiNoGenModel": "Generator model not configured, please assign in AI Roles",
     "quiz.aiNoEndpoint": "The endpoint referenced by the generator model does not exist, please check config",
     "quiz.aiNoApiKey": "API Key not configured, please fill it in settings first",
-
     "err.400.title": "Request Rejected (400)",
     "err.400.hint": "The gateway may not support response_format. Try disabling JSON Schema strict mode in settings",
     "err.401.title": "Authentication Failed ({0})",
@@ -178,7 +172,6 @@
     "err.generic.title": "An Error Occurred",
     "err.generic.hint": "Please check configuration and retry",
     "err.retryGrade": "Retry Grading",
-
     "result.score": "Score",
     "result.accuracy": "Accuracy",
     "result.time": "Time",
@@ -206,20 +199,17 @@
     "result.save": "Save to Document",
     "result.wrongCount": "{0} wrong · {1} unanswered",
     "result.qCount": "{0} questions",
-
     "heatmap.rangeLabel": "Range",
     "heatmap.rangeRecent": "Last 12 months",
     "heatmap.rangeYear": "{0}",
-    "stats.heatmapDesc": "Your answering heatmap with a switchable range; colors are configurable in Settings → Heatmap",
+    "stats.heatmapDesc": "Quiz activity over the past year; colours are configurable under Settings → Heatmap",
     "heatmap.totalRecords": "{0} record(s) in total",
     "heatmap.ariaLabel": "Quiz activity heatmap arranged by week. Focus a day to read its score.",
     "heatmap.less": "Less",
     "heatmap.more": "More",
     "heatmap.noRecord": "No record",
     "heatmap.scoreTip": "{0} · {1} pts ({2} times)",
-
     "stats.heatmap": "Study activity",
-    "stats.heatmapDesc": "Quiz activity over the past year; colours are configurable under Settings → Heatmap",
     "stats.title": "Study statistics",
     "stats.range": "Range",
     "stats.rangeDays": "Last {0} days",
@@ -296,7 +286,6 @@
     "history.colCount": "Questions",
     "history.colTime": "Time",
     "history.pts": "pts",
-
     "question.previewEmpty": "Nothing written yet",
     "question.testCaseCount": "{0} test case(s)",
     "question.runTests": "Run tests",
@@ -307,7 +296,6 @@
     "question.edit": "Edit",
     "question.preview": "Preview",
     "question.subjectivePlaceholder": "Type your answer (Markdown and LaTeX supported)",
-
     "settings.ai.title": "AI Endpoints & Models",
     "settings.ai.desc": "Manage models under each endpoint, assign roles in AI Roles",
     "settings.ai.endpointName": "Endpoint Name",
@@ -346,7 +334,6 @@
     "settings.ai.alertDupModelName": "Duplicate model name \"{0}\" under this endpoint",
     "settings.ai.endpointNum": "Endpoint {0}",
     "settings.ai.modelNum": "Model {0}",
-
     "settings.roles.title": "AI Roles",
     "settings.roles.desc": "Assign endpoint and model to each role: generation, review, grading",
     "settings.roles.generator": "Generator",
@@ -358,7 +345,6 @@
     "settings.roles.endpoint": "Endpoint",
     "settings.roles.model": "Model",
     "settings.roles.hint": "💡 Using different models for generator and reviewer is recommended for better results. The grader can use the same model. Review loop retries up to 3 rounds; failed questions are sent back to the generator for regeneration.",
-
     "settings.general.difficulty": "Difficulty distribution",
     "settings.general.diffSumNow": "Current sum across levels: {0}",
     "settings.general.notebook": "Target notebook",
@@ -398,7 +384,6 @@
     "settings.general.storageNotebook": "Fixed notebook",
     "settings.general.diffInvalidDesc": "Easy + Medium + Hard must equal total ({0})",
     "settings.general.language": "AI Output Language",
-
     "settings.prompts.title": "Prompt Management",
     "settings.prompts.desc": "All prompts are editable and resettable to default",
     "settings.prompts.generate": "Generate Prompt (includes coding instructions)",
@@ -407,7 +392,6 @@
     "settings.prompts.analysis": "Weakness Analysis",
     "settings.prompts.resetAll": "Reset all to default",
     "settings.prompts.reset": "Reset Default",
-
     "settings.heatmap.title": "Heatmap Settings",
     "settings.heatmap.desc": "Score calendar and color ranges",
     "settings.heatmap.metric": "Aggregation",
@@ -419,7 +403,6 @@
     "settings.heatmap.rangeMax": "Range max",
     "settings.heatmap.rangeColor": "Range colour",
     "settings.heatmap.addRange": "+ Add Range",
-
     "settings.saveFailed": "Failed to save settings: {0}",
     "settings.data.clearScoresDesc": "Deletes {0} score record(s), including questions and grading detail. This cannot be undone.",
     "settings.data.clearScoresConfirmTitle": "Clear all scores?",
@@ -466,7 +449,6 @@
     "settings.data.desc": "Clear locally stored records",
     "settings.data.clearScores": "Clear Score Records",
     "settings.data.clearProgress": "Clear Answer Progress",
-
     "settings.title": "Plugin settings",
     "settings.nav.ai": "AI Service",
     "settings.nav.roles": "AI Roles",
@@ -474,7 +456,6 @@
     "settings.nav.prompts": "Prompts",
     "settings.nav.heatmap": "Heatmap",
     "settings.nav.data": "Data",
-
     "selector.fromToday": "From Today's Notes",
     "selector.fromRecent": "From Recent N Days",
     "selector.loadingNotebook": "Loading notebook \"{0}\" content…",
@@ -493,11 +474,9 @@
     "selector.notebookPrefix": "Notebook·{0}",
     "selector.todayNotebookPrefix": "{0}·Today's Notes",
     "selector.recentNotebookPrefix": "{0}·Recent Notes",
-
     "tab.quiz": "Quiz · {0}",
     "tab.quizDefault": "Quiz",
     "tab.history": "Quiz History",
-
     "doc.answerSummary": "Show answer and explanation",
     "doc.answerLabel": "**Answer:** ",
     "doc.explanationLabel": "**Explanation:** ",
@@ -505,7 +484,6 @@
     "doc.blankLabel": "Blank {0}",
     "doc.analysisTitle": "## Weakness Analysis & Study Guide",
     "doc.titlePrefix": "Quiz",
-
     "ai.modelNotFound": "Model not found: {0}",
     "ai.endpointNotFound": "Endpoint referenced by model {0} does not exist: {1}",
     "ai.timeout": "Request timed out after {0}s",
@@ -513,10 +491,10 @@
     "ai.responseNotJson": "AI response is not JSON",
     "ai.responseNoContent": "AI response contains no content",
     "ai.testPromptDefault": "Briefly introduce yourself in one sentence.",
-
     "gen.batchProgress": "Generating batch {0}/{1} ({2} questions)…",
     "gen.reviewing": "Reviewing (round {0})…",
     "gen.reviewPassed": "Round {0} review passed, {1} question(s) total",
+    "gen.reviewSkipped": "Could not parse the review result; this review round was skipped",
     "gen.reviewNoReason": "Not approved",
     "gen.reviewMaxRounds": "Reached the maximum review rounds; {0} question(s) still failed",
     "gen.regenerating": "Round {0}: regenerating {1} failed question(s)…",
@@ -525,7 +503,6 @@
     "gen.missingQuestions": "AI response is missing the questions array (parsed type: {0})",
     "gen.emptyQuestions": "AI returned an empty questions array",
     "gen.allInvalid": "All {0} question(s) failed validation: {1}",
-
     "validate.notObject": "Question is not an object",
     "validate.typeDisabled": "Question type {0} is not enabled",
     "validate.emptyQuestion": "Question text is empty",
@@ -536,12 +513,10 @@
     "validate.subjectiveNoRef": "Subjective question is missing the reference answer",
     "validate.codingNoRef": "Coding question is missing both a reference answer and test cases",
     "validate.unknownType": "Unknown question type: {0}",
-
     "grade.failed": "Grading failed: {0}",
     "grade.notObject": "AI grading response is not a JSON object",
     "grade.noScore": "AI grading response has no valid score",
     "grade.toolDescription": "Grade",
-
     "date.today": "today",
     "date.beforeBase": "before the base time",
     "date.recentDays": "the last {0} days",
@@ -549,10 +524,7 @@
     "date.emptyNotes": "Notes for {0} are empty. Check whether the documents have content.",
     "date.title": "Notes for {0} ({1} docs)",
     "date.notebookTitle": "Notebook · notes for {0} ({1} docs)",
-
     "quiz.analysisFailed": "Weakness analysis failed: {0}",
-
     "schema.parseFailed": "JSON parse failed: {0} (first 200 chars: {1})",
-
     "gen.unknownReason": "Unknown reason"
 }

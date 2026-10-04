@@ -25,6 +25,35 @@ interface ReviewItem {
     reason?: string;
 }
 
+/**
+ * 从审题结果里挑出未通过的题目下标与原因。
+ *
+ * 输入是模型输出，任何字段都不可信：元素可能不是对象、index 可能是
+ * 小数/字符串/越界值、同一题可能被报多次。这里全部过滤掉，
+ * 只返回可用于 questions[i] 的合法下标（去重且升序稳定）。
+ */
+export function collectFailedReviews(
+    reviews: unknown[],
+    questionCount: number
+): { indices: number[]; reasons: string[] } {
+    const indices: number[] = [];
+    const reasons: string[] = [];
+
+    for (const raw of reviews) {
+        const item = raw as Partial<ReviewItem> | null;
+        if (!item || typeof item !== "object" || item.passed) continue;
+        const index = item.index;
+        if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= questionCount) {
+            continue;
+        }
+        if (indices.includes(index)) continue;
+        indices.push(index);
+        reasons.push(typeof item.reason === "string" && item.reason ? item.reason : t("gen.reviewNoReason"));
+    }
+
+    return { indices, reasons };
+}
+
 const MAX_REVIEW_ROUNDS = 3;
 
 /**
@@ -127,22 +156,18 @@ async function reviewLoop(
             temperature: 0.3,
         });
 
-        const reviewParsed = parseJsonLoose(reviewResult.content) as { reviews?: ReviewItem[] };
+        const reviewParsed = parseJsonLoose(reviewResult.content) as { reviews?: unknown } | null;
         const reviews = reviewParsed?.reviews;
-        if (!reviews || !Array.isArray(reviews)) {
-            // 审题结果解析失败，跳过审题
+        if (!Array.isArray(reviews)) {
+            // 审题结果解析失败，跳过审题（提示一下，否则用户只看到「审题中」就没有下文）
+            onProgress?.("reviewing", round, t("gen.reviewSkipped"));
             break;
         }
 
-        // 筛选未通过的题
-        const failedIndices: number[] = [];
-        const reasons: string[] = [];
-        for (const r of reviews) {
-            if (!r.passed && r.index >= 0 && r.index < questions.length) {
-                failedIndices.push(r.index);
-                reasons.push(r.reason ?? t("gen.reviewNoReason"));
-            }
-        }
+        // 筛选未通过的题。
+        // 审题结果是模型输出，必须逐项校验：null 元素、非整数下标或越界下标
+        // 都会让后面的 questions[i] 取到 undefined，进而崩掉整轮生成。
+        const { indices: failedIndices, reasons } = collectFailedReviews(reviews, questions.length);
 
         if (failedIndices.length === 0) {
             onProgress?.("reviewing", round, t("gen.reviewPassed", String(round), String(questions.length)));
@@ -169,7 +194,9 @@ async function reviewLoop(
         let replaced = 0;
         for (let i = 0; i < failedIndices.length; i++) {
             const target = failedIndices[i];
-            const result = coerceQuestion(regenParsed.questions[i], questions[target].id, types);
+            const current = questions[target];
+            if (!current) continue;
+            const result = coerceQuestion(regenParsed.questions[i], current.id, types);
             if (!result.ok || !result.question) continue;
             questions[target] = result.question;
             replaced++;

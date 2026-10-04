@@ -3,7 +3,6 @@
     "generateNotebookQuiz": "📚 从笔记本生成复习题",
     "openDocFirst": "请先打开文档",
     "byePlugin": "再见，RecallGen",
-
     "common.true": "正确",
     "common.false": "错误",
     "common.refresh": "刷新",
@@ -18,7 +17,6 @@
     "common.thinking": "思考中…",
     "common.blank": "第 {0} 空",
     "common.seeAnswer": "见参考答案",
-
     "type.single_choice": "单选题",
     "type.multiple_choice": "多选题",
     "type.fill_blank": "填空题",
@@ -31,17 +29,14 @@
     "type.true_false_short": "判断",
     "type.subjective_short": "简答",
     "type.coding_short": "编程",
-
     "diff.easy": "初级",
     "diff.medium": "中级",
     "diff.hard": "高级",
-
     "chat.globalTitle": "💬 AI 答疑",
     "chat.globalHint": "针对本次答题追问",
     "chat.globalEmpty": "可以向 AI 追问本次答题的任何问题",
     "chat.errorReply": "（请求失败：{0}）",
     "chat.globalPlaceholder": "请输入你的问题...",
-
     "quiz.answered": "已答 {0} / {1}",
     "quiz.regenerate": "重新生成",
     "quiz.submit": "交卷",
@@ -158,7 +153,6 @@
     "quiz.aiNoGenModel": "出题者模型未配置，请在 AI 身份中指定",
     "quiz.aiNoEndpoint": "出题者模型引用的端点不存在，请检查配置",
     "quiz.aiNoApiKey": "API Key 未配置，请先在设置中填写",
-
     "err.400.title": "请求被拒绝（400）",
     "err.400.hint": "可能是 response_format 不被网关支持，请在设置中关闭 JSON Schema 严格模式",
     "err.401.title": "认证失败（{0}）",
@@ -178,7 +172,6 @@
     "err.generic.title": "发生错误",
     "err.generic.hint": "请检查配置后重试",
     "err.retryGrade": "重试判分",
-
     "result.score": "得分",
     "result.accuracy": "正确率",
     "result.time": "用时",
@@ -206,20 +199,17 @@
     "result.save": "保存到文档",
     "result.wrongCount": "{0} 错 · {1} 未答",
     "result.qCount": "{0} 题",
-
     "heatmap.rangeLabel": "统计范围",
     "heatmap.rangeRecent": "近一年",
     "heatmap.rangeYear": "{0} 年",
-    "stats.heatmapDesc": "答题热力图，可切换统计范围；配色可在「设置 → 热力图」调整",
+    "stats.heatmapDesc": "过去一年的答题热力图；配色可在「设置 → 热力图」调整",
     "heatmap.totalRecords": "共 {0} 条答题记录",
     "heatmap.ariaLabel": "答题热力图，按周排列，可聚焦到某天查看成绩",
     "heatmap.less": "少",
     "heatmap.more": "多",
     "heatmap.noRecord": "无记录",
     "heatmap.scoreTip": "{0} · {1} 分（{2} 次）",
-
     "stats.heatmap": "学习轨迹",
-    "stats.heatmapDesc": "过去一年的答题热力图；配色可在「设置 → 热力图」调整",
     "stats.title": "学习统计",
     "stats.range": "统计范围",
     "stats.rangeDays": "近 {0} 天",
@@ -296,7 +286,6 @@
     "history.colCount": "题数",
     "history.colTime": "时间",
     "history.pts": "分",
-
     "question.previewEmpty": "还没有输入内容",
     "question.testCaseCount": "{0} 个测试用例",
     "question.runTests": "运行测试",
@@ -307,7 +296,6 @@
     "question.edit": "编辑",
     "question.preview": "预览",
     "question.subjectivePlaceholder": "输入你的作答（支持 Markdown 和 LaTeX）",
-
     "settings.ai.title": "AI 端点与模型",
     "settings.ai.desc": "每个端点下管理其模型，在「AI 身份」中分配角色",
     "settings.ai.endpointName": "端点名称",
@@ -346,7 +334,6 @@
     "settings.ai.alertDupModelName": "该端点下已存在同名模型「{0}」",
     "settings.ai.endpointNum": "端点 {0}",
     "settings.ai.modelNum": "模型 {0}",
-
     "settings.roles.title": "AI 身份",
     "settings.roles.desc": "为出题、审题、判题三个环节分别指定端点与模型",
     "settings.roles.generator": "出题者",
@@ -358,7 +345,6 @@
     "settings.roles.endpoint": "端点",
     "settings.roles.model": "模型",
     "settings.roles.hint": "💡 出题者和审题者建议使用不同模型以获得更好效果。判题者也可用同一模型。审题循环最多重试 3 轮，未通过的题目会退回出题者重新生成。",
-
     "settings.general.difficulty": "难度分布",
     "settings.general.diffSumNow": "当前各档合计 {0} 题",
     "settings.general.notebook": "目标笔记本",
@@ -398,7 +384,6 @@
     "settings.general.storageNotebook": "固定笔记本",
     "settings.general.diffInvalidDesc": "初级+中级+高级之和须等于总题数（{0}）",
     "settings.general.language": "AI 输出语言",
-
     "settings.prompts.title": "提示词管理",
     "settings.prompts.desc": "各环节提示词均可编辑，支持重置默认",
     "settings.prompts.generate": "出题提示词（含编程题指令）",
@@ -407,7 +392,6 @@
     "settings.prompts.analysis": "薄弱点分析",
     "settings.prompts.resetAll": "全部重置为默认",
     "settings.prompts.reset": "重置默认",
-
     "settings.heatmap.title": "热力图设置",
     "settings.heatmap.desc": "成绩日历与配色区间",
     "settings.heatmap.metric": "聚合方式",
@@ -419,7 +403,6 @@
     "settings.heatmap.rangeMax": "区间上限",
     "settings.heatmap.rangeColor": "区间颜色",
     "settings.heatmap.addRange": "+ 添加区间",
-
     "settings.saveFailed": "保存设置失败：{0}",
     "settings.data.clearScoresDesc": "将删除 {0} 条成绩记录，包含题目与判分明细，删除后无法恢复",
     "settings.data.clearScoresConfirmTitle": "确认清空全部成绩？",
@@ -466,7 +449,6 @@
     "settings.data.desc": "清除本地存储的记录",
     "settings.data.clearScores": "清空成绩记录",
     "settings.data.clearProgress": "清空答题进度",
-
     "settings.title": "插件设置",
     "settings.nav.ai": "AI 服务",
     "settings.nav.roles": "AI 身份",
@@ -474,7 +456,6 @@
     "settings.nav.prompts": "提示词",
     "settings.nav.heatmap": "热力图",
     "settings.nav.data": "数据管理",
-
     "selector.fromToday": "从今日笔记生成",
     "selector.fromRecent": "从近 N 天笔记生成",
     "selector.loadingNotebook": "正在加载笔记本「{0}」的内容…",
@@ -493,11 +474,9 @@
     "selector.notebookPrefix": "笔记本·{0}",
     "selector.todayNotebookPrefix": "{0}·今日笔记",
     "selector.recentNotebookPrefix": "{0}·近 N 天笔记",
-
     "tab.quiz": "复习题 · {0}",
     "tab.quizDefault": "复习题",
     "tab.history": "复习记录",
-
     "doc.answerSummary": "查看答案与解析",
     "doc.answerLabel": "**答案：** ",
     "doc.explanationLabel": "**解析：** ",
@@ -505,7 +484,6 @@
     "doc.blankLabel": "第{0}空",
     "doc.analysisTitle": "## 薄弱点分析与复习指导",
     "doc.titlePrefix": "复习题",
-
     "ai.modelNotFound": "未找到模型: {0}",
     "ai.endpointNotFound": "模型 {0} 引用的端点不存在: {1}",
     "ai.timeout": "请求超时（{0} 秒）",
@@ -513,10 +491,10 @@
     "ai.responseNotJson": "AI 响应不是 JSON",
     "ai.responseNoContent": "AI 响应缺少内容",
     "ai.testPromptDefault": "请用一句话简要介绍你自己",
-
     "gen.batchProgress": "正在生成第 {0}/{1} 批（本批 {2} 题）…",
     "gen.reviewing": "第 {0} 轮审题中…",
     "gen.reviewPassed": "第 {0} 轮审题通过，共 {1} 题",
+    "gen.reviewSkipped": "审题结果无法解析，已跳过本轮审题",
     "gen.reviewNoReason": "未通过审核",
     "gen.reviewMaxRounds": "已达最大审题轮次，{0} 题仍未通过",
     "gen.regenerating": "第 {0} 轮：正在重新生成 {1} 道未通过题目…",
@@ -525,7 +503,6 @@
     "gen.missingQuestions": "AI 返回缺少 questions 数组（解析结果类型：{0}）",
     "gen.emptyQuestions": "AI 返回的 questions 数组为空",
     "gen.allInvalid": "{0} 道题目全部校验失败：{1}",
-
     "validate.notObject": "题目不是对象",
     "validate.typeDisabled": "题型 {0} 未启用",
     "validate.emptyQuestion": "题干为空",
@@ -536,12 +513,10 @@
     "validate.subjectiveNoRef": "主观题缺少参考答案",
     "validate.codingNoRef": "编程题缺少参考答案与测试用例",
     "validate.unknownType": "未知题型: {0}",
-
     "grade.failed": "判分失败: {0}",
     "grade.notObject": "AI 判分返回的不是 JSON 对象",
     "grade.noScore": "AI 判分缺少有效的 score",
     "grade.toolDescription": "判分",
-
     "date.today": "今日",
     "date.beforeBase": "基点之前",
     "date.recentDays": "近 {0} 天",
@@ -549,10 +524,7 @@
     "date.emptyNotes": "{0}笔记内容为空，请检查文档是否有实际内容",
     "date.title": "{0}笔记（{1} 篇）",
     "date.notebookTitle": "笔记本·{0}笔记（{1} 篇）",
-
     "quiz.analysisFailed": "薄弱点分析失败：{0}",
-
     "schema.parseFailed": "JSON 解析失败: {0}（原文前 200 字: {1}）",
-
     "gen.unknownReason": "未知原因"
 }
