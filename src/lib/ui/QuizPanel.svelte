@@ -539,6 +539,12 @@
         if (!session) return;
         stopCountdown();
         flushTiming(null);
+        /*
+         * 用时必须在判分之前结算。
+         * 原先在 await service.grade(...) 之后才计算，于是判分耗时（主观题要调 AI，
+         * 可能好几秒）被算进了「用时」——结果页与导出的耗时都偏大。
+         */
+        duration = Math.round((Date.now() - session.createdAt) / 1000);
         panelState = "loading_grading";
         progressValue = 0;
         progressLabel = t("quiz.grading");
@@ -554,7 +560,6 @@
                 beginRun()
             );
 
-            duration = Math.round((Date.now() - session.createdAt) / 1000);
             const scoreId = genId();
             // 成绩先落盘，不受后续分析成败影响
             await service.saveScore({
