@@ -227,9 +227,10 @@ export default class RecallGenPlugin extends Plugin {
         const self = this;
         const dialog = new Dialog({
             title: this.displayName ?? "RecallGen",
-            content: '<div class="rg-scope flex h-full min-h-[400px] flex-col"></div>',
-            width: "900px",
-            height: "70vh",
+            // 窄屏（移动端）下 900px 会超出视口，用 min() 收窄；内容区交给面板内部滚动
+            content: '<div class="rg-scope flex h-full min-h-[260px] flex-col"></div>',
+            width: "min(900px, 94vw)",
+            height: "min(70vh, 96vh)",
             destroyCallback: () => closeSetting(),
         });
         const host = dialog.element as HTMLElement;

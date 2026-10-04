@@ -291,7 +291,7 @@
                     </div>
                     {#if modelsOf(endpoint.id).length > 0}
                         <div
-                            class="text-muted-foreground grid grid-cols-[1fr_5rem_6rem_auto] gap-2 text-[11px] font-semibold"
+                            class="text-muted-foreground hidden grid-cols-[1fr_5rem_6rem_auto] gap-2 text-[11px] font-semibold sm:grid"
                         >
                             <span>{t("settings.ai.colName")}</span>
                             <span class="text-center">{t("settings.ai.colTemp")}</span>
@@ -300,7 +300,7 @@
                         </div>
                     {/if}
                     {#each modelsOf(endpoint.id) as model (model.id)}
-                        <div class="grid grid-cols-[1fr_5rem_6rem_auto] items-center gap-2">
+                        <div class="grid grid-cols-2 items-center gap-2 sm:grid-cols-[1fr_5rem_6rem_auto]">
                             <Input
                                 value={model.name}
                                 aria-label={t("settings.ai.colName")}
