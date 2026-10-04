@@ -617,3 +617,30 @@ describe("toReviewQuestions", () => {
         expect(toReviewQuestions([])).toEqual([]);
     });
 });
+
+describe("normalizeText - 全角字符不能被当成标点删掉", () => {
+    it("全角字母与半角字母归一化一致", () => {
+        expect(normalizeText("变量Ａ")).toBe(normalizeText("变量A"));
+        expect(normalizeText("ＡＢＣ")).toBe("abc");
+    });
+
+    it("不同的全角字母不会塌缩成同一个题干（回归：曾都变成「变量」）", () => {
+        expect(normalizeText("变量Ａ")).not.toBe(normalizeText("变量Ｂ"));
+    });
+
+    it("全角数字不会被删空（回归：曾变成空串）", () => {
+        expect(normalizeText("１２３")).toBe("123");
+        expect(normalizeText("１２３")).not.toBe("");
+    });
+
+    it("全角标点仍然被去掉", () => {
+        expect(normalizeText("（甲）、乙！")).toBe("甲乙");
+        expect(normalizeText("１＋１＝２？")).toBe("112");
+    });
+
+    it("上述差异会体现在题目指纹上", () => {
+        const a = question("变量Ａ");
+        const b = question("变量Ｂ");
+        expect(questionFingerprint(a)).not.toBe(questionFingerprint(b));
+    });
+});

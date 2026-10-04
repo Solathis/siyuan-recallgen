@@ -21,14 +21,24 @@ export function questionFingerprint(question: Question): string {
 
 /**
  * 归一化题干：
- * 统一大小写、去掉所有空白与常见标点，只保留字母数字与中日韩文字。
+ * 统一大小写、去掉所有空白与标点，只保留字母数字与中日韩文字。
  * 这样「1 + 1 = ?」与「1+1=?」会被识别为同一题。
+ *
+ * 必须先做 NFKC：原先用一个字符区间同时表达「ASCII 标点」与「全角标点」，
+ * 而 \uff01-\uff5e 覆盖整个全角区，会把全角字母与数字一起删掉——
+ * 「变量Ａ」与「变量Ｂ」都归一化成「变量」，「１２３」直接变成空串，
+ * 两道不同的题因此被判为同一道。
  */
 export function normalizeText(text: string): string {
-    return text
-        .toLowerCase()
-        .replace(/[\s\u3000]+/g, "")
-        .replace(/[!-/:-@[-`{-~\u3001-\u303f\uff01-\uff5e]/g, "");
+    return (
+        text
+            .normalize("NFKC")
+            .toLowerCase()
+            // 折叠空白（NFKC 后全角空格已是普通空格，这里仍一并处理）
+            .replace(/[\s\u3000]+/g, "")
+            // 只删标点与符号，保留字母、数字与中日韩文字
+            .replace(/[\p{P}\p{S}]/gu, "")
+    );
 }
 
 /** djb2 哈希，输出 8 位十六进制。仅用于去重，不用于安全场景 */
