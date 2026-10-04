@@ -96,6 +96,9 @@
 
     /* ── 生命周期 ────────────────────────────────────────────────── */
 
+    /** 面板根节点，用于判断自身是否可见（见 isPanelVisible） */
+    let rootEl: HTMLElement | null = $state(null);
+
     onDestroy(() => {
         window.removeEventListener("keydown", onKeydown);
         if (saveTimer) clearTimeout(saveTimer);
@@ -581,13 +584,25 @@
         );
     }
 
+    /** 面板是否真的显示在屏幕上：隐藏的 tab 里不能抢全局按键 */
+    function isPanelVisible(): boolean {
+        return !!rootEl && rootEl.isConnected && rootEl.getClientRects().length > 0;
+    }
+
     /**
      * 答题快捷键：左右方向键切换题目，Ctrl/Cmd+Enter 交卷。
-     * 输入框与代码编辑器内不生效，避免与正常输入冲突。
+     *
+     * 监听挂在 window 上，因为用户常常刚点完按钮、焦点并不在面板内；
+     * 所以必须自己判断该不该响应：面板不可见、正在输入、或打开了弹层时都让行。
      */
     function onKeydown(event: KeyboardEvent) {
         if (panelState !== "answering" || questions.length === 0) return;
         if (isTypingTarget(event.target)) return;
+        if (!isPanelVisible()) return;
+        // 弹层（交卷确认、下拉菜单等）打开时把按键让给弹层
+        if ((event.target as HTMLElement | null)?.closest?.('[role="dialog"], [role="menu"], [role="listbox"]')) {
+            return;
+        }
 
         if (event.key === "ArrowLeft" || event.key === "PageUp") {
             event.preventDefault();
@@ -602,7 +617,7 @@
     }
 </script>
 
-<div class="flex h-full flex-col" style="--rg-panel-width: {config.general.panelWidth}px">
+<div bind:this={rootEl} class="flex h-full flex-col" style="--rg-panel-width: {config.general.panelWidth}px">
     <div class="mx-auto flex h-full w-full flex-col px-4" style="max-width: var(--rg-panel-width, 1100px)">
         {#if panelState === "configuring"}
             <div class="flex justify-center px-2 py-12">
