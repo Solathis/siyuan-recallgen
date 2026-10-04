@@ -127,3 +127,40 @@ describe("ConfigStore.set", () => {
         expect((getStored().general as { countdownMinutes: number }).countdownMinutes).toBe(30);
     });
 });
+
+describe("磁盘配置的逐字段校验", () => {
+    it("磁盘上被改坏的字段不会流进出题逻辑（回归：只做浅合并）", async () => {
+        const plugin: import("./store").StoragePlugin = {
+            loadData: async () => ({
+                general: { allowedTypes: "coding", difficulty: null, countdownMinutes: "很久" },
+                ai: { endpoints: "不是数组", models: [] },
+                prompts: { generate: 42 },
+                heatmap: { ranges: [{ min: 0, max: 100, color: "red;color:red" }] },
+            }),
+            saveData: async () => undefined,
+        };
+        const store = new ConfigStore(plugin);
+        const config = await store.load();
+
+        // 非法值回落到默认，而不是原样带着走
+        expect(Array.isArray(config.general.allowedTypes)).toBe(true);
+        expect(config.general.allowedTypes.length).toBeGreaterThan(0);
+        expect(typeof config.general.difficulty).toBe("object");
+        expect(typeof config.general.countdownMinutes).toBe("number");
+        expect(Array.isArray(config.ai.endpoints)).toBe(true);
+        expect(typeof config.prompts.generate).toBe("string");
+        expect(config.heatmap.ranges.every((r) => typeof r.color === "string")).toBe(true);
+    });
+
+    it("合法的磁盘配置保持原值", async () => {
+        const plugin: import("./store").StoragePlugin = {
+            loadData: async () => ({
+                general: { countdownMinutes: 42, language: "en" },
+            }),
+            saveData: async () => undefined,
+        };
+        const config = await new ConfigStore(plugin).load();
+        expect(config.general.countdownMinutes).toBe(42);
+        expect(config.general.language).toBe("en");
+    });
+});

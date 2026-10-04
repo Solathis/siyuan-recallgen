@@ -1,6 +1,7 @@
 import type { StoragePlugin } from "./store";
 import type { ConfigPatch, RecallGenConfig } from "@/types/config";
-import { getDefaultConfig, migrateAIConfig } from "@/types/config";
+import { getDefaultConfig } from "@/types/config";
+import { sanitizeConfig } from "@/lib/quiz/config-io";
 import { AsyncStore } from "./store";
 
 const CONFIG_NAME = "recallgen-config.json";
@@ -52,14 +53,12 @@ export class ConfigStore extends AsyncStore {
         return this.writeDeferred(() => snapshot, COALESCE_MS);
     }
 
-    /** 用默认值补齐缺失字段，兼容旧版配置 */
+    /**
+     * 用默认值补齐缺失字段并做逐字段校验。
+     * 磁盘上的配置可能被手工改坏（allowedTypes 写成字符串、difficulty 为 null…），
+     * 只做浅合并会把这些值直接带进出题逻辑，因此复用导入路径的校验。
+     */
     private mergeDefaults(partial: Partial<RecallGenConfig>): RecallGenConfig {
-        const def = getDefaultConfig();
-        return {
-            ai: migrateAIConfig(partial.ai),
-            prompts: { ...def.prompts, ...partial.prompts },
-            general: { ...def.general, ...partial.general },
-            heatmap: { ...def.heatmap, ...partial.heatmap },
-        };
+        return sanitizeConfig(getDefaultConfig(), partial).config;
     }
 }

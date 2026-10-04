@@ -87,14 +87,20 @@ export function parseConfigExport(text: string): ConfigExportFile {
     };
 }
 
-/** 导入并合并到当前配置，返回新配置与需要提示用户的警告 */
-export function mergeImportedConfig(current: RecallGenConfig, text: string): ImportResult {
-    const file = parseConfigExport(text);
-    const imported = file.config;
+/**
+ * 逐字段校验并合并一份配置。
+ * 导入文件与磁盘上的配置走的是同一条路径：两侧都可能被手工改坏，
+ * 只做浅合并会让 allowedTypes:"coding" 这类值直接流进出题逻辑。
+ */
+export function sanitizeConfig(
+    current: RecallGenConfig,
+    imported: Partial<RecallGenConfig>,
+    { includesSecrets = true }: { includesSecrets?: boolean } = {}
+): ImportResult {
     const warnings: string[] = [];
     const defaults = getDefaultConfig();
 
-    const ai = mergeAI(current.ai, imported.ai, file.includesSecrets, warnings);
+    const ai = mergeAI(current.ai, imported.ai, includesSecrets, warnings);
     const prompts = mergePrompts(current, imported, warnings);
     const general = mergeGeneral(current, imported, warnings);
     const heatmap = mergeHeatmap(current, imported, warnings);
@@ -111,6 +117,12 @@ export function mergeImportedConfig(current: RecallGenConfig, text: string): Imp
     if (!modelIds.has(ai.testModelId)) ai.testModelId = fallback;
 
     return { config: { ai, prompts, general, heatmap }, warnings };
+}
+
+/** 导入并合并到当前配置，返回新配置与需要提示用户的警告 */
+export function mergeImportedConfig(current: RecallGenConfig, text: string): ImportResult {
+    const file = parseConfigExport(text);
+    return sanitizeConfig(current, file.config, { includesSecrets: file.includesSecrets });
 }
 
 function mergeAI(
