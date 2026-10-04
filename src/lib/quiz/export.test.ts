@@ -266,3 +266,44 @@ describe("planBackupImport", () => {
         expect(plan.items[0].detail).toBeNull();
     });
 });
+
+describe("导出的公式注入与编码防护", () => {
+    it("以 = + - @ 开头的字段被加上单引号前缀", () => {
+        expect(csvCell("=1+1")).toBe("'=1+1");
+        expect(csvCell("+1+1")).toBe("'+1+1");
+        expect(csvCell("-2+3")).toBe("'-2+3");
+        expect(csvCell("@SUM(A1)")).toBe("'@SUM(A1)");
+    });
+
+    it("以制表符或回车开头的字段同样被中和", () => {
+        expect(csvCell("\t=1+1")).toBe("'\t=1+1");
+        expect(csvCell("\r=1+1")).toBe('"\'\r=1+1"');
+    });
+
+    it("带头部特殊字符且含引号的字段：先加前缀再按 CSV 规则转义", () => {
+        expect(csvCell('=HYPERLINK("http://evil")')).toBe('"\'=HYPERLINK(""http://evil"")"');
+    });
+
+    it("普通字段不受影响", () => {
+        expect(csvCell("第三章 复习")).toBe("第三章 复习");
+        expect(csvCell("a,b")).toBe('"a,b"');
+    });
+
+    it("CSV 带 UTF-8 BOM，避免 Excel 打开中文乱码", () => {
+        expect(buildCsvExport([entry()]).startsWith("\uFEFF")).toBe(true);
+    });
+
+    it("恶意标题在整表导出中也被中和", () => {
+        const csv = buildCsvExport([entry({ title: '=HYPERLINK("http://evil")' })]);
+        expect(csv).toContain("'=HYPERLINK");
+    });
+
+    it("Markdown 标题里的换行不会注入额外结构", () => {
+        const md = buildMarkdownExport([entry()], "标题\n## 注入的标题");
+        expect(md.split("\n")[0]).toBe("# 标题 ## 注入的标题");
+    });
+
+    it("Markdown 单元格转义反斜杠，避免二次转义破坏表格", () => {
+        expect(markdownCell("a\|b")).toBe("a\\\|b");
+    });
+});

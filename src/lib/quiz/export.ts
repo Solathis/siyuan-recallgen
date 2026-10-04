@@ -25,19 +25,32 @@ export const EXPORT_MIME: Record<ExportFormat, string> = {
     markdown: "text/markdown",
 };
 
-/** CSV 字段转义：含逗号、引号、换行时用双引号包裹并转义内部引号 */
+/**
+ * CSV 字段转义。
+ *
+ * 除了常规的逗号/引号/换行包裹，还要中和公式注入：
+ * 标题与来源来自笔记内容，属于可被外部影响的数据，
+ * 以 = + - @ 或制表符/回车开头时 Excel/WPS/Sheets 会当公式执行
+ * （=HYPERLINK、DDE 等），仅靠加引号并不能阻止。
+ */
 export function csvCell(value: unknown): string {
     const text = value === null || value === undefined ? "" : String(value);
-    if (/[",\n\r]/.test(text)) {
-        return `"${text.replace(/"/g, '""')}"`;
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    if (/[",\n\r]/.test(safe)) {
+        return `"${safe.replace(/"/g, '""')}"`;
     }
-    return text;
+    return safe;
 }
 
-/** Markdown 表格单元格转义：竖线与换行会破坏表格结构 */
+/** Markdown 表格单元格转义：竖线与换行会破坏表格结构，反斜杠需先行转义 */
 export function markdownCell(value: unknown): string {
     const text = value === null || value === undefined ? "" : String(value);
-    return text.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+    return text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
+
+/** 用作 Markdown 标题的单行文本：换行会插入任意 Markdown 结构 */
+function markdownHeading(value: string): string {
+    return value.replace(/\r?\n/g, " ").trim();
 }
 
 /** 按时间戳格式化为本地时间字符串 */
@@ -121,7 +134,8 @@ export function buildCsvExport(entries: ScoreIndexEntry[]): string {
             .map(csvCell)
             .join(",")
     );
-    return [CSV_HEADERS.join(","), ...rows].join("\n");
+    // 前缀 UTF-8 BOM：否则 Excel 会按本地编码打开，中文列名与标题变乱码
+    return `\uFEFF${[CSV_HEADERS.join(","), ...rows].join("\n")}`;
 }
 
 /** 导出为 Markdown 表格 */
@@ -145,7 +159,7 @@ export function buildMarkdownExport(entries: ScoreIndexEntry[], title = "RecallG
             .join(" | ")
     );
     return [
-        `# ${title}`,
+        `# ${markdownHeading(title)}`,
         "",
         `| ${header.join(" | ")} |`,
         `| ${align.join(" | ")} |`,
