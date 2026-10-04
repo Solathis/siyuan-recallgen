@@ -86,7 +86,8 @@ interface ForwardResponse {
     body: string;
     status: number;
     contentType: string;
-    headers: Record<string, string>;
+    /** 与内核 NetworkForwardData 对齐：同名响应头会出现多次 */
+    headers: Record<string, string[] | null> | null;
     elapsed: number;
     url: string;
 }
@@ -150,7 +151,9 @@ async function forward(
         responseEncoding: "text",
     };
 
-    const fetchPromise = fetchSyncPost("/api/network/forwardProxy", req);
+    // 请求体由 JSON 可序列化的字面量拼成，这里收口成一次断言：
+    // 官方 NetworkForwardRequestInput.payload 要求 JSONValue，而 body 是动态构造的
+    const fetchPromise = fetchSyncPost("/api/network/forwardProxy", req as never);
     // 超时后底层请求仍可能失败，提前挂一个兜底 catch，避免未捕获的 Promise 拒绝
     void fetchPromise.catch(() => undefined);
 

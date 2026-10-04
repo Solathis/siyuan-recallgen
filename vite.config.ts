@@ -2,7 +2,6 @@ import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { join, relative, resolve, sep } from "path";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import { viteStaticCopy } from "vite-plugin-static-copy";
-import livereload from "rollup-plugin-livereload";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import zipPack from "vite-plugin-zip-pack";
@@ -137,8 +136,11 @@ export default defineConfig({
             formats: ["cjs"],
         },
         rollupOptions: {
+            // 开发模式只需 watch 外部文件：思源侧的自动刷新由宿主自己完成
+            // （原先挂的 rollup-plugin-livereload 只对 HTML 产物注入脚本，
+            //   而插件产物里没有 HTML，等于空转，且该依赖自 2021 年起未再维护）
             plugins: isDev
-                ? [livereload(outputDir), watchExternalFiles(["public/i18n/**", "./README*.md", "./plugin.json"])]
+                ? [watchExternalFiles(["public/i18n/**", "./README*.md", "./plugin.json"])]
                 : [
                       zipPack({
                           inDir: outputDir,

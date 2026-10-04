@@ -23,7 +23,7 @@ import { callLLM, resolveAI, testConnection as aiTestConnection, type ChatMessag
 import { saveAsNewDoc, appendAnalysis } from "@/lib/quiz/docWriter";
 import type { QuizService, QuizTabData } from "@/lib/quiz/service";
 import { loadDateRangeNotes } from "@/lib/quiz/dateRange";
-import { initI18n, setFallback, t } from "@/lib/i18n";
+import { initI18n, localeText, setFallback, t } from "@/lib/i18n";
 import enFallback from "@/../public/i18n/en.json";
 import type { RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, QuestionType, QuizSession, ScoreIndexEntry } from "@/types/quiz";
@@ -183,7 +183,7 @@ export default class RecallGenPlugin extends Plugin {
             this.progressStore.flush().catch((e) => console.warn("[RecallGen] 答题进度落盘失败", e)),
             this.bankStore.flush().catch((e) => console.warn("[RecallGen] 题库落盘失败", e)),
         ]);
-        showMessage(this.i18n.byePlugin ?? t("byePlugin"));
+        showMessage(localeText(this.i18n, "byePlugin", t("byePlugin")));
     }
 
     /** 卸载并登记注销：先跑组件自己的 beforeDestroy，再交给 Svelte 卸载 */

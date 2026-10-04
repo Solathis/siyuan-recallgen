@@ -1,7 +1,7 @@
 import type { Plugin } from "siyuan";
 import { getAllEditor, confirm, showMessage, Menu } from "siyuan";
 import { getBlockKramdown, exportMdContent, getHPathByID, lsNotebooks, sql, listDocTree, quoteSqlLiteral } from "@/api";
-import { t } from "../i18n";
+import { localeText, t } from "../i18n";
 import { clampContent, exportDocsMarkdown, MAX_CONTENT_CHARS } from "./content";
 import type { QuizTabData } from "./service";
 
@@ -29,17 +29,17 @@ export class QuizSelector {
         this.plugin.eventBus.on("open-menu-doctree", this.boundDocTree);
         this.plugin.addCommand({
             langKey: "generateQuiz",
-            langText: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
+            langText: localeText(this.plugin.i18n, "generateQuiz", t("generateQuiz")),
             callback: () => void this.onCommand(),
         });
         this.plugin.addCommand({
             langKey: "reviewDue",
-            langText: this.plugin.i18n.reviewDue ?? t("bank.reviewDue"),
+            langText: localeText(this.plugin.i18n, "reviewDue", t("bank.reviewDue")),
             callback: () => this.openDueReview(),
         });
         this.plugin.addCommand({
             langKey: "generateNotebookQuiz",
-            langText: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
+            langText: localeText(this.plugin.i18n, "generateNotebookQuiz", t("generateNotebookQuiz")),
             callback: () => void this.onNotebookCommand(),
         });
     }
@@ -229,7 +229,7 @@ export class QuizSelector {
     private async onCommand() {
         const editors = getAllEditor();
         if (!editors || editors.length === 0) {
-            showMessage(this.plugin.i18n.openDocFirst ?? t("openDocFirst"));
+            showMessage(localeText(this.plugin.i18n, "openDocFirst", t("openDocFirst")));
             return;
         }
         const rootId = editors[0].protyle.block.rootID;

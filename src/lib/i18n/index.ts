@@ -9,14 +9,23 @@ type Dict = Record<string, string>;
 let current: Dict = {};
 let fallback: Dict = {};
 
+/** 只保留字符串值：思源的词典类型是 JSON 值，非字符串一律丢弃并由 key 兜底 */
+function asDict(values: Record<string, unknown> | null | undefined): Dict {
+    const out: Dict = {};
+    for (const [key, value] of Object.entries(values ?? {})) {
+        if (typeof value === "string") out[key] = value;
+    }
+    return out;
+}
+
 /** onload 时调用，注入 SiYuan 自动加载的 i18n 字典 */
-export function initI18n(i18nObj: Dict): void {
-    current = i18nObj ?? {};
+export function initI18n(i18nObj: Record<string, unknown>): void {
+    current = asDict(i18nObj);
 }
 
 /** 设置回退字典（英文） */
-export function setFallback(dict: Dict): void {
-    fallback = dict;
+export function setFallback(dict: Record<string, unknown>): void {
+    fallback = asDict(dict);
 }
 
 /**
@@ -30,4 +39,15 @@ export function t(key: string, ...args: (string | number)[]): string {
         const i = Number(index);
         return i < args.length ? String(args[i]) : placeholder;
     });
+}
+
+/**
+ * 取插件自带 i18n 字典里的文案。
+ *
+ * 思源把插件词典声明为 Record<string, JSONValue>，直接当 string 用在新版
+ * 类型定义下会报错（值可能是数字/数组）。这里统一判类型并回落到界面文案。
+ */
+export function localeText(dict: Record<string, unknown> | undefined | null, key: string, fallback: string): string {
+    const value = dict?.[key];
+    return typeof value === "string" && value.length > 0 ? value : fallback;
 }
