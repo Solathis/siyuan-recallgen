@@ -12,3 +12,5 @@ coverage
 .zcode
 package-lock.json
 package.zip
+# tsc 复合项目的增量编译缓存
+*.tsbuildinfo

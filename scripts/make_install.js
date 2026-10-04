@@ -35,6 +35,11 @@ if (!fs.existsSync(targetDir)) {
     process.exit(1);
 }
 
+const name = getThisPluginName();
+if (name === null) {
+    process.exit(1);
+}
+
 /**
  * 2. The built output directory.
  * `pnpm build` 会优先写 OUTPUT_DIR（见 vite.config.ts 与 .env.local），
@@ -72,10 +77,6 @@ function resolveBuildDir() {
 /**
  * 3. The target directory to install the plugin
  */
-const name = getThisPluginName();
-if (name === null) {
-    process.exit(1);
-}
 const targetPath = `${targetDir}/${name}`;
 
 /**

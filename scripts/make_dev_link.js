@@ -44,6 +44,11 @@ if (!fs.existsSync(targetDir)) {
     process.exit(1);
 }
 
+const name = getThisPluginName();
+if (name === null) {
+    process.exit(1);
+}
+
 /**
  * 2. The dev directory, which contains the compiled plugin code
  */
@@ -55,10 +60,6 @@ if (!fs.existsSync(devDir)) {
 /**
  * 3. The target directory to make symbolic link to dev directory
  */
-const name = getThisPluginName();
-if (name === null) {
-    process.exit(1);
-}
 const targetPath = `${targetDir}/${name}`;
 
 /**

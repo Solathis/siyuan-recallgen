@@ -19,13 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 不写死版本：由 package.json 的 packageManager 决定，避免两处漂移
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ">=24.11"
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

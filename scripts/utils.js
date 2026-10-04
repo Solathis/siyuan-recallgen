@@ -30,9 +30,11 @@ export async function myfetch(url, options) {
                 data += chunk;
             });
             res.on("end", () => {
+                const status = res.statusCode ?? 0;
                 resolve({
-                    ok: true,
-                    status: res.statusCode,
+                    // 原实现无论什么状态码都返回 ok: true，调用方的失败分支永远不会命中
+                    ok: status >= 200 && status < 300,
+                    status,
                     json: () => JSON.parse(data),
                 });
             });
@@ -73,7 +75,7 @@ export async function getSiYuanDir() {
 /**
  * Choose target workspace
  * @param {{path: string}[]} workspaces
- * @returns {string} The path of the selected workspace
+ * @returns {Promise<string>} The path of the selected workspace
  */
 export async function chooseTarget(workspaces) {
     let count = workspaces.length;
@@ -95,7 +97,13 @@ export async function chooseTarget(workspaces) {
             });
         });
         rl.close();
-        return `${workspaces[index].path}/data/plugins`;
+        // 输入非法时原实现会 workspaces[undefined] 直接抛错，报错信息看不出原因
+        const selected = workspaces[Number(index)];
+        if (!selected) {
+            error(`Failed! Invalid workspace index: ${JSON.stringify(index)}`);
+            process.exit(1);
+        }
+        return `${selected.path}/data/plugins`;
     }
 }
 
