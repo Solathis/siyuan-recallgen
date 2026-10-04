@@ -530,6 +530,7 @@
     "date.emptyNotes": "{0}笔记内容为空，请检查文档是否有实际内容",
     "date.title": "{0}笔记（{1} 篇）",
     "date.notebookTitle": "笔记本·{0}笔记（{1} 篇）",
+    "date.capped": "笔记数量达到单笔记本上限（{0} 篇），可能未包含全部笔记",
     "quiz.analysisFailed": "薄弱点分析失败：{0}",
     "schema.parseFailed": "JSON 解析失败: {0}（原文前 200 字: {1}）",
     "gen.unknownReason": "未知原因",
@@ -570,5 +571,7 @@
     "runtime.noWorker": "当前环境不支持运行测试（Web Worker 不可用）",
     "runtime.badResult": "执行结果格式异常",
     "storage.readFailed": "读取 {0} 失败",
-    "storage.writeFailed": "写入 {0} 失败"
+    "storage.writeFailed": "写入 {0} 失败",
+    "date.skippedByLength": "有 {0} 篇笔记因内容过长未纳入出题范围",
+    "date.exportFailed": "有 {0} 篇笔记导出失败，未纳入出题范围"
 }

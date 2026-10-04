@@ -530,6 +530,7 @@
     "date.emptyNotes": "Notes for {0} are empty. Check whether the documents have content.",
     "date.title": "Notes for {0} ({1} docs)",
     "date.notebookTitle": "Notebook · notes for {0} ({1} docs)",
+    "date.capped": "Hit the per-notebook limit of {0} documents; some notes may be missing",
     "quiz.analysisFailed": "Weakness analysis failed: {0}",
     "schema.parseFailed": "JSON parse failed: {0} (first 200 chars: {1})",
     "gen.unknownReason": "Unknown reason",
@@ -570,5 +571,7 @@
     "runtime.noWorker": "This environment cannot run tests (Web Worker unavailable)",
     "runtime.badResult": "The execution result had an unexpected shape",
     "storage.readFailed": "Failed to read {0}",
-    "storage.writeFailed": "Failed to write {0}"
+    "storage.writeFailed": "Failed to write {0}",
+    "date.skippedByLength": "{0} note(s) were too long and left out of the quiz scope",
+    "date.exportFailed": "{0} note(s) failed to export and were left out of the quiz scope"
 }

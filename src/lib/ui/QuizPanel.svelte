@@ -358,14 +358,15 @@
         progressValue = null;
         progressLabel = t("quiz.loadingNotes");
         try {
-            const { content, title } = await service.loadDateRangeContent(
+            const loaded = await service.loadDateRangeContent(
                 dateCfg,
                 tabData.dateRange ?? "beforeToday",
                 tabData.notebookId
             );
             if (cancelled) return;
-            tabData.content = content;
-            tabData.sourceTitle = title;
+            warnPartialScope(loaded);
+            tabData.content = loaded.content;
+            tabData.sourceTitle = loaded.title;
             await startGenerate();
         } catch (e) {
             // 取消（无论来自关闭 tab 还是新一轮开始）都不该弹出错误
@@ -373,6 +374,17 @@
             error = describeError(e);
             panelState = "configuring";
         }
+    }
+
+    /**
+     * 提示「范围内的笔记没有全部纳入」。
+     * 命中上限、超长被跳过、导出失败这三种情况原先都不吭声，
+     * 用户会以为范围内所有笔记都参与了出题。
+     */
+    function warnPartialScope(loaded: { capped: boolean; skipped: number; failed: number }): void {
+        if (loaded.capped) showMessage(t("date.capped", String(200)), 8000);
+        if (loaded.skipped > 0) showMessage(t("date.skippedByLength", String(loaded.skipped)), 8000);
+        if (loaded.failed > 0) showMessage(t("date.exportFailed", String(loaded.failed)), 8000);
     }
 
     async function startGenerate() {

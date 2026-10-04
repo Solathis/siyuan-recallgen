@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { __resetFetchSyncPost, __setFetchSyncPost } from "@/test/siyuan-stub";
 import type { DateGenConfig } from "@/lib/quiz/service";
-import { dateClause, dayBoundary, fmtTS } from "./dateRange";
+import { MAX_CONTENT_CHARS } from "./content";
+import { dateClause, dayBoundary, fmtTS, loadDateRangeNotes, MAX_DOCS_PER_NOTEBOOK } from "./dateRange";
 
 const cfg = (days: number, baseHour = 4, baseMinute = 0): DateGenConfig => ({ days, baseHour, baseMinute });
 
@@ -67,5 +69,66 @@ describe("dateClause", () => {
         const before = dateClause(cfg(7), "beforeToday", now);
         expect(before.endsWith("AND created < '20260923040000'")).toBe(true);
         expect(today).toContain("created >= '20260923040000'");
+    });
+});
+
+describe("loadDateRangeNotes - 未纳入情况的回报", () => {
+    const notebook = { id: "nb-1", name: "笔记本", closed: false };
+
+    /** 按 URL 分派的 handler：lsNotebooks / sql / exportMdContent */
+    function serve(docCount: number, options: { content?: (id: string) => string | null | undefined } = {}) {
+        __setFetchSyncPost((url, data) => {
+            if (url.includes("lsNotebooks")) {
+                return { code: 0, msg: "", data: { notebooks: [notebook] } };
+            }
+            if (url.includes("query/sql")) {
+                const rows = Array.from({ length: docCount }, (_, i) => ({ id: `doc-${i}` }));
+                return { code: 0, msg: "", data: rows };
+            }
+            if (url.includes("exportMdContent")) {
+                const id = (data as { id: string }).id;
+                const content = options.content ? options.content(id) : `内容 ${id}`;
+                if (content === null || content === undefined) return { code: -1, msg: "失败", data: null };
+                return { code: 0, msg: "", data: { content } };
+            }
+            return { code: 0, msg: "", data: null };
+        });
+    }
+
+    afterEach(() => {
+        __resetFetchSyncPost();
+    });
+
+    it("命中单笔记本上限时报告 capped", async () => {
+        serve(MAX_DOCS_PER_NOTEBOOK);
+        const loaded = await loadDateRangeNotes(cfg(7), "beforeToday");
+        expect(loaded.capped).toBe(true);
+    });
+
+    it("未命中上限时不报告 capped", async () => {
+        serve(3);
+        const loaded = await loadDateRangeNotes(cfg(7), "beforeToday");
+        expect(loaded.capped).toBe(false);
+    });
+
+    it("标题里的篇数是实际纳入数，而不是命中数", async () => {
+        // 命中 3 篇，其中 1 篇导出失败
+        serve(3, { content: (id) => (id === "doc-1" ? null : `内容 ${id}`) });
+        const loaded = await loadDateRangeNotes(cfg(7), "beforeToday");
+        expect(loaded.failed).toBe(1);
+        expect(loaded.title).toContain("2");
+    });
+
+    it("超出字符预算的文档计入 skipped", async () => {
+        const huge = "x".repeat(MAX_CONTENT_CHARS + 10);
+        // 首篇超预算会被截断保底，后续超预算的计入 skipped
+        serve(3, { content: () => huge });
+        const loaded = await loadDateRangeNotes(cfg(7), "beforeToday");
+        expect(loaded.skipped).toBe(2);
+    });
+
+    it("范围内没有笔记时抛出带范围的提示", async () => {
+        serve(0);
+        await expect(loadDateRangeNotes(cfg(7), "beforeToday")).rejects.toThrow(/最近 7 天|没有/);
     });
 });

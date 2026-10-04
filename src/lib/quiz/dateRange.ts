@@ -39,25 +39,52 @@ export function dateClause(cfg: DateGenConfig, range: DateRange, now: Date = new
     return `created >= '${fmtTS(past)}' AND created < '${fmtTS(start)}'`;
 }
 
+/**
+ * 单个笔记本一次最多取多少篇文档。
+ * 上限本身是为了避免一次查询把整库拉进来，但命中上限意味着「还有笔记没被取到」，
+ * 必须让用户知道，否则会以为范围里的笔记都参与了出题。
+ */
+export const MAX_DOCS_PER_NOTEBOOK = 200;
+
+interface CollectedDocs {
+    ids: string[];
+    /** 命中上限，可能还有未取到的文档 */
+    capped: boolean;
+}
+
 /** 收集指定笔记本内某日期范围的文档 ID */
-async function collectDocIdsByDate(notebookId: string, cfg: DateGenConfig, range: DateRange): Promise<string[]> {
+async function collectDocIdsByDate(notebookId: string, cfg: DateGenConfig, range: DateRange): Promise<CollectedDocs> {
     const clause = dateClause(cfg, range);
     const rows = await sql(
-        `SELECT id FROM blocks WHERE box = ${quoteSqlLiteral(notebookId)} AND type = ${quoteSqlLiteral("d")} AND ${clause} ORDER BY hpath ASC LIMIT 200`
+        `SELECT id FROM blocks WHERE box = ${quoteSqlLiteral(notebookId)} AND type = ${quoteSqlLiteral("d")} AND ${clause} ORDER BY hpath ASC LIMIT ${MAX_DOCS_PER_NOTEBOOK}`
     );
-    return rows?.map((r: { id: string }) => r.id) ?? [];
+    const ids = rows?.map((r: { id: string }) => r.id) ?? [];
+    return { ids, capped: ids.length >= MAX_DOCS_PER_NOTEBOOK };
 }
 
 /** 收集所有打开笔记本内某日期范围的文档 ID */
-async function collectAllDocIdsByDate(cfg: DateGenConfig, range: DateRange): Promise<string[]> {
+async function collectAllDocIdsByDate(cfg: DateGenConfig, range: DateRange): Promise<CollectedDocs> {
     const res = await lsNotebooks().catch(() => null);
     const notebooks = res?.notebooks?.filter((n: { closed: boolean }) => !n.closed) ?? [];
     const out: string[] = [];
+    let capped = false;
     for (const nb of notebooks) {
-        const ids = await collectDocIdsByDate(nb.id, cfg, range);
-        out.push(...ids);
+        const collected = await collectDocIdsByDate(nb.id, cfg, range);
+        out.push(...collected.ids);
+        capped = capped || collected.capped;
     }
-    return out;
+    return { ids: out, capped };
+}
+
+export interface DateRangeNotes {
+    content: string;
+    title: string;
+    /** 命中单笔记本上限，可能还有笔记未纳入 */
+    capped: boolean;
+    /** 因超出字符预算被跳过的文档数 */
+    skipped: number;
+    /** 导出失败的文档数 */
+    failed: number;
 }
 
 /** 加载日期范围内的笔记内容 */
@@ -65,7 +92,7 @@ export async function loadDateRangeNotes(
     cfg: DateGenConfig,
     range: DateRange,
     notebookId?: string
-): Promise<{ content: string; title: string }> {
+): Promise<DateRangeNotes> {
     const label =
         range === "today"
             ? t("date.today")
@@ -73,25 +100,29 @@ export async function loadDateRangeNotes(
               ? t("date.beforeBase")
               : t("date.recentDays", String(cfg.days));
 
-    let docIds: string[];
-    if (notebookId) {
-        docIds = await collectDocIdsByDate(notebookId, cfg, range);
-    } else {
-        docIds = await collectAllDocIdsByDate(cfg, range);
-    }
+    const collected = notebookId
+        ? await collectDocIdsByDate(notebookId, cfg, range)
+        : await collectAllDocIdsByDate(cfg, range);
 
-    if (docIds.length === 0) {
+    if (collected.ids.length === 0) {
         throw new Error(t("date.noNotes", label));
     }
 
-    const result = await exportDocsMarkdown(docIds);
+    const result = await exportDocsMarkdown(collected.ids);
     if (!result.content.trim()) {
         throw new Error(t("date.emptyNotes", label));
     }
 
+    // 标题里的篇数用「实际纳入」的数量：命中了多少不等于送进了提示词
     const title = notebookId
-        ? t("date.notebookTitle", label, String(docIds.length))
-        : t("date.title", label, String(docIds.length));
+        ? t("date.notebookTitle", label, String(result.exported))
+        : t("date.title", label, String(result.exported));
 
-    return { content: result.content, title };
+    return {
+        content: result.content,
+        title,
+        capped: collected.capped,
+        skipped: result.skipped,
+        failed: result.failed,
+    };
 }

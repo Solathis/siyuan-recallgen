@@ -26,7 +26,7 @@ export interface QuizService {
         cfg: DateGenConfig,
         range: "today" | "beforeToday",
         notebookId?: string
-    ): Promise<{ content: string; title: string }>;
+    ): Promise<import("./dateRange").DateRangeNotes>;
     grade(
         questions: Question[],
         answers: Record<string, UserAnswer>,
