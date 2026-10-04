@@ -144,8 +144,15 @@ export default defineConfig({
                 : [
                       zipPack({
                           inDir: outputDir,
-                          outDir: outputDir,
+                          // 产物放到仓库根：写进 inDir 会让 zip 落在被压缩的目录里，
+                          // 若 OUTPUT_DIR 指向已安装的插件目录，还会把压缩包一起装进插件
+                          outDir: "./",
                           outFileName: "package.zip",
+                          // 打包失败必须让构建失败：此前的默认回调只打印日志，
+                          // 构建照样绿灯，发版时会拿到一个不存在的 artifact
+                          done: (err) => {
+                              if (err) throw err;
+                          },
                       }),
                   ],
 

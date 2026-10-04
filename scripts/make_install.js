@@ -8,6 +8,7 @@
  */
 // make_install.js
 import fs from "fs";
+import path from "path";
 import { log, error, getSiYuanDir, chooseTarget, copyDirectory, getThisPluginName } from "./utils.js";
 
 let targetDir = "";
@@ -35,11 +36,37 @@ if (!fs.existsSync(targetDir)) {
 }
 
 /**
- * 2. The dist directory, which contains the compiled plugin code
+ * 2. The built output directory.
+ * `pnpm build` 会优先写 OUTPUT_DIR（见 vite.config.ts 与 .env.local），
+ * 这时 dist/ 可能压根没被更新——直接复制 dist 会把旧产物装进插件目录。
  */
-const distDir = `${process.cwd()}/dist`;
+const distDir = resolveBuildDir();
 if (!fs.existsSync(distDir)) {
-    fs.mkdirSync(distDir);
+    error(`Failed! Build output directory not exists: "${distDir}"`);
+    error("Please run `pnpm run build` first (or unset OUTPUT_DIR).");
+    process.exit(1);
+}
+if (!fs.existsSync(`${distDir}/index.js`)) {
+    error(`Failed! "${distDir}" does not look like a build output (no index.js).`);
+    process.exit(1);
+}
+
+/** 与 vite.config.ts 保持一致：OUTPUT_DIR > .env.local 的 OUTPUT_DIR > dist */
+function resolveBuildDir() {
+    const fromEnv = process.env.OUTPUT_DIR;
+    if (fromEnv) return path.resolve(process.cwd(), fromEnv);
+    const envFile = path.join(process.cwd(), ".env.local");
+    if (fs.existsSync(envFile)) {
+        const line = fs
+            .readFileSync(envFile, "utf8")
+            .split(/\r?\n/)
+            .find((l) => l.trim().startsWith("OUTPUT_DIR="));
+        if (line) {
+            const value = line.slice(line.indexOf("=") + 1).trim();
+            if (value) return path.resolve(process.cwd(), value);
+        }
+    }
+    return path.join(process.cwd(), "dist");
 }
 
 /**
