@@ -33,6 +33,16 @@ const NOW = new Date(2026, 8, 23, 12, 0, 0).getTime();
 const question = (text: string, type: Question["type"] = "true_false"): Question =>
     ({ id: "q-1", type, difficulty: "easy", question: text, answer: true }) as Question;
 
+/**
+ * 换题型。
+ * Question 是按 type 判别的联合类型，展开后直接改 type 得不到合法成员
+ * （例如 coding 还要求 language），所以统一在本文件收口转换。
+ */
+const asType = (item: BankItem, type: Question["type"]): BankItem => ({
+    ...item,
+    question: { ...item.question, type } as Question,
+});
+
 describe("normalizeText", () => {
     it("去除空白与标点，统一大小写", () => {
         expect(normalizeText("  Hello, World!  ")).toBe("helloworld");
@@ -422,18 +432,12 @@ describe("selectReviewItems", () => {
     });
 
     it("按题型筛选", () => {
-        const mixed: BankItem[] = [
-            { ...bank[0], question: { ...bank[0].question, type: "coding" } },
-            { ...bank[1], question: { ...bank[1].question, type: "subjective" } },
-        ];
+        const mixed: BankItem[] = [asType(bank[0], "coding"), asType(bank[1], "subjective")];
         expect(selectReviewItems(mixed, { now: NOW, type: "coding" }).map((i) => i.question.question)).toEqual(["甲"]);
     });
 
     it("题型与知识点可同时限定", () => {
-        const mixed: BankItem[] = [
-            { ...bank[0], question: { ...bank[0].question, type: "coding" } },
-            { ...bank[1], question: { ...bank[1].question, type: "coding" } },
-        ];
+        const mixed: BankItem[] = [asType(bank[0], "coding"), asType(bank[1], "coding")];
         // 甲、乙都属于「代数」，其中只有甲是编程题
         expect(selectReviewItems(mixed, { now: NOW, tag: "代数", type: "coding" })).toHaveLength(2);
         expect(selectReviewItems(mixed, { now: NOW, tag: "几何", type: "coding" })).toHaveLength(0);
@@ -441,16 +445,8 @@ describe("selectReviewItems", () => {
 
     it("按题型复习同样支持提前复习", () => {
         const future: BankItem[] = [
-            {
-                ...bank[0],
-                question: { ...bank[0].question, type: "coding" },
-                card: { ...bank[0].card, due: NOW + DAY },
-            },
-            {
-                ...bank[2],
-                question: { ...bank[2].question, type: "coding" },
-                card: { ...bank[2].card, due: NOW + DAY },
-            },
+            { ...asType(bank[0], "coding"), card: { ...bank[0].card, due: NOW + DAY } },
+            { ...asType(bank[2], "coding"), card: { ...bank[2].card, due: NOW + DAY } },
         ];
         expect(selectReviewItems(future, { now: NOW, type: "coding" })).toHaveLength(0);
         expect(selectReviewItems(future, { now: NOW, type: "coding", ahead: true })).toHaveLength(2);
