@@ -96,15 +96,20 @@ export function buildIndexEntry(record: ScoreRecord): ScoreIndexEntry {
 
 /** 实测的单题平均耗时；没有单题数据时返回 undefined */
 function averageQuestionSeconds(results: GradingResult[]): number | undefined {
-    const measured = results.map((r) => r.seconds).filter((s): s is number => typeof s === "number" && s > 0);
+    const measured = results.map((r) => r.seconds).filter(isPositiveSeconds);
     if (measured.length === 0) return undefined;
     return Math.round(measured.reduce((a, b) => a + b, 0) / measured.length);
 }
 
 /** 最耗时的一题；没有单题数据时返回 undefined */
 function slowestQuestionSeconds(results: GradingResult[]): number | undefined {
-    const measured = results.map((r) => r.seconds).filter((s): s is number => typeof s === "number" && s > 0);
+    const measured = results.map((r) => r.seconds).filter(isPositiveSeconds);
     return measured.length > 0 ? Math.max(...measured) : undefined;
+}
+
+/** 合法的单题耗时：有限正数（Infinity/NaN 会污染平均值与最大值） */
+function isPositiveSeconds(value: number | undefined): value is number {
+    return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 /** 空字符串答案视为未作答 */
@@ -115,9 +120,15 @@ function hasAnswer(answer: UserAnswer | undefined): boolean {
     return true;
 }
 
-/** 成绩百分比（0-100），maxScore 为 0 时返回 0 */
+/**
+ * 成绩百分比（0-100）。
+ * maxScore 非有限正数时返回 0：导入的脏数据可能是 0/负数/NaN，
+ * 直接相除会把 NaN 或负数百分比带进统计与图表。
+ */
 export function scorePercent(entry: Pick<ScoreIndexEntry, "totalScore" | "maxScore">): number {
-    return entry.maxScore > 0 ? (entry.totalScore / entry.maxScore) * 100 : 0;
+    if (!Number.isFinite(entry.maxScore) || entry.maxScore <= 0) return 0;
+    const percent = (entry.totalScore / entry.maxScore) * 100;
+    return Number.isFinite(percent) ? percent : 0;
 }
 
 /** 按本地时间取分片键 YYYY-MM */

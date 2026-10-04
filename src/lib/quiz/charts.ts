@@ -31,14 +31,23 @@ export function dayKey(timestamp: number): string {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** 按时间范围过滤（按本地日切分，含当天） */
-/** days 为 0 表示不限范围；函数本身接受任意天数，UI 只暴露预置档位 */
+/**
+ * 按时间范围过滤（按本地日切分，含当天）。
+ * days 为 0 表示不限范围；函数本身接受任意天数，UI 只暴露预置档位。
+ * 同时排除未来时间戳：导入的数据或系统时钟回拨可能产生这类记录，
+ * 不排除的话它们会永远留在任何范围里，让统计结果偏大。
+ */
 export function filterByRange(entries: ScoreIndexEntry[], days: number, now = Date.now()): ScoreIndexEntry[] {
-    if (days === 0) return entries;
+    const upper = new Date(now);
+    upper.setHours(23, 59, 59, 999);
+    const until = upper.getTime();
+    if (!(days > 0)) return entries.filter((e) => e.timestamp <= until);
+
     const cutoff = new Date(now);
     cutoff.setHours(0, 0, 0, 0);
     cutoff.setDate(cutoff.getDate() - (days - 1));
-    return entries.filter((e) => e.timestamp >= cutoff.getTime());
+    const from = cutoff.getTime();
+    return entries.filter((e) => e.timestamp >= from && e.timestamp <= until);
 }
 
 /** 总览指标 */
@@ -178,18 +187,19 @@ function accuracyOf(
         count,
         passed,
         accuracy: count > 0 ? (passed / count) * 100 : 0,
-        percent: maxScore > 0 ? (score / maxScore) * 100 : 0,
+        percent: Number.isFinite(maxScore) && maxScore > 0 ? (score / maxScore) * 100 : 0,
     };
 }
 
 /** 按题型统计正确率，按固定顺序输出且只保留有数据的题型 */
 export function accuracyByType(entries: ScoreIndexEntry[]): GroupAccuracy[] {
-    return TYPE_ORDER.map((type) => accuracyOf(entries, (e) => e.byType[type], type)).filter((g) => g.count > 0);
+    // byType 用可选链：导入的旧记录可能没有该聚合字段，直接取值会在统计页抛错
+    return TYPE_ORDER.map((type) => accuracyOf(entries, (e) => e.byType?.[type], type)).filter((g) => g.count > 0);
 }
 
 /** 按难度统计正确率 */
 export function accuracyByDifficulty(entries: ScoreIndexEntry[]): GroupAccuracy[] {
-    return DIFFICULTY_ORDER.map((d) => accuracyOf(entries, (e) => e.byDifficulty[d], d)).filter((g) => g.count > 0);
+    return DIFFICULTY_ORDER.map((d) => accuracyOf(entries, (e) => e.byDifficulty?.[d], d)).filter((g) => g.count > 0);
 }
 
 /**

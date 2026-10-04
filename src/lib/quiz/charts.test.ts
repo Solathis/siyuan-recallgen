@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ScoreIndexEntry } from "@/types/quiz";
+import { scorePercent } from "./stats";
 import {
     accuracyByDifficulty,
     accuracyByTag,
@@ -293,5 +294,41 @@ describe("accuracyByTag", () => {
 
     it("空输入返回空数组", () => {
         expect(accuracyByTag([])).toEqual([]);
+    });
+});
+
+describe("统计容错（导入的脏数据不应让统计页崩掉）", () => {
+    const legacy = { id: "s-legacy", timestamp: NOW, totalScore: 80, maxScore: 100, questionCount: 5 } as never;
+
+    it("缺少 byType / byDifficulty 聚合的旧记录不会抛错", () => {
+        expect(() => accuracyByType([legacy])).not.toThrow();
+        expect(() => accuracyByDifficulty([legacy])).not.toThrow();
+        expect(accuracyByType([legacy])).toEqual([]);
+        expect(accuracyByDifficulty([legacy])).toEqual([]);
+    });
+
+    it("maxScore 为 0 / 负数 / NaN 时百分比为 0 而不是 NaN", () => {
+        expect(scorePercent({ totalScore: 10, maxScore: 0 })).toBe(0);
+        expect(scorePercent({ totalScore: 10, maxScore: -5 })).toBe(0);
+        expect(scorePercent({ totalScore: 10, maxScore: NaN })).toBe(0);
+    });
+
+    it("未来时间戳不会留在任何范围内", () => {
+        const future = {
+            id: "s-future",
+            timestamp: NOW + 30 * 24 * 3600 * 1000,
+            totalScore: 100,
+            maxScore: 100,
+            questionCount: 1,
+        } as never;
+        expect(filterByRange([future], 7, NOW)).toHaveLength(0);
+        expect(filterByRange([future], 0, NOW)).toHaveLength(0);
+    });
+
+    it("负数天数按不限范围处理，而不是把 cutoff 推到未来", () => {
+        const past = { id: "s-past", timestamp: NOW - 40 * 24 * 3600 * 1000 } as never;
+        // 负数与 0 一样视为不限下界，但未来记录仍被排除
+        expect(filterByRange([past], -5, NOW)).toHaveLength(1);
+        expect(filterByRange([past], 0, NOW)).toHaveLength(1);
     });
 });

@@ -319,3 +319,27 @@ describe("uniformIndices", () => {
         expect(picked[picked.length - 1]).toBe(36);
     });
 });
+
+describe("ticks 的退化输入", () => {
+    it("count 为 0 时不产生 NaN（回归：max/0*0 === NaN）", () => {
+        const result = ticks(100, 0);
+        expect(result.some((value) => Number.isNaN(value))).toBe(false);
+        expect(result[0]).toBe(0);
+        expect(result[result.length - 1]).toBe(100);
+    });
+
+    it("count 为负数或非整数时同样安全", () => {
+        for (const count of [-3, 0.4, NaN, Infinity]) {
+            expect(ticks(50, count).some((value) => Number.isNaN(value))).toBe(false);
+        }
+    });
+
+    it("合法 count 仍按等分输出", () => {
+        expect(ticks(100, 4)).toEqual([0, 25, 50, 75, 100]);
+    });
+
+    it("max 非正时返回 [0]", () => {
+        expect(ticks(0)).toEqual([0]);
+        expect(ticks(-10)).toEqual([0]);
+    });
+});

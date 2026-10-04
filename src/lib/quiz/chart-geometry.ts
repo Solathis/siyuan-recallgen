@@ -14,12 +14,14 @@ export function linearScale(d0: number, d1: number, r0: number, r1: number): (va
 }
 
 /**
- * 生成 0..max 的等分刻度（含首尾），共 count+1 个。
- * max 非正时返回 [0]，避免出现 NaN 刻度。
+ * 生成 0..max 的等分刻度（含首尾），共 steps+1 个。
+ * max 非正时返回 [0]；count 小于 1（含 0，会让 max/count 变成 Infinity）时按 1 段处理，
+ * 两种情况都不产生 NaN 刻度。
  */
 export function ticks(max: number, count = 4): number[] {
     if (!Number.isFinite(max) || max <= 0) return [0];
-    return Array.from({ length: count + 1 }, (_, i) => (max / count) * i);
+    const steps = Number.isFinite(count) && count >= 1 ? Math.floor(count) : 1;
+    return Array.from({ length: steps + 1 }, (_, i) => (max / steps) * i);
 }
 
 /** 折线上的一个点 */
