@@ -160,3 +160,55 @@ describe("buildQuestionsMarkdown", () => {
         expect(buildQuestionsMarkdown([])).toBe("");
     });
 });
+
+describe("文档写入的注入与脏数据防护", () => {
+    const single = (over: Record<string, unknown> = {}) =>
+        q({ type: "single_choice", options: ["甲", "乙"], answer: 0, ...over });
+    const QUOTE = String.fromCharCode(34);
+    const LF = String.fromCharCode(10);
+    const NUL = String.fromCharCode(0);
+
+    it("含引号与换行的题目 id 不会写进 IAL 属性（回归：可注入任意 Markdown/IAL）", () => {
+        const evil = single({ id: "x" + QUOTE + LF + '{: custom-hacked="1"}' + LF + LF + "恶意内容" });
+        const md = buildQuestionsMarkdown([evil]);
+        expect(md).not.toContain("custom-recallgen-id");
+        expect(md).not.toContain("custom-hacked");
+    });
+
+    it("合法 id 仍会写入", () => {
+        const md = buildQuestionsMarkdown([single({ id: "q-1_ab.c" })]);
+        expect(md).toContain('{: custom-recallgen-id="q-1_ab.c"}');
+    });
+
+    it("选项缺失时不再因 forEach 抛错", () => {
+        expect(() => buildQuestionsMarkdown([single({ options: undefined })])).not.toThrow();
+    });
+
+    it("越界/非法的答案下标不会产出 NUL 等控制字符", () => {
+        for (const answer of [NaN, -1, 26, 1.5]) {
+            const md = buildQuestionsMarkdown([single({ answer })]);
+            expect(md.includes(NUL), String(answer)).toBe(false);
+        }
+    });
+
+    it("多选题答案数组缺失时输出为空而不是抛错", () => {
+        const broken = q({ type: "multiple_choice", options: ["甲", "乙"], answer: undefined as never });
+        expect(() => buildQuestionsMarkdown([broken])).not.toThrow();
+    });
+
+    it("标题按码点截断，不切开 emoji 代理对", () => {
+        const hasLoneSurrogate = (text: string) =>
+            [...text].some((ch) => {
+                const code = ch.charCodeAt(0);
+                return ch.length === 1 && code >= 0xd800 && code <= 0xdfff;
+            });
+        const title = titleOf("🎓".repeat(60));
+        expect(hasLoneSurrogate(title)).toBe(false);
+        expect([...title].length).toBeLessThan(60);
+    });
+
+    it("Windows 保留设备名被加前缀规避", () => {
+        expect(titleOf("nul")).toContain("_nul");
+        expect(titleOf("CON")).toContain("_CON");
+    });
+});

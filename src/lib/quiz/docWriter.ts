@@ -20,16 +20,23 @@ function fmtDate(d = new Date()): string {
  * 思源桌面端会用 hpath 落文件，因此需要剔除路径非法字符、控制字符，
  * 并去掉结尾的点和空格（Windows 不允许），截断长度避免超长路径。
  */
+/** Windows 保留设备名：即使带扩展名也不能作为文件名 */
+const RESERVED_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
 export function titleOf(sourceTitle: string, date = new Date()): string {
-    const safe =
-        String(sourceTitle)
-            .replace(/[\u0000-\u001f]/g, "")
-            .replace(/[/\\:*?"<>|]/g, "_")
-            .replace(/\s+/g, " ")
-            .trim()
-            .replace(/[.\s]+$/, "")
-            .slice(0, 40)
-            .trim() || t("doc.titlePrefix");
+    let safe = String(sourceTitle)
+        .replace(/[\u0000-\u001f]/g, "")
+        .replace(/[/\\:*?"<>|]/g, "_")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/[.\s]+$/, "");
+
+    // 按码点截断：slice 会把代理对（emoji 等）切成两半，产生非法字符导致落盘失败
+    const points = [...safe];
+    if (points.length > 40) safe = points.slice(0, 40).join("").trim();
+    if (RESERVED_NAMES.test(safe)) safe = `_${safe}`;
+    if (!safe) safe = t("doc.titlePrefix");
+
     return `${t("doc.titlePrefix")}_${fmtDate(date)}_${safe}`;
 }
 
@@ -49,6 +56,13 @@ function codeBlock(content: string, language = ""): string {
 }
 
 /**
+ * IAL 属性值的合法字符集。
+ * 题库备份里的题目 id 是不受控输入：含引号与换行的 id 能提前闭合属性，
+ * 从而把任意 Markdown / IAL 注入用户文档。
+ */
+const SAFE_ATTRIBUTE_ID = /^[\w.-]{1,64}$/;
+
+/**
  * 将题目集合成为结构化 Markdown，每题块带 IAL `custom-recallgen-id`，
  * 答案与解析置于折叠 details 中防止复习偷看。
  */
@@ -57,12 +71,16 @@ export function buildQuestionsMarkdown(questions: Question[]): string {
 
     for (const q of questions) {
         lines.push(`### ${typeLabel(q.type)} · ${diffLabel(q.difficulty)}`);
-        lines.push(`{: custom-recallgen-id="${q.id}"}`);
+        // 非法 id 直接省略该属性，而不是转义后照写：
+        // 这个属性目前没有读取方，缺了不影响功能，写进去才有风险
+        if (SAFE_ATTRIBUTE_ID.test(q.id)) {
+            lines.push(`{: custom-recallgen-id="${q.id}"}`);
+        }
         lines.push(q.question);
         lines.push("");
 
         if (q.type === "single_choice" || q.type === "multiple_choice") {
-            q.options.forEach((opt, i) => {
+            (q.options ?? []).forEach((opt, i) => {
                 lines.push(`${String.fromCharCode(65 + i)}. ${opt}`);
             });
             lines.push("");
@@ -89,15 +107,22 @@ export function buildQuestionsMarkdown(questions: Question[]): string {
     return lines.join("\n");
 }
 
+/**
+ * 选项下标 → 字母。
+ * 只接受 0-25 的整数：NaN、负数或越界值经 fromCharCode 会产出 NUL 或
+ * `[`、`\\` 之类的字符，导入的脏数据会把它带进用户文档。
+ */
+function optionLabel(index: unknown): string {
+    if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index > 25) return "?";
+    return String.fromCharCode(65 + index);
+}
+
 function answerText(q: Question): string {
     switch (q.type) {
         case "single_choice":
-            return String.fromCharCode(65 + q.answer);
+            return optionLabel(q.answer);
         case "multiple_choice":
-            return q.answer
-                .map((i) => String.fromCharCode(65 + i))
-                .sort()
-                .join("、");
+            return (Array.isArray(q.answer) ? q.answer : []).map(optionLabel).sort().join("、");
         case "true_false":
             return q.answer ? t("common.true") : t("common.false");
         case "fill_blank":
