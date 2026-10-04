@@ -161,6 +161,7 @@
     "err.429.hint": "API calls too frequent, please retry later or switch API Key",
     "err.5xx.title": "AI Server Error ({0})",
     "err.5xx.hint": "AI service temporarily unavailable, please retry later",
+    "err.http.title": "Request failed ({0})",
     "err.network.title": "Network Error ({0})",
     "err.network.hint": "Please check Base URL and network connection",
     "err.config.title": "Incomplete Configuration",
@@ -169,6 +170,7 @@
     "err.timeout.hint": "AI generation took too long, please increase timeout in settings",
     "err.json.title": "AI Response Parse Error",
     "err.json.hint": "Model returned unexpected format. Try enabling JSON Schema or switching model",
+    "err.truncated.title": "AI output was truncated",
     "err.generic.title": "An Error Occurred",
     "err.generic.hint": "Please check configuration and retry",
     "err.retryGrade": "Retry Grading",
@@ -489,6 +491,7 @@
     "ai.endpointNotFound": "Endpoint referenced by model {0} does not exist: {1}",
     "ai.timeout": "Request timed out after {0}s",
     "ai.proxyFailed": "Kernel network proxy failed: {0}",
+    "ai.proxyBadResponse": "The kernel network proxy returned an unexpected payload",
     "ai.responseNotJson": "AI response is not JSON",
     "ai.responseNoContent": "AI response contains no content",
     "ai.testPromptDefault": "Briefly introduce yourself in one sentence.",
@@ -528,5 +531,8 @@
     "date.notebookTitle": "Notebook · notes for {0} ({1} docs)",
     "quiz.analysisFailed": "Weakness analysis failed: {0}",
     "schema.parseFailed": "JSON parse failed: {0} (first 200 chars: {1})",
-    "gen.unknownReason": "Unknown reason"
+    "gen.unknownReason": "Unknown reason",
+    "err.http.hint": "Check the Base URL, model name and request parameters",
+    "err.truncated.hint": "Output exceeded MaxTokens — raise it for this model or generate fewer questions",
+    "ai.truncated": "AI output was truncated (hit MaxTokens or max_output_tokens)"
 }

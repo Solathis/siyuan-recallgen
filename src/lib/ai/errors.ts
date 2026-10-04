@@ -27,7 +27,10 @@ export function describeError(error: unknown): ErrorDescription {
             case "parse":
                 return { title: t("err.json.title"), hint: t("err.json.hint"), detail };
             case "network":
-                return { title: t("err.network.title", "network"), hint: t("err.network.hint"), detail };
+                // 不把 kind 名当参数塞进标题：之前会显示成「网络错误（network）」
+                return { title: t("err.network.title"), hint: t("err.network.hint"), detail };
+            case "truncated":
+                return { title: t("err.truncated.title"), hint: t("err.truncated.hint"), detail };
             case "http":
                 return describeHttp(error.status, detail);
         }
@@ -51,7 +54,9 @@ export function describeHttp(status: number | undefined, detail: string): ErrorD
         return { title: t("err.5xx.title", String(status)), hint: t("err.5xx.hint"), detail };
     }
     if (typeof status === "number") {
-        return { title: t("err.network.title", String(status)), hint: t("err.network.hint"), detail };
+        // 其余状态码（404 模型名写错、408、413…）此前一律报「网络错误」，
+        // 把人往 Base URL 上引
+        return { title: t("err.http.title", String(status)), hint: t("err.http.hint"), detail };
     }
     return { title: t("err.generic.title"), hint: t("err.generic.hint"), detail };
 }

@@ -291,3 +291,71 @@ describe("callLLM - 响应异常", () => {
         await expect(callLLM(rc(), [{ role: "user", content: "hi" }])).rejects.toThrow(/模型不存在/);
     });
 });
+
+describe("响应结构校验", () => {
+    const messages = [{ role: "user" as const, content: "hi" }];
+
+    it("代理返回 data=null 时给出可读错误，而不是 TypeError", async () => {
+        __setFetchSyncPost(() => ({ code: 0, msg: "", data: null }));
+        await expect(callLLM(rc(), messages, {})).rejects.toMatchObject({
+            name: "AIError",
+            kind: "parse",
+        });
+    });
+
+    it("代理返回结构残缺（缺 body/status）时同样给出可读错误", async () => {
+        __setFetchSyncPost(() => ({ code: 0, msg: "", data: { status: 200 } }));
+        await expect(callLLM(rc(), messages, {})).rejects.toMatchObject({ name: "AIError", kind: "parse" });
+    });
+});
+
+describe("输出截断检测", () => {
+    const messages = [{ role: "user" as const, content: "hi" }];
+
+    it("chat 协议 finish_reason=length 时抛出 truncated 而不是让 jsonrepair 蒙混过去", async () => {
+        recordingHandler(() =>
+            proxyOk({
+                choices: [{ message: { content: '{"questions":' }, finish_reason: "length" }],
+            })
+        );
+        await expect(callLLM(rc(), messages, {})).rejects.toMatchObject({ kind: "truncated" });
+    });
+
+    it("messages 协议 stop_reason=max_tokens 同样被识别", async () => {
+        recordingHandler(() => proxyOk({ content: [{ type: "text", text: "{}" }], stop_reason: "max_tokens" }));
+        await expect(callLLM(rc({ protocol: "messages" }), messages, {})).rejects.toMatchObject({
+            kind: "truncated",
+        });
+    });
+
+    it("responses 协议 status=incomplete 同样被识别", async () => {
+        recordingHandler(() =>
+            proxyOk({ status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output: [] })
+        );
+        await expect(callLLM(rc({ protocol: "responses" }), messages, {})).rejects.toMatchObject({
+            kind: "truncated",
+        });
+    });
+
+    it("正常结束时不受影响", async () => {
+        recordingHandler(() => proxyOk({ choices: [{ message: { content: "ok" }, finish_reason: "stop" }] }));
+        await expect(callLLM(rc(), messages, {})).resolves.toMatchObject({ content: "ok" });
+    });
+});
+
+describe("responses 协议正文提取", () => {
+    const messages = [{ role: "user" as const, content: "hi" }];
+
+    it("首项是 reasoning 项时不会漏掉后面的正文（推理模型的常见形态）", async () => {
+        recordingHandler(() =>
+            proxyOk({
+                output: [
+                    { type: "reasoning", content: [{ type: "summary_text", text: "" }] },
+                    { type: "message", content: [{ type: "output_text", text: '{"questions":[]}' }] },
+                ],
+            })
+        );
+        const result = await callLLM(rc({ protocol: "responses" }), messages, {});
+        expect(result.content).toBe('{"questions":[]}');
+    });
+});

@@ -7,7 +7,7 @@ import type { AIConfig, AIProvider, AIProtocol } from "@/types/config";
  * 用类别而非消息文本判断是否可重试——原实现匹配英文 "timeout"，
  * 而超时消息是中文「请求超时」，导致超时永远不会重试。
  */
-export type AIErrorKind = "http" | "timeout" | "network" | "parse" | "config";
+export type AIErrorKind = "http" | "timeout" | "network" | "parse" | "config" | "truncated";
 
 /** AI 调用错误，附带类别与 HTTP 状态便于上层区分 */
 export class AIError extends Error {
@@ -173,13 +173,52 @@ async function forward(
     if (resp.code !== 0) {
         throw new AIError(t("ai.proxyFailed", resp.msg), undefined, "network");
     }
-    return resp.data as ForwardResponse;
+
+    // 只做类型断言是不够的：内核在异常路径上可能给出 data=null，
+    // 后续读 status/body 会抛原始 TypeError，用户看到的是无意义的堆栈
+    const data = resp.data as Partial<ForwardResponse> | null | undefined;
+    if (!data || typeof data !== "object" || typeof data.status !== "number" || typeof data.body !== "string") {
+        throw new AIError(t("ai.proxyBadResponse"), undefined, "parse");
+    }
+    return data as ForwardResponse;
 }
 
 function checkHttpOk(fr: ForwardResponse): void {
     if (fr.status < 200 || fr.status >= 300) {
         throw new AIError(`AI HTTP ${fr.status}: ${fr.body.slice(0, 500)}`, fr.status);
     }
+}
+
+/**
+ * 输出被截断时抛出可操作的错误。
+ *
+ * 不检测的话，被截断的 JSON 会被 jsonrepair「修」成一个看似合法的残缺对象
+ * （例如 `{"questions":` 变成 `{questions:null}`），用户只会看到
+ * 「AI 返回缺少 questions 数组」，完全猜不到真正原因是 maxTokens 不够。
+ */
+function checkNotTruncated(parsed: unknown): void {
+    const reason = readStopReason(parsed);
+    if (reason === "length" || reason === "max_tokens") {
+        throw new AIError(t("ai.truncated"), undefined, "truncated");
+    }
+}
+
+/** 读取各协议表示「停止原因」的字段：chat 用 finish_reason，responses 用 status，messages 用 stop_reason */
+function readStopReason(parsed: unknown): string | undefined {
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const obj = parsed as {
+        choices?: Array<{ finish_reason?: unknown }>;
+        status?: unknown;
+        incomplete_details?: unknown;
+        stop_reason?: unknown;
+    };
+    const finish = obj.choices?.[0]?.finish_reason;
+    if (typeof finish === "string") return finish;
+    const stop = obj.stop_reason;
+    if (typeof stop === "string") return stop;
+    // responses 协议：status=incomplete 且 incomplete_details.reason=max_output_tokens
+    if (obj.status === "incomplete" && obj.incomplete_details) return "length";
+    return undefined;
 }
 
 // ── 认证头 ────────────────────────────────────────────────────────────
@@ -238,6 +277,7 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
     if (parsed === null) throw new AIError(t("ai.responseNotJson"), undefined, "parse");
+    checkNotTruncated(parsed);
     const content = extractChatContent(parsed);
     if (!content) throw new AIError(t("ai.responseNoContent"), undefined, "parse");
     return { content, raw: parsed };
@@ -256,10 +296,20 @@ function toResponsesFormat(rf: unknown): unknown {
 }
 
 function extractResponsesContent(parsed: unknown): string {
-    const obj = parsed as { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> };
-    if (obj.output_text) return obj.output_text;
-    const text = obj.output?.[0]?.content?.[0]?.text;
-    return typeof text === "string" ? text : "";
+    const obj = parsed as {
+        output_text?: string;
+        output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+    };
+    if (typeof obj.output_text === "string" && obj.output_text.length > 0) return obj.output_text;
+
+    // 逐项查找第一个文本块：推理模型的 output[0] 往往是 reasoning 项，
+    // 只看 output[0].content[0] 会把正文整段漏掉
+    for (const item of obj.output ?? []) {
+        for (const block of item?.content ?? []) {
+            if (typeof block?.text === "string" && block.text.length > 0) return block.text;
+        }
+    }
+    return "";
 }
 
 async function callResponses(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLMCallOptions): Promise<LLMResult> {
@@ -276,6 +326,7 @@ async function callResponses(rc: ResolvedAIConfig, messages: ChatMessage[], opts
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
     if (parsed === null) throw new AIError(t("ai.responseNotJson"), undefined, "parse");
+    checkNotTruncated(parsed);
     const content = extractResponsesContent(parsed);
     if (!content) throw new AIError(t("ai.responseNoContent"), undefined, "parse");
     return { content, raw: parsed };
@@ -315,6 +366,7 @@ async function callMessages(rc: ResolvedAIConfig, messages: ChatMessage[], opts:
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
     if (parsed === null) throw new AIError(t("ai.responseNotJson"), undefined, "parse");
+    checkNotTruncated(parsed);
     const content = extractMessagesContent(parsed);
     if (!content) throw new AIError(t("ai.responseNoContent"), undefined, "parse");
     return { content, raw: parsed };
