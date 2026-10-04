@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { AIError } from "@/lib/ai/client";
-import type { Question } from "@/types/quiz";
-import { PASS_SCORE } from "@/types/quiz";
+import { getDefaultConfig } from "@/types/config";
+import { hasAnswer, PASS_SCORE, type Question } from "@/types/quiz";
 import {
     blankMatches,
     clampScore,
     gradeObjective,
+    gradeUnanswered,
+    gradeAll,
     isExactlyCorrect,
     isObjective,
     scoreFillBlank,
@@ -280,5 +282,48 @@ describe("多选题计分策略", () => {
     it("其他题型的计分不受策略影响", () => {
         expect(scoreObjective(single(1), { type: "single_choice", value: 1 }, "strict")).toBe(100);
         expect(scoreObjective(blank([["a"], ["b"]]), { type: "fill_blank", value: ["a", ""] }, "strict")).toBe(50);
+    });
+});
+
+describe("未作答的主观/编程题", () => {
+    const subjective = {
+        id: "q-sub",
+        type: "subjective",
+        difficulty: "medium",
+        question: "谈谈你的理解",
+        reference_answer: "要点",
+    } as unknown as Question;
+    const coding = {
+        id: "q-code",
+        type: "coding",
+        difficulty: "medium",
+        question: "写函数",
+        language: "javascript",
+        test_cases: [],
+    } as unknown as Question;
+
+    it("本地判 0 且标注为未作答", () => {
+        const r = gradeUnanswered(subjective, undefined);
+        expect(r).toMatchObject({ questionId: "q-sub", method: "local", score: 0, correct: false });
+        expect(r.comment).toBeTruthy();
+    });
+
+    it("hasAnswer 把空串、纯空白、空数组都视为未作答", () => {
+        expect(hasAnswer(undefined)).toBe(false);
+        expect(hasAnswer({ type: "coding", value: "" })).toBe(false);
+        expect(hasAnswer({ type: "subjective", value: "   \n " })).toBe(false);
+        expect(hasAnswer({ type: "fill_blank", value: [] })).toBe(false);
+        expect(hasAnswer({ type: "subjective", value: "答了" })).toBe(true);
+        expect(hasAnswer({ type: "coding", value: "return 1" })).toBe(true);
+    });
+
+    it("gradeAll 对未作答题目完全不调用 AI（配置里没有可用模型也能跑完）", async () => {
+        const config = getDefaultConfig();
+        // 故意清空端点与模型：只要仍然去调 AI，resolveAI 就会抛错
+        config.ai.endpoints = [];
+        config.ai.models = [];
+        const results = await gradeAll(config, [subjective, coding], {});
+        expect(results.map((r) => r.score)).toEqual([0, 0]);
+        expect(results.every((r) => r.method === "local")).toBe(true);
     });
 });

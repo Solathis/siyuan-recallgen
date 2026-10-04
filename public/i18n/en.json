@@ -515,6 +515,7 @@
     "validate.codingNoRef": "Coding question is missing both a reference answer and test cases",
     "validate.unknownType": "Unknown question type: {0}",
     "grade.failed": "Grading failed: {0}",
+    "grade.unanswered": "Not answered — scored 0",
     "grade.notObject": "AI grading response is not a JSON object",
     "grade.noScore": "AI grading response has no valid score",
     "grade.toolDescription": "Grade",

@@ -515,6 +515,7 @@
     "validate.codingNoRef": "编程题缺少参考答案与测试用例",
     "validate.unknownType": "未知题型: {0}",
     "grade.failed": "判分失败: {0}",
+    "grade.unanswered": "未作答，计 0 分",
     "grade.notObject": "AI 判分返回的不是 JSON 对象",
     "grade.noScore": "AI 判分缺少有效的 score",
     "grade.toolDescription": "判分",

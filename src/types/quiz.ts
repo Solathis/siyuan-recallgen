@@ -1,6 +1,6 @@
 /**
  * RecallGen 核心类型定义。
- * 除一个阈值常量外只有类型，无运行时副作用，并发安全。
+ * 除少量共享常量与纯谓词外只有类型，无运行时副作用，并发安全。
  */
 
 /**
@@ -9,6 +9,18 @@
  * 避免多处各写 60 导致口径漂移。
  */
 export const PASS_SCORE = 60;
+
+/**
+ * 作答是否算「真的答了」。
+ * 判分与统计必须用同一口径：空串、纯空白、空数组都视为未作答，
+ * 否则会出现「统计里算未作答、判分时却送去让 AI 打分」这种自相矛盾的行为。
+ */
+export function hasAnswer(answer: UserAnswer | undefined): boolean {
+    if (!answer) return false;
+    if (typeof answer.value === "string") return answer.value.trim().length > 0;
+    if (Array.isArray(answer.value)) return answer.value.length > 0;
+    return true;
+}
 
 /** 难度等级 */
 export type Difficulty = "easy" | "medium" | "hard";

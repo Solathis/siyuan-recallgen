@@ -1,4 +1,4 @@
-import { PASS_SCORE } from "@/types/quiz";
+import { hasAnswer, PASS_SCORE } from "@/types/quiz";
 import type {
     Difficulty,
     GradingResult,
@@ -7,7 +7,6 @@ import type {
     ScoreAggregate,
     ScoreIndexEntry,
     ScoreRecord,
-    UserAnswer,
 } from "@/types/quiz";
 
 export { PASS_SCORE } from "@/types/quiz";
@@ -110,14 +109,6 @@ function slowestQuestionSeconds(results: GradingResult[]): number | undefined {
 /** 合法的单题耗时：有限正数（Infinity/NaN 会污染平均值与最大值） */
 function isPositiveSeconds(value: number | undefined): value is number {
     return typeof value === "number" && Number.isFinite(value) && value > 0;
-}
-
-/** 空字符串答案视为未作答 */
-function hasAnswer(answer: UserAnswer | undefined): boolean {
-    if (!answer) return false;
-    if (typeof answer.value === "string") return answer.value.trim().length > 0;
-    if (Array.isArray(answer.value)) return answer.value.length > 0;
-    return true;
 }
 
 /**

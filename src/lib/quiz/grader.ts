@@ -10,7 +10,7 @@ import {
     parseJsonLoose,
 } from "../ai/schema";
 import type { MultipleChoicePolicy, RecallGenConfig } from "@/types/config";
-import type { GradingResult, Question, UserAnswer } from "@/types/quiz";
+import { hasAnswer, type GradingResult, type Question, type UserAnswer } from "@/types/quiz";
 
 const MAX_CONCURRENT = 4;
 
@@ -38,6 +38,12 @@ export async function gradeAll(
             results.push(withSeconds(gradeObjective(q, ua, policy), secondsByQuestion));
             done++;
             onProgress?.(done, total);
+        } else if (!hasAnswer(ua)) {
+            // 未作答直接本地判 0：让 AI 给空答案打分既没意义，
+            // 又可能被模型「同情分」刷出分数，还白白消耗一次调用
+            results.push(withSeconds(gradeUnanswered(q, ua), secondsByQuestion));
+            done++;
+            onProgress?.(done, total);
         } else {
             pool.add(async () => {
                 const r = await gradeAI(config, q, ua).catch((e): GradingResult => ({
@@ -61,6 +67,23 @@ export async function gradeAll(
     // 按原题序返回，避免依赖 questionId 的字符串排序（id 格式一旦变化就会错位）
     const byId = new Map(results.map((r) => [r.questionId, r]));
     return questions.map((q) => byId.get(q.id)).filter((r): r is GradingResult => r !== undefined);
+}
+
+/**
+ * 未作答的主观/编程题：本地记 0 分，不调用 AI。
+ * 与客观题未作答的结果结构保持一致（method 标 local，便于区分「没答」与「判分失败」）。
+ */
+export function gradeUnanswered(q: Question, ua: UserAnswer | undefined): GradingResult {
+    return {
+        questionId: q.id,
+        type: q.type,
+        method: "local",
+        correct: false,
+        score: 0,
+        maxScore: 100,
+        comment: t("grade.unanswered"),
+        userAnswer: ua,
+    };
 }
 
 /** 附加单题耗时（仅在测得有效值时写入） */
