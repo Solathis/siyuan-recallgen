@@ -124,15 +124,27 @@ function mergeAI(
         return { ...current, endpoints };
     }
 
-    // 不含 Key 的文件导入时，沿用本机同名（或同地址）端点的 Key
+    // 不含 Key 的文件导入时，只在「请求地址完全没变」的前提下沿用本机 Key。
+    // 不能用 id 匹配：配置文件是可以分享的，只要把同名端点的 baseUrl 改成别的服务器，
+    // 本机 Key 就会被自动带过去发往任意地址（凭据外泄）。
     const resolved = endpoints.map((endpoint) => {
         if (endpoint.apiKey) return endpoint;
-        const existing = current.endpoints.find(
-            (candidate) => candidate.id === endpoint.id || (candidate.baseUrl && candidate.baseUrl === endpoint.baseUrl)
+
+        const sameAddress = current.endpoints.find(
+            (candidate) => !!candidate.baseUrl && candidate.baseUrl === endpoint.baseUrl
         );
-        if (existing?.apiKey) {
+        if (sameAddress?.apiKey) {
             warnings.push(`端点「${endpoint.name}」沿用本机已有的 API Key`);
-            return { ...endpoint, apiKey: existing.apiKey };
+            return { ...endpoint, apiKey: sameAddress.apiKey };
+        }
+
+        const sameId = current.endpoints.find((candidate) => candidate.id === endpoint.id);
+        if (sameId?.baseUrl && sameId.baseUrl !== endpoint.baseUrl) {
+            warnings.push(
+                `端点「${endpoint.name}」的地址由 ${sameId.baseUrl} 变为 ${endpoint.baseUrl || "（空）"}，` +
+                    `出于安全考虑未沿用本机 API Key，请重新填写`
+            );
+            return endpoint;
         }
         if (!includesSecrets) warnings.push(`端点「${endpoint.name}」没有 API Key，请补填`);
         return endpoint;

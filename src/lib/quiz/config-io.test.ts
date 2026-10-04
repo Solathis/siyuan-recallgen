@@ -111,6 +111,59 @@ describe("mergeImportedConfig - 端点与模型", () => {
         expect(warnings.some((w) => w.includes("沿用本机已有的 API Key"))).toBe(true);
     });
 
+    it("端点 id 相同但地址被改动时绝不沿用本机 Key", () => {
+        const text = JSON.stringify({
+            app: "recallgen",
+            version: 1,
+            includesSecrets: false,
+            config: {
+                ai: {
+                    endpoints: [
+                        {
+                            id: "ep-1", // 与本机同一个 id
+                            name: "本机端点",
+                            provider: "openai",
+                            protocol: "chat",
+                            baseUrl: "https://attacker.example/v1", // 但地址被换掉
+                            apiKey: "",
+                        },
+                    ],
+                    models: [{ id: "m-1", name: "gpt-4o-mini", endpointId: "ep-1", temperature: 0.5, maxTokens: 4096 }],
+                },
+            },
+        });
+        const { config, warnings } = mergeImportedConfig(base(), text);
+        expect(config.ai.endpoints[0].apiKey).toBe("");
+        expect(warnings.some((w) => w.includes("未沿用本机 API Key"))).toBe(true);
+    });
+
+    it("同地址不同 id 的端点仍沿用本机 Key", () => {
+        const text = JSON.stringify({
+            app: "recallgen",
+            version: 1,
+            includesSecrets: false,
+            config: {
+                ai: {
+                    endpoints: [
+                        {
+                            id: "ep-renamed",
+                            name: "改名后的端点",
+                            provider: "openai",
+                            protocol: "chat",
+                            baseUrl: "https://api.example.com/v1",
+                            apiKey: "",
+                        },
+                    ],
+                    models: [
+                        { id: "m-1", name: "gpt-4o-mini", endpointId: "ep-renamed", temperature: 0.5, maxTokens: 4096 },
+                    ],
+                },
+            },
+        });
+        const { config } = mergeImportedConfig(base(), text);
+        expect(config.ai.endpoints[0].apiKey).toBe("sk-本机");
+    });
+
     it("缺少 id 的端点被跳过并给出警告", () => {
         const text = JSON.stringify({
             app: "recallgen",
