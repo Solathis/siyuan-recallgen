@@ -16,9 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 不写死版本：由 package.json 的 packageManager 决定，避免两处漂移
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -42,6 +41,33 @@ jobs:
 
       - run: pnpm run build
 
+      # 发布前先确认压缩包内容齐全：artifactErrorsFailBuild 只看「文件存在」，
+      # 一个空包或漏了 index.css 的包也会被发出去
+      - name: Verify package contents
+        run: |
+          set -e
+          test -f package.zip
+          unzip -l package.zip
+          for f in index.js index.css plugin.json i18n/zh-CN.json i18n/en.json README.md; do
+            unzip -l package.zip "$f" > /dev/null || { echo "package.zip 缺少 $f" >&2; exit 1; }
+          done
+
+      # 带 - 的标签（v1.0.0-beta.1 等）按预发布处理，否则会被当成正式版
+      - name: Detect prerelease
+        id: channel
+        run: |
+          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 用 CHANGELOG 中与该版本对应的段落作为发布说明，而不是留空
+      - name: Extract release notes
+        run: |
+          node scripts/extract_changelog.js "${GITHUB_REF_NAME#v}" > release-notes.md
+          cat release-notes.md
+
       - name: Release
         uses: ncipollo/release-action@v1
         with:
@@ -49,4 +75,5 @@ jobs:
           artifactErrorsFailBuild: true
           artifacts: dist/package.zip
           token: ${{ secrets.GITHUB_TOKEN }}
-          prerelease: false
+          prerelease: ${{ steps.channel.outputs.prerelease }}
+          bodyFile: release-notes.md
