@@ -39,6 +39,38 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      # package.json 与 plugin.json 的版本号必须一致：update-version 会同时改两处，
+      # 但手工发版时很容易漏，导致插件市场显示旧版本
+      - name: Version consistency
+        run: |
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const plugin = JSON.parse(fs.readFileSync("plugin.json", "utf8"));
+            if (pkg.version !== plugin.version) {
+              console.error(`version mismatch: package.json=${pkg.version} plugin.json=${plugin.version}`);
+              process.exit(1);
+            }
+          '
+
+      - name: i18n key parity
+        run: |
+          node -e '
+            const fs = require("fs");
+            const load = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
+            const zh = load("public/i18n/zh-CN.json");
+            const en = load("public/i18n/en.json");
+            const zhKeys = Object.keys(zh).sort();
+            const enKeys = Object.keys(en).sort();
+            const missingInEn = zhKeys.filter((k) => !(k in en));
+            const missingInZh = enKeys.filter((k) => !(k in zh));
+            if (missingInEn.length || missingInZh.length) {
+              console.error("i18n keys differ", { missingInEn, missingInZh });
+              process.exit(1);
+            }
+            console.log(`i18n ok: ${zhKeys.length} keys in both dictionaries`);
+          '
+
       - name: Build
         run: pnpm run build
 
