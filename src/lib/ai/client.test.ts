@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetFetchSyncPost, __setFetchSyncPost, type IWebSocketData } from "@/test/siyuan-stub";
 import { AIError, callLLM, isAbortError, isRetryable, joinUrl, resolveAI, type ResolvedAIConfig } from "./client";
 import { DEFAULT_AI_CONFIG, getDefaultConfig } from "@/types/config";
+import { buildJsonObjectResponseFormat, buildTools } from "./schema";
 
 const rc = (over: Partial<ResolvedAIConfig> = {}): ResolvedAIConfig => ({
     provider: "openai",
@@ -423,5 +424,58 @@ describe("取消（AbortSignal）", () => {
         expect(isAbortError(new AIError("x", undefined, "aborted"))).toBe(true);
         expect(isAbortError(new AIError("x", undefined, "timeout"))).toBe(false);
         expect(isAbortError(new Error("x"))).toBe(false);
+    });
+});
+
+describe("结构化输出在三种协议上都生效", () => {
+    const messages = [{ role: "user" as const, content: "hi" }];
+    const schema = { type: "object", properties: { questions: { type: "array" } } };
+
+    it("chat 协议走 tools + tool_choice（原有行为）", async () => {
+        const calls = recordingHandler(() => proxyOk({ choices: [{ message: { content: "{}" } }] }));
+        await callLLM(rc(), messages, { tools: buildTools("t", "d", schema) });
+        const body = calls[0].data.payload;
+        expect(body.tools).toBeTruthy();
+        expect(body.tool_choice).toBeTruthy();
+    });
+
+    it("responses 协议把 tools 映射为 text.format（回归：此前完全不发约束）", async () => {
+        const calls = recordingHandler(() => proxyOk({ output: [{ content: [{ text: "{}" }] }] }));
+        await callLLM(rc({ protocol: "responses" }), messages, { tools: buildTools("recallgen_quiz", "d", schema) });
+        const body = calls[0].data.payload;
+        expect(body.text.format.type).toBe("json_schema");
+        expect(body.text.format.name).toBe("recallgen_quiz");
+        expect(body.text.format.schema).toEqual(schema);
+    });
+
+    it("messages 协议映射为 Anthropic tools（input_schema）+ 强制 tool_choice", async () => {
+        const calls = recordingHandler(() => proxyOk({ content: [{ type: "text", text: "{}" }] }));
+        await callLLM(rc({ protocol: "messages" }), messages, { tools: buildTools("recallgen_quiz", "d", schema) });
+        const body = calls[0].data.payload;
+        expect(body.tools[0].name).toBe("recallgen_quiz");
+        expect(body.tools[0].input_schema).toEqual(schema);
+        expect(body.tools[0].parameters).toBeUndefined();
+        expect(body.tool_choice).toEqual({ type: "tool", name: "recallgen_quiz" });
+    });
+
+    it("messages 协议能从 tool_use 块取出结构化结果", async () => {
+        recordingHandler(() =>
+            proxyOk({
+                content: [
+                    { type: "text", text: "先说明一下" },
+                    { type: "tool_use", name: "recallgen_quiz", input: { questions: [{ question: "1+1" }] } },
+                ],
+            })
+        );
+        const result = await callLLM(rc({ protocol: "messages" }), messages, {});
+        expect(JSON.parse(result.content)).toEqual({ questions: [{ question: "1+1" }] });
+    });
+
+    it("未开启 Schema 时三种协议都不发约束", async () => {
+        const calls = recordingHandler(() => proxyOk({ choices: [{ message: { content: "{}" } }] }));
+        await callLLM(rc(), messages, { responseFormat: buildJsonObjectResponseFormat() });
+        const body = calls[0].data.payload;
+        expect(body.tools).toBeUndefined();
+        expect(body.response_format).toEqual({ type: "json_object" });
     });
 });

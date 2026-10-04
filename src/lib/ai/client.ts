@@ -342,6 +342,21 @@ function toResponsesFormat(rf: unknown): unknown {
     return { type: r.type };
 }
 
+/**
+ * 把 chat 风格的 tools 声明映射成 Responses API 的 text.format。
+ *
+ * 原实现只读 responseFormat，而上层在开启 JSON Schema 时传的是 tools，
+ * 于是 Responses 协议实际上拿不到任何结构化约束（只剩提示词里的一句「按 JSON 输出」）。
+ * 用 text.format 的 json_schema 而不是 tools：后者会让模型去「调用函数」，
+ * 返回值形态与这里解析文本的方式不一致。
+ */
+function toolsToResponsesFormat(tools: unknown): unknown {
+    const first = Array.isArray(tools) ? (tools[0] as { function?: { name?: string; parameters?: object } }) : null;
+    const fn = first?.function;
+    if (!fn || typeof fn.name !== "string" || !fn.parameters) return undefined;
+    return { type: "json_schema", name: fn.name, schema: fn.parameters, strict: false };
+}
+
 function extractResponsesContent(parsed: unknown): string {
     const obj = parsed as {
         output_text?: string;
@@ -367,7 +382,8 @@ async function callResponses(rc: ResolvedAIConfig, messages: ChatMessage[], opts
         temperature: opts.temperature ?? rc.temperature,
         max_output_tokens: opts.maxTokens ?? rc.maxTokens,
     };
-    const fmt = toResponsesFormat(opts.responseFormat);
+    // 开启 JSON Schema 时上层给的是 tools，这里优先映射成结构化输出格式
+    const fmt = toolsToResponsesFormat(opts.tools) ?? toResponsesFormat(opts.responseFormat);
     if (fmt) body.text = { format: fmt };
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout, opts.signal);
     checkHttpOk(fr);
@@ -392,8 +408,24 @@ function splitSystem(messages: ChatMessage[]): { system?: string; messages: Chat
     return { system, messages: rest };
 }
 
+/**
+ * 把 chat 风格的 tools 声明映射成 Anthropic 的 tools。
+ * Anthropic 的结构化输出只能走 tool use，字段名是 input_schema 而不是 parameters。
+ */
+function toolsToAnthropicTools(tools: unknown): unknown[] | undefined {
+    if (!Array.isArray(tools)) return undefined;
+    const mapped = tools
+        .map((tool) => (tool as { function?: { name?: string; description?: string; parameters?: object } }).function)
+        .filter((fn): fn is { name: string; description?: string; parameters?: object } => !!fn && !!fn.name)
+        .map((fn) => ({ name: fn.name, description: fn.description, input_schema: fn.parameters ?? {} }));
+    return mapped.length > 0 ? mapped : undefined;
+}
+
 function extractMessagesContent(parsed: unknown): string {
-    const content = (parsed as { content?: Array<{ type: string; text?: string }> })?.content;
+    const content = (parsed as { content?: Array<{ type: string; text?: string; input?: unknown }> })?.content;
+    // 结构化输出：结果在 tool_use 块的 input 里，序列化回 JSON 文本与其它协议保持一致
+    const toolUse = content?.find((b) => b.type === "tool_use" && b.input !== undefined);
+    if (toolUse) return JSON.stringify(toolUse.input);
     const textBlock = content?.find((b) => b.type === "text");
     return textBlock?.text ?? "";
 }
@@ -409,6 +441,13 @@ async function callMessages(rc: ResolvedAIConfig, messages: ChatMessage[], opts:
     };
     if (system) body.system = system;
     body.temperature = opts.temperature ?? rc.temperature;
+    // 强制调用指定工具：Anthropic 没有 response_format，结构化输出只能靠 tool use
+    const anthropicTools = toolsToAnthropicTools(opts.tools);
+    if (anthropicTools) {
+        body.tools = anthropicTools;
+        const name = (anthropicTools[0] as { name: string }).name;
+        body.tool_choice = { type: "tool", name };
+    }
     const fr = await forward(url, body, buildAuthHeaders(rc), opts.timeout ?? rc.timeout, opts.signal);
     checkHttpOk(fr);
     const parsed = safeParse(fr.body);
