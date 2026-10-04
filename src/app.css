@@ -45,14 +45,24 @@
     --accent: var(--b3-list-hover, var(--b3-theme-background-light));
     --accent-foreground: var(--b3-theme-on-background);
 
-    --destructive: var(--b3-card-error);
-    --destructive-foreground: #ffffff;
+    /*
+     * 语义色。
+     * 思源的卡片变量是「前景 + 背景」成对提供的（--b3-card-*-color / -background），
+     * 并不存在 --b3-card-error 这种单值变量（曾误用，导致这些工具类在真机上不生效）；
+     * 也没有 --b3-theme-on-success / on-warning。
+     *
+     * 因此：
+     * - 实心标记与文字用卡片色（浅色主题下是深色、深色主题下是浅色，两种主题都清晰）
+     * - 其上的文字用主题背景色：卡片色与背景色本就是思源保证对比度的一对
+     * - destructive 例外：思源提供了正式的 --b3-theme-error / --b3-theme-on-error 实心配对
+     */
+    --destructive: var(--b3-theme-error, #d23f31);
+    --destructive-foreground: var(--b3-theme-on-error, #ffffff);
 
-    /* 语义色：shadcn 默认没有，供成绩/难度等场景使用 */
-    --success: var(--b3-card-success);
-    --success-foreground: #ffffff;
-    --warning: var(--b3-card-warning);
-    --warning-foreground: #ffffff;
+    --success: var(--b3-card-success-color, #006b04);
+    --success-foreground: var(--b3-theme-background, #ffffff);
+    --warning: var(--b3-card-warning-color, #8a4f00);
+    --warning-foreground: var(--b3-theme-background, #ffffff);
 
     --border: var(--b3-border-color);
     --input: var(--b3-border-color);
