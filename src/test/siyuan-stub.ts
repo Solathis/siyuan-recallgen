@@ -48,7 +48,57 @@ export function getAllEditor(): unknown[] {
     return [];
 }
 
-export class Plugin {}
+/**
+ * 插件基类替身。
+ *
+ * 真实实现由思源宿主注入（`siyuan` 包只有类型），因此这里按宿主的公开契约
+ * 提供最小实现：把 addTab/addTopBar/addCommand/addIcons 的注册记录下来，
+ * 并把数据文件放在内存里。这样插件入口可以在 jsdom 下真正跑一遍
+ * onload / onunload，而不是只做模块导入冒烟。
+ */
+export interface TabRegistration {
+    type: string;
+    init?: (this: unknown) => void;
+    destroy?: (this: unknown) => void;
+}
+
+export class Plugin {
+    name = "siyuan-recallgen";
+    displayName = "RecallGen";
+    i18n: Record<string, string> = {};
+    eventBus = {
+        on: (_event: string, _handler: unknown) => undefined,
+        off: (_event: string, _handler: unknown) => undefined,
+    };
+    readonly tabs: TabRegistration[] = [];
+    readonly topBars: unknown[] = [];
+    readonly commands: unknown[] = [];
+    readonly icons: string[] = [];
+    private readonly files = new Map<string, unknown>();
+
+    addTab(reg: TabRegistration): void {
+        this.tabs.push(reg);
+    }
+    addTopBar(options: unknown): void {
+        this.topBars.push(options);
+    }
+    addCommand(options: unknown): void {
+        this.commands.push(options);
+    }
+    addIcons(icon: string): void {
+        this.icons.push(icon);
+    }
+    async loadData(name: string): Promise<unknown> {
+        return this.files.has(name) ? this.files.get(name) : null;
+    }
+    async saveData(name: string, content: unknown): Promise<void> {
+        this.files.set(name, content);
+    }
+    async removeData(name: string): Promise<void> {
+        this.files.delete(name);
+    }
+}
+
 export class Setting {}
 export class Dialog {}
 export class Menu {}

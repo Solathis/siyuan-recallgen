@@ -5,7 +5,7 @@ import { defineConfig } from "vitest/config";
 const srcDir = fileURLToPath(new URL("./src", import.meta.url));
 
 export default defineConfig({
-    // 组件级冒烟测试需要真正编译 .svelte，因此这里也要挂载 svelte 插件
+    // 组件级测试需要真正编译 .svelte，因此这里也要挂载 svelte 插件
     plugins: [svelte()],
     resolve: {
         alias: [
@@ -16,6 +16,9 @@ export default defineConfig({
             },
             { find: /^@\/(.*)$/, replacement: `${srcDir}/$1` },
         ],
+        // jsdom 下的组件测试必须拿到 Svelte 的客户端构建：
+        // 默认解析到 index-server，mount() 会直接抛 lifecycle_function_unavailable
+        conditions: ["browser", "module", "import", "default"],
     },
     test: {
         environment: "node",

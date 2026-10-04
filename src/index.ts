@@ -103,6 +103,9 @@ export default class RecallGenPlugin extends Plugin {
                 const host = c.element as HTMLElement;
                 const div = document.createElement("div");
                 div.style.height = "100%";
+                // rg-scope 是插件样式的作用域根：收窄版 preflight 与 KaTeX 的
+                // 公式样式都挂在它下面，漏掉它会让面板里的排版重置与公式样式全部失效
+                div.className = "rg-scope";
                 host.appendChild(div);
                 self.mounted.set(
                     host,
@@ -128,6 +131,7 @@ export default class RecallGenPlugin extends Plugin {
                 const div = document.createElement("div");
                 div.style.height = "100%";
                 div.style.overflow = "auto";
+                div.className = "rg-scope";
                 host.appendChild(div);
                 self.mounted.set(
                     host,
