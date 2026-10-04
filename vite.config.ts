@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "path";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { join, relative, resolve, sep } from "path";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import livereload from "rollup-plugin-livereload";
@@ -15,7 +15,68 @@ const isDev = mode === "development";
 
 /** 本地开发时可在 gitignore 的 .env.local 里指定思源插件目录，避免把机器路径写进仓库 */
 const fileEnv = loadEnv(mode, process.cwd(), "");
-const outputDir = isDev ? "dev" : env.OUTPUT_DIR || fileEnv.OUTPUT_DIR || "dist";
+const outputDir = isDev ? "dev" : resolveOutputDir(env.OUTPUT_DIR || fileEnv.OUTPUT_DIR || "dist");
+
+/**
+ * 解析产物目录，并保证「清空产物目录」这一步不会误删数据。
+ *
+ * 因为 emptyOutDir 为 true，且 OUTPUT_DIR 允许指向仓库外的思源插件目录，
+ * 一旦路径写错（例如少写一级插件目录名），就会把整个目录内容删掉。
+ * 所以仓库外的目标必须先被确认属于本插件，否则直接让构建失败。
+ */
+function resolveOutputDir(raw: string): string {
+    const root = resolve(__dirname);
+    const dir = resolve(root, raw);
+    if (dir === root) {
+        throw new Error("OUTPUT_DIR 不能指向项目根目录：构建会清空它");
+    }
+    if (isInside(root, dir)) return dir;
+
+    assertSafeExternalDir(root, dir);
+    return dir;
+}
+
+function isInside(root: string, target: string): boolean {
+    const rel = relative(root, target);
+    return rel !== "" && !rel.startsWith("..") && !rel.startsWith(`..${sep}`) && !isAbsolutePath(rel);
+}
+
+function isAbsolutePath(p: string): boolean {
+    return /^([a-zA-Z]:)?[\\/]/.test(p);
+}
+
+/** 仓库外目录只有在「不存在 / 为空 / 确实是本插件」时才允许被清空 */
+function assertSafeExternalDir(root: string, dir: string): void {
+    if (!existsSync(dir)) return;
+
+    // 软链到仓库内（make-link 建立的 dev/ 链接）视为安全
+    let real = dir;
+    try {
+        real = realpathSync(dir);
+    } catch {
+        /* realpath 失败时按原路径判断 */
+    }
+    if (isInside(root, real)) return;
+
+    const entries = readdirSync(dir);
+    if (entries.length === 0) return;
+
+    const manifest = join(dir, "plugin.json");
+    if (!existsSync(manifest)) {
+        throw new Error(
+            `OUTPUT_DIR 指向仓库外的非空目录 ${dir}，其中没有 plugin.json。\n` +
+                `构建会清空该目录，已中止。请确认路径是否写错（应指向 .../data/plugins/<插件名>）。`
+        );
+    }
+    const expected = JSON.parse(readFileSync(join(root, "plugin.json"), "utf8")).name;
+    const actual = JSON.parse(readFileSync(manifest, "utf8")).name;
+    if (actual !== expected) {
+        throw new Error(
+            `OUTPUT_DIR 指向的目录 ${dir} 属于插件「${actual}」，不是本插件「${expected}」。\n` +
+                `构建会清空该目录，已中止。`
+        );
+    }
+}
 
 export default defineConfig({
     resolve: {
