@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BANK_BACKUP_VERSION, buildBankBackup, parseBankBackup } from "./bank-backup";
-import { applyResult, createBankItem, type BankItem } from "./bank";
+import { applyResult, createBankItem, isPlausibleCard, type BankItem } from "./bank";
 import type { Question } from "@/types/quiz";
 
 const NOW = new Date(2026, 8, 23, 12, 0, 0).getTime();
@@ -80,6 +80,28 @@ describe("parseBankBackup 校验", () => {
         const result = parseBankBackup(JSON.stringify({ app: "recallgen", kind: "bank", items: [legacy] }));
         expect(result.file.items).toHaveLength(1);
         expect(result.file.items[0].history).toEqual([]);
+        // 排程必须被重置成可用的新卡：缺失 card 的条目此前能导入成功，
+        // 之后 isCardDue / masteryScore / scheduleReview 会抛异常
+        expect(isPlausibleCard(result.file.items[0].card)).toBe(true);
+        expect(result.warnings.join()).toContain("排程");
+    });
+
+    it("非法排程值被就地修复，而不是让后续排程函数炸掉", () => {
+        const broken = {
+            ...item("坏排程"),
+            card: { due: "不是时间", stability: NaN, difficulty: null, state: 99, reps: "x" },
+        };
+        const result = parseBankBackup(JSON.stringify({ app: "recallgen", kind: "bank", items: [broken] }));
+        expect(result.file.items).toHaveLength(1);
+        expect(isPlausibleCard(result.file.items[0].card)).toBe(true);
+        expect(Number.isFinite(result.file.items[0].card.due)).toBe(true);
+    });
+
+    it("未知题型会被丢弃", () => {
+        const weird = { ...item("怪题型"), question: { ...item("怪题型").question, type: "unknown_type" } };
+        const result = parseBankBackup(JSON.stringify({ app: "recallgen", kind: "bank", items: [weird] }));
+        expect(result.file.items).toHaveLength(0);
+        expect(result.warnings.join()).toContain("结构不完整");
     });
 
     it("按题干重算指纹并提示修正", () => {

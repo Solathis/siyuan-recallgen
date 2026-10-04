@@ -1,4 +1,4 @@
-import { createEmptyCard, fsrs, Rating, State, type Card } from "ts-fsrs";
+import { createEmptyCard, fixDate, fixState, fsrs, Rating, State, type Card } from "ts-fsrs";
 import { PASS_SCORE } from "@/types/quiz";
 import type { Question, QuestionType } from "@/types/quiz";
 
@@ -94,14 +94,81 @@ export function normalizeBankItem(raw: BankItem, now = Date.now()): BankItem {
             (a): a is BankAttempt => !!a && typeof a === "object" && Number.isFinite(a.at) && Number.isFinite(a.percent)
         )
         .map((a) => ({ at: a.at, percent: clampPercent(a.percent) }));
+    const createdAt = Number.isFinite(raw.createdAt) ? raw.createdAt : now;
     return {
         ...raw,
-        createdAt: Number.isFinite(raw.createdAt) ? raw.createdAt : now,
-        updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : (raw.createdAt ?? now),
+        createdAt,
+        updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : createdAt,
+        card: normalizeCardState(raw.card, createdAt),
         timesSeen: Number.isFinite(raw.timesSeen) ? raw.timesSeen : history.length,
         timesPassed: Number.isFinite(raw.timesPassed) ? raw.timesPassed : 0,
         history: history.slice(-MAX_BANK_HISTORY),
     };
+}
+
+/** FSRS State 的合法取值 */
+const CARD_STATES: readonly State[] = [State.New, State.Learning, State.Review, State.Relearning];
+
+/**
+ * 修复排程字段。
+ * 备份文件可能来自旧版本或被人手改过，而后续的排程/统计函数都假定 card 可用；
+ * 这里宁可退化成一张新卡，也不能让它们在使用时抛异常。
+ * ts-fsrs 的 fixDate/fixState 只做类型归一（字符串写法、时间戳），
+ * 遇到真正非法的值会抛错，所以必须兜住。
+ */
+export function normalizeCardState(raw: unknown, fallbackNow = Date.now()): BankCardState {
+    const base = newCardState(fallbackNow);
+    const card = raw as Partial<BankCardState> | null | undefined;
+    if (!card || typeof card !== "object") return base;
+
+    const num = (value: unknown, fallback: number): number =>
+        typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+    return {
+        due: repairTime(card.due, base.due),
+        stability: num(card.stability, base.stability),
+        difficulty: num(card.difficulty, base.difficulty),
+        elapsed_days: num(card.elapsed_days, base.elapsed_days),
+        scheduled_days: num(card.scheduled_days, base.scheduled_days),
+        learning_steps: num(card.learning_steps, base.learning_steps),
+        reps: num(card.reps, base.reps),
+        lapses: num(card.lapses, base.lapses),
+        state: repairState(card.state, base.state),
+        last_review:
+            card.last_review === undefined || card.last_review === null
+                ? undefined
+                : repairTime(card.last_review, base.due),
+    };
+}
+
+/** 排程字段是否可读（用于导入时提示「有记录的排程被重置」） */
+export function isPlausibleCard(value: unknown): boolean {
+    const card = value as Partial<BankCardState> | null | undefined;
+    if (!card || typeof card !== "object") return false;
+    return (
+        Number.isFinite(card.due) &&
+        Number.isFinite(card.stability) &&
+        Number.isFinite(card.difficulty) &&
+        Number.isFinite(card.state) &&
+        CARD_STATES.includes(card.state as State)
+    );
+}
+
+function repairTime(value: unknown, fallback: number): number {
+    try {
+        return fixDate(value).getTime();
+    } catch {
+        return fallback;
+    }
+}
+
+function repairState(value: unknown, fallback: State): State {
+    try {
+        const state = fixState(value);
+        return CARD_STATES.includes(state) ? state : fallback;
+    } catch {
+        return fallback;
+    }
 }
 
 /** 得分率收敛到 0-100 */

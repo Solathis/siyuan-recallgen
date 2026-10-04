@@ -12,6 +12,7 @@ import {
     gradeToRating,
     hash32,
     isCardDue,
+    isPlausibleCard,
     masteryScore,
     newCardState,
     bankTags,
@@ -336,6 +337,23 @@ describe("normalizeBankItem", () => {
         const fixed = normalizeBankItem(raw);
         expect(fixed.question.question).toBe("旧数据");
         expect(fixed.card.due).toBe(raw.card.due);
+    });
+
+    it("缺失 card 时重置为可用新卡，而不是留给后续排程函数抛错", () => {
+        const legacy = { ...raw } as Partial<typeof raw>;
+        delete legacy.card;
+        const fixed = normalizeBankItem(legacy as typeof raw);
+        expect(isPlausibleCard(fixed.card)).toBe(true);
+        // 这些此前都会因 card 缺失而抛异常
+        expect(() => masteryScore(fixed)).not.toThrow();
+        expect(() => isCardDue(fixed.card, NOW)).not.toThrow();
+        expect(() => scheduleReview(fixed.card, 80, NOW)).not.toThrow();
+    });
+
+    it("非法排程值被修复为合法卡片", () => {
+        const broken = { ...raw, card: { due: null, stability: "x", state: -1 } } as unknown as typeof raw;
+        const fixed = normalizeBankItem(broken);
+        expect(isPlausibleCard(fixed.card)).toBe(true);
     });
 });
 
