@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { __resetFetchSyncPost, __setFetchSyncPost } from "@/test/siyuan-stub";
-import { exportDocsMarkdown, MAX_CONTENT_CHARS } from "./content";
+import { clampContent, exportDocsMarkdown, MAX_CONTENT_CHARS } from "./content";
 
 /** 按文档 id 返回导出内容的 handler；返回 null 表示该文档导出失败 */
 function serveExports(contentById: Record<string, string | null>, delays: Record<string, number> = {}) {
@@ -86,5 +86,24 @@ describe("exportDocsMarkdown", () => {
 
     it("默认预算为 200k 字符", () => {
         expect(MAX_CONTENT_CHARS).toBe(200_000);
+    });
+});
+
+describe("clampContent", () => {
+    it("未超预算时原样返回", () => {
+        expect(clampContent("abc", 10)).toEqual({ content: "abc", truncated: false });
+    });
+
+    it("恰好等于预算不算截断", () => {
+        expect(clampContent("abcde", 5)).toEqual({ content: "abcde", truncated: false });
+    });
+
+    it("超出预算时截断并标记（单文档/选块路径原先完全没有预算）", () => {
+        const result = clampContent("abcdef", 3);
+        expect(result).toEqual({ content: "abc", truncated: true });
+    });
+
+    it("空串安全", () => {
+        expect(clampContent("")).toEqual({ content: "", truncated: false });
     });
 });

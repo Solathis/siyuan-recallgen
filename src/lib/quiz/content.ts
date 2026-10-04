@@ -24,6 +24,18 @@ export interface ExportResult {
 }
 
 /**
+ * 把一段内容收敛到字符预算内。
+ *
+ * 单文档与选块这两条路径原先完全没有预算：一篇长文档会整篇进入提示词，
+ * 模型侧只会回一个难以理解的 400（上下文超限），用户无从判断原因。
+ * 截断时由调用方提示用户，避免「静默少了一半笔记」。
+ */
+export function clampContent(content: string, maxChars = MAX_CONTENT_CHARS): { content: string; truncated: boolean } {
+    if (content.length <= maxChars) return { content, truncated: false };
+    return { content: content.slice(0, maxChars), truncated: true };
+}
+
+/**
  * 并发导出多个文档的 Markdown 并按原顺序拼接。
  * - 单个文档导出失败不影响其余文档
  * - 超出字符预算的文档整体跳过，但保证至少返回首篇（必要时截断）

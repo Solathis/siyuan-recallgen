@@ -2,7 +2,7 @@ import type { Plugin } from "siyuan";
 import { getAllEditor, confirm, showMessage, Menu } from "siyuan";
 import { getBlockKramdown, exportMdContent, getHPathByID, lsNotebooks, sql, listDocTree, quoteSqlLiteral } from "@/api";
 import { t } from "../i18n";
-import { exportDocsMarkdown } from "./content";
+import { clampContent, exportDocsMarkdown, MAX_CONTENT_CHARS } from "./content";
 import type { QuizTabData } from "./service";
 
 const MIN_LEN = 50;
@@ -287,14 +287,23 @@ export class QuizSelector {
             if (kr?.kramdown) parts.push(kr.kramdown);
         }
         const title = await safeTitle(rootId);
-        await this.launch(parts.join("\n\n"), rootId, title);
+        const { content, truncated } = clampContent(parts.join("\n\n"));
+        this.warnTruncated(truncated);
+        await this.launch(content, rootId, title);
     }
 
     private async fromDoc(rootId: string) {
         const exp = await exportMdContent(rootId).catch(() => null);
-        const content = exp?.content ?? "";
         const title = exp?.hPath || (await safeTitle(rootId));
+        // 单文档同样要过预算：整篇长文档送进提示词只会换来一个看不懂的 400
+        const { content, truncated } = clampContent(exp?.content ?? "");
+        this.warnTruncated(truncated);
         await this.launch(content, rootId, title);
+    }
+
+    /** 内容被截断时告知用户，避免以为整篇笔记都参与了出题 */
+    private warnTruncated(truncated: boolean): void {
+        if (truncated) showMessage(t("selector.contentTruncated", String(MAX_CONTENT_CHARS)), 8000);
     }
 
     private async fromNotebook(notebookId: string, notebookName: string) {

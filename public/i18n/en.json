@@ -462,6 +462,7 @@
     "selector.fromToday": "From Today's Notes",
     "selector.fromRecent": "From Recent N Days",
     "selector.loadingNotebook": "Loading notebook \"{0}\" content…",
+    "selector.contentTruncated": "Note content exceeds {0} characters and was truncated before generation",
     "selector.noDocs": "No documents in notebook",
     "selector.emptyContent": "Notebook documents are empty",
     "selector.docsTruncated": "Too many documents; only the first {0} were processed. Please narrow the scope.",
