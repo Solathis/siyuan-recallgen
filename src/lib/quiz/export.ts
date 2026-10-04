@@ -141,7 +141,19 @@ export function buildCsvExport(entries: ScoreIndexEntry[]): string {
 
 /** 导出为 Markdown 表格 */
 export function buildMarkdownExport(entries: ScoreIndexEntry[], title = "RecallGen"): string {
-    const header = ["时间", "标题", "来源", "得分", "百分比", "题数", "正确", "未答", "耗时", "题型表现"];
+    // 表头跟界面语言：导出的文档是用户长期保留的，不该在英文界面下出现中文表头
+    const header = [
+        t("export.time"),
+        t("export.title"),
+        t("export.source"),
+        t("export.score"),
+        t("export.percent"),
+        t("export.questions"),
+        t("export.correct"),
+        t("export.unanswered"),
+        t("export.duration"),
+        t("export.byType"),
+    ];
     const align = ["---", "---", "---", "---:", "---:", "---:", "---:", "---:", "---:", "---"];
     const rows = entries.map((e) =>
         [

@@ -67,3 +67,35 @@ describe("英文界面下的后端文案", () => {
         if (!isRunSupported(outcome)) expect(outcome.reason).toMatch(/no test cases/);
     });
 });
+
+describe("英文界面下导出的 Markdown 表头", () => {
+    const entry = {
+        id: "s-1",
+        timestamp: new Date(2026, 8, 23, 14, 5).getTime(),
+        title: "第三章",
+        totalScore: 80,
+        maxScore: 100,
+        questionCount: 5,
+        passedCount: 4,
+        unanswered: 1,
+        byType: {},
+    } as unknown as import("@/types/quiz").ScoreIndexEntry;
+
+    it("表头与内容都用英文，不再出现中文表头", async () => {
+        const { buildMarkdownExport } = await import("@/lib/quiz/export");
+        const md = buildMarkdownExport([entry], "RecallGen");
+        expect(md).toContain("| Time | Title | Source |");
+        expect(md).toContain("| Correct |");
+        expect(md).not.toMatch(/[时间标题来源得分]/);
+    });
+
+    it("中文界面下仍是中文表头", async () => {
+        const zh = (await import("@/../public/i18n/zh-CN.json")).default as Record<string, string>;
+        const { initI18n, setFallback } = await import("@/lib/i18n");
+        initI18n(zh);
+        setFallback(zh);
+        const { buildMarkdownExport } = await import("@/lib/quiz/export");
+        const md = buildMarkdownExport([entry], "RecallGen");
+        expect(md).toContain("| 时间 | 标题 | 来源 |");
+    });
+});

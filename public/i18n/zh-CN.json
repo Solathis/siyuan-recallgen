@@ -573,5 +573,15 @@
     "storage.readFailed": "读取 {0} 失败",
     "storage.writeFailed": "写入 {0} 失败",
     "date.skippedByLength": "有 {0} 篇笔记因内容过长未纳入出题范围",
-    "date.exportFailed": "有 {0} 篇笔记导出失败，未纳入出题范围"
+    "date.exportFailed": "有 {0} 篇笔记导出失败，未纳入出题范围",
+    "export.time": "时间",
+    "export.title": "标题",
+    "export.source": "来源",
+    "export.score": "得分",
+    "export.percent": "百分比",
+    "export.questions": "题数",
+    "export.correct": "正确",
+    "export.unanswered": "未答",
+    "export.duration": "耗时",
+    "export.byType": "题型表现"
 }

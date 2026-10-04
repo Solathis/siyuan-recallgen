@@ -573,5 +573,15 @@
     "storage.readFailed": "Failed to read {0}",
     "storage.writeFailed": "Failed to write {0}",
     "date.skippedByLength": "{0} note(s) were too long and left out of the quiz scope",
-    "date.exportFailed": "{0} note(s) failed to export and were left out of the quiz scope"
+    "date.exportFailed": "{0} note(s) failed to export and were left out of the quiz scope",
+    "export.time": "Time",
+    "export.title": "Title",
+    "export.source": "Source",
+    "export.score": "Score",
+    "export.percent": "Percent",
+    "export.questions": "Questions",
+    "export.correct": "Correct",
+    "export.unanswered": "Unanswered",
+    "export.duration": "Duration",
+    "export.byType": "By type"
 }
