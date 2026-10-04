@@ -118,6 +118,25 @@ describe("AsyncStore.read", () => {
         expect(await store.readData(null)).toEqual({ a: "内存新值" });
     });
 
+    it("文件损坏时先留存副本再回落默认值（回归：随后的写入会把损坏内容覆盖掉）", async () => {
+        const writes: Array<{ name: string; content: unknown }> = [];
+        const plugin: StoragePlugin = {
+            loadData: async () => "{这不是合法 json",
+            saveData: async (name, content) => {
+                writes.push({ name, content });
+            },
+        };
+        const store = new TestStore(plugin);
+        expect(await store.readData({ fallback: true })).toEqual({ fallback: true });
+        // 副本写在校前，且内容就是原始损坏文本
+        expect(writes[0].name).toMatch(/^test\.json\.corrupt-\d+$/);
+        expect(writes[0].content).toBe("{这不是合法 json");
+
+        // 之后的正常写入仍能进行（不会被「保留副本」拖住）
+        await store.writeData({ a: 1 });
+        expect(writes[1]).toEqual({ name: "test.json", content: { a: 1 } });
+    });
+
     it("读取失败抛出 StorageError 并带上文件名", async () => {
         const plugin: StoragePlugin = {
             loadData: async () => {
@@ -162,13 +181,29 @@ describe("AsyncStore.write", () => {
             loadData: async () => null,
             saveData: async () => {
                 calls++;
-                if (calls === 1) throw new Error("磁盘满了");
+                // 前两次（首次 + 重试）都失败，之后恢复
+                if (calls <= 2) throw new Error("磁盘满了");
             },
         };
         const store = new TestStore(plugin);
         await expect(store.writeData({ a: 1 })).rejects.toBeInstanceOf(StorageError);
         await expect(store.writeData({ a: 2 })).resolves.toBeUndefined();
+        expect(calls).toBe(3);
+    });
+
+    it("单次落盘失败会重试一次，成功则不外抛（回归：瞬时失败直接丢一次写入）", async () => {
+        let calls = 0;
+        const plugin: StoragePlugin = {
+            loadData: async () => null,
+            saveData: async () => {
+                calls++;
+                if (calls === 1) throw new Error("磁盘忙");
+            },
+        };
+        const store = new TestStore(plugin);
+        await expect(store.writeData({ a: 1 })).resolves.toBeUndefined();
         expect(calls).toBe(2);
+        expect(await store.readData(null)).toEqual({ a: 1 });
     });
 
     it("flush 等待排队中的写入完成", async () => {
@@ -329,7 +364,8 @@ describe("AsyncStore.writeDeferred", () => {
             const p2 = store.writeLater(() => ({ v: 2 }), 100);
             p1.catch(() => undefined);
             p2.catch(() => undefined);
-            await vi.advanceTimersByTimeAsync(100);
+            // 推进到合并窗口 + 一次重试等待之后
+            await vi.advanceTimersByTimeAsync(1000);
             await expect(p1).rejects.toBeInstanceOf(StorageError);
             await expect(p2).rejects.toBeInstanceOf(StorageError);
         } finally {

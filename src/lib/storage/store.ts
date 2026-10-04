@@ -8,6 +8,13 @@ export interface StoragePlugin {
     removeData?: (name: string) => Promise<any>;
 }
 
+/** 落盘失败后的重试等待 */
+const WRITE_RETRY_DELAY_MS = 200;
+
+function sleepMs(ms: number): Promise<void> {
+    return new Promise((r) => setTimeout(r, ms));
+}
+
 /** 存储操作失败时抛出的错误 */
 export class StorageError extends Error {
     constructor(
@@ -87,6 +94,10 @@ export class AsyncStore {
             try {
                 value = JSON.parse(raw) as T;
             } catch {
+                // 解析失败说明文件损坏。原实现直接回落默认值，
+                // 而随后的第一次写入就会把损坏文件覆盖掉——数据就此永久消失。
+                // 这里先留一份副本，让损坏内容还有被人工救回的机会。
+                await this.preserveCorrupt(raw);
                 value = fallback;
             }
         } else {
@@ -145,13 +156,33 @@ export class AsyncStore {
         return next;
     }
 
-    private persist(data: unknown): Promise<void> {
-        return this.plugin
-            .saveData(this.name, data)
-            .then(() => undefined)
-            .catch((e) => {
-                throw new StorageError(t("storage.writeFailed", this.name), this.name, e);
-            });
+    /**
+     * 落盘，失败后重试一次。
+     * 单次失败往往是瞬时问题（磁盘忙、内核请求抖动）；直接放弃会让
+     * 「分片已写、索引未写」这类半成品状态变成常态，因此给它一次机会。
+     */
+    private async persist(data: unknown): Promise<void> {
+        try {
+            await this.plugin.saveData(this.name, data);
+        } catch (first) {
+            await sleepMs(WRITE_RETRY_DELAY_MS);
+            try {
+                await this.plugin.saveData(this.name, data);
+            } catch (second) {
+                throw new StorageError(t("storage.writeFailed", this.name), this.name, second ?? first);
+            }
+        }
+    }
+
+    /** 把损坏的原始内容另存一份，避免被后续写入覆盖掉 */
+    private async preserveCorrupt(raw: string): Promise<void> {
+        const backup = `${this.name}.corrupt-${Date.now()}`;
+        try {
+            await this.plugin.saveData(backup, raw);
+            console.warn(`[RecallGen] ${this.name} 内容损坏，已留存副本 ${backup}`);
+        } catch (e) {
+            console.warn(`[RecallGen] ${this.name} 内容损坏，且留存副本失败`, e);
+        }
     }
 
     /**
