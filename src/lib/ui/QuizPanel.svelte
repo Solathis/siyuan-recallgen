@@ -183,6 +183,18 @@
         startCountdown();
     });
 
+    /** 未作答的题目下标列表（按题序） */
+    const unansweredIndices = $derived(
+        questions.map((q, i) => (session?.answers[q.id] ? -1 : i)).filter((i) => i >= 0)
+    );
+
+    /** 跳到下一道未作答的题目 */
+    function goToNextUnanswered(): void {
+        if (unansweredIndices.length === 0) return;
+        const next = unansweredIndices.find((i) => i > activeIndex) ?? unansweredIndices[0];
+        goToQuestion(next);
+    }
+
     /** 被标记的题目下标列表（按题序） */
     const flaggedIndices = $derived(questions.map((q, i) => (session?.flagged?.[q.id] ? i : -1)).filter((i) => i >= 0));
 
@@ -896,6 +908,17 @@
                         <Badge variant="secondary">
                             {t("quiz.answered", String(answeredCount), String(questions.length))}
                         </Badge>
+                        {#if unansweredIndices.length > 0}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onclick={goToNextUnanswered}
+                                title={t("quiz.nextUnansweredHint")}
+                                aria-label={t("quiz.nextUnanswered")}
+                            >
+                                {t("quiz.nextUnanswered")} →
+                            </Button>
+                        {/if}
                         {#if flaggedCount > 0}
                             <Badge variant="outline">{t("quiz.flaggedCount", String(flaggedCount))}</Badge>
                             <Button
@@ -1035,6 +1058,8 @@
                     {analysis}
                     {analysisError}
                     {submitError}
+                    sourceDocId={session.sourceDocId}
+                    sourceTitle={session.sourceTitle}
                     {duration}
                     onsave={() => void saveToDoc(false)}
                     onsavewrong={() => void saveToDoc(true)}

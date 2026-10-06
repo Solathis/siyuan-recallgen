@@ -132,6 +132,7 @@
     "quiz.progress": "作答进度 {0}",
     "quiz.flag": "标记",
     "quiz.nextFlagged": "下一道标记题",
+    "quiz.nextUnanswered": "下一道未答题",
     "quiz.unflag": "取消标记",
     "quiz.flaggedCount": "已标记 {0}",
     "quiz.retrySessionTitle": "{0}（重做错题 {1} 题）",
@@ -192,6 +193,7 @@
     "result.correctAnswer": "正确答案：",
     "result.explanation": "解析",
     "result.comment": "评语",
+    "result.sourceNote": "来源",
     "result.tabAnalysisAdvice": "解析与建议",
     "result.jumpTo": "跳到第 {0} 题（{1}）",
     "result.status_correct": "正确",
@@ -600,5 +602,6 @@
     "stats.reviewDifficultyHint": "复习「{0}」难度的到期题目",
     "settings.general.reviewLimitHint": "到期复习一次最多取这么多题；0 表示不限（到期题目较多时建议设上限）",
     "result.submitErrorHint": "成绩与复习排程没有写入，请重试交卷或检查磁盘；下方结果仍可查看",
-    "quiz.nextFlaggedHint": "跳到下一道被标记「稍后回看」的题目（无标记时不可用）"
+    "quiz.nextFlaggedHint": "跳到下一道被标记「稍后回看」的题目（无标记时不可用）",
+    "quiz.nextUnansweredHint": "跳到下一道还没作答的题目（全部已答时不可用）"
 }

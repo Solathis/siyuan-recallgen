@@ -16,6 +16,8 @@ import type { GenProgressCallback } from "../quiz/generator";
 /** QuizPanel 与插件后端交互的接口，由 index.ts 实现 */
 export interface QuizService {
     getConfig(): RecallGenConfig;
+    /** 在思源中打开一篇文档（用于结果面板跳回原始笔记） */
+    openDoc(docId: string): void;
     /**
      * 订阅配置变化，返回取消订阅函数。
      * 面板打开期间修改设置需要立即生效，而 getConfig() 单独调用无法被响应式追踪。

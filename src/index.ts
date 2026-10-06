@@ -313,6 +313,12 @@ export default class RecallGenPlugin extends Plugin {
     private buildService(): QuizService {
         return {
             getConfig: () => this.config,
+            openDoc: (docId: string) => {
+                openTab({
+                    app: (this as unknown as { app: import("siyuan").App }).app,
+                    doc: { id: docId },
+                });
+            },
             subscribeConfig: (listener) => {
                 this.configListeners.add(listener);
                 return () => this.configListeners.delete(listener);

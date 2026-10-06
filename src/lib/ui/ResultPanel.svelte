@@ -20,6 +20,8 @@
         analysisError = null,
         /** 判分之后的保存类步骤失败的原因；有值时在结果上方给出持续可见的横幅 */
         submitError = null,
+        sourceDocId = "",
+        sourceTitle = "",
         duration = 0,
         onsave = () => {},
         onsavewrong = () => {},
@@ -34,6 +36,10 @@
         /** 分析失败的原因：展示给用户，但不作为分析内容参与答疑或写入文档 */
         analysisError?: string | null;
         submitError?: import("../ai/errors").ErrorDescription | null;
+        /** 来源文档 ID；有值时结果页显示「跳回原始笔记」链接 */
+        sourceDocId?: string;
+        /** 来源文档标题，用于链接文字 */
+        sourceTitle?: string;
         duration?: number;
         onsave?: () => void;
         onsavewrong?: () => void;
@@ -222,6 +228,19 @@
             {#if submitError.detail}
                 <p class="mt-1 font-mono text-xs break-all">{submitError.detail}</p>
             {/if}
+        </div>
+    {/if}
+
+    {#if sourceDocId && sourceTitle}
+        <div class="text-muted-foreground mb-2 flex items-center gap-1 text-xs">
+            <span>{t("result.sourceNote")}:</span>
+            <button
+                type="button"
+                class="text-primary underline-offset-2 hover:underline"
+                onclick={() => service.openDoc(sourceDocId)}
+            >
+                {sourceTitle}
+            </button>
         </div>
     {/if}
 

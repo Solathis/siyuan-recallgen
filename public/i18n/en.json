@@ -132,6 +132,7 @@
     "quiz.progress": "Progress {0}",
     "quiz.flag": "Flag",
     "quiz.nextFlagged": "Next flagged",
+    "quiz.nextUnanswered": "Next unanswered",
     "quiz.unflag": "Unflag",
     "quiz.flaggedCount": "{0} flagged",
     "quiz.retrySessionTitle": "{0} (retry {1} wrong)",
@@ -192,6 +193,7 @@
     "result.correctAnswer": "Correct Answer:",
     "result.explanation": "Explanation",
     "result.comment": "Comment",
+    "result.sourceNote": "Source",
     "result.tabAnalysisAdvice": "Analysis & advice",
     "result.jumpTo": "Go to question {0} ({1})",
     "result.status_correct": "correct",
@@ -600,5 +602,6 @@
     "stats.reviewDifficultyHint": "Review due {0} questions",
     "settings.general.reviewLimitHint": "Upper bound on due questions taken per review session; 0 means no limit",
     "result.submitErrorHint": "The score and review schedule were not written. Retry submitting or check your disk; the results below are still viewable",
-    "quiz.nextFlaggedHint": "Jump to the next question flagged for review (disabled when none)"
+    "quiz.nextFlaggedHint": "Jump to the next question flagged for review (disabled when none)",
+    "quiz.nextUnansweredHint": "Jump to the next question you haven't answered (disabled when all answered)"
 }
