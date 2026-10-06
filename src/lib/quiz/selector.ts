@@ -2,7 +2,7 @@ import type { Plugin } from "siyuan";
 import { getAllEditor, confirm, showMessage, Menu } from "siyuan";
 import { getBlockKramdown, exportMdContent, getHPathByID, lsNotebooks, sql, listDocTree, quoteSqlLiteral } from "@/api";
 import { localeText, t } from "../i18n";
-import { clampContent, exportDocsMarkdown, MAX_CONTENT_CHARS } from "./content";
+import { clampContent, exportDocsMarkdown, MAX_CONTENT_CHARS, MAX_DOCS_PER_NOTEBOOK } from "./content";
 import type { QuizTabData } from "./service";
 
 const MIN_LEN = 50;
@@ -56,7 +56,7 @@ export class QuizSelector {
         if (!detail?.menu) return;
         detail.menu.addItem({
             icon: "iconSparkles",
-            label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
+            label: localeText(this.plugin.i18n, "generateQuiz", t("generateQuiz")),
             click: () => void this.run(() => this.fromBlocks(detail)),
         });
     }
@@ -68,14 +68,14 @@ export class QuizSelector {
         const rootId: string = detail?.data?.rootID || detail?.data?.id || detail?.protyle?.block?.rootID;
         detail.menu.addItem({
             icon: "iconSparkles",
-            label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
+            label: localeText(this.plugin.i18n, "generateQuiz", t("generateQuiz")),
             click: () => {
                 if (rootId) void this.run(() => this.fromDoc(rootId));
             },
         });
         detail.menu.addItem({
             icon: "iconFiles",
-            label: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
+            label: localeText(this.plugin.i18n, "generateNotebookQuiz", t("generateNotebookQuiz")),
             click: () => void this.onNotebookCommand(),
         });
         detail.menu.addItem({
@@ -132,7 +132,7 @@ export class QuizSelector {
             if (!docId) return;
             detail.menu.addItem({
                 icon: "iconSparkles",
-                label: this.plugin.i18n.generateQuiz ?? t("generateQuiz"),
+                label: localeText(this.plugin.i18n, "generateQuiz", t("generateQuiz")),
                 click: () => void this.run(() => this.fromDoc(docId)),
             });
             detail.menu.addItem({
@@ -176,7 +176,7 @@ export class QuizSelector {
                 t("selector.notebook");
             detail.menu.addItem({
                 icon: "iconFiles",
-                label: this.plugin.i18n.generateNotebookQuiz ?? t("generateNotebookQuiz"),
+                label: localeText(this.plugin.i18n, "generateNotebookQuiz", t("generateNotebookQuiz")),
                 click: () => void this.run(() => this.fromNotebook(nbId, nbName)),
             });
             detail.menu.addItem({
@@ -360,30 +360,37 @@ export class QuizSelector {
     }
 }
 
-/** 文档数量上限，超过则截断并提示用户缩小范围 */
-const MAX_DOCS = 200;
-
 /** 收集笔记本下所有文档 ID；truncated 表示命中了数量上限 */
 async function collectDocIds(notebookId: string): Promise<{ ids: string[]; truncated: boolean }> {
     const rows = await sql(
-        `SELECT id FROM blocks WHERE box = ${quoteSqlLiteral(notebookId)} AND type = ${quoteSqlLiteral("d")} ORDER BY hpath ASC LIMIT ${MAX_DOCS + 1}`
+        `SELECT id FROM blocks WHERE box = ${quoteSqlLiteral(notebookId)} AND type = ${quoteSqlLiteral("d")} ORDER BY hpath ASC LIMIT ${MAX_DOCS_PER_NOTEBOOK + 1}`
     ).catch(() => null);
 
     if (rows && rows.length > 0) {
-        return { ids: rows.slice(0, MAX_DOCS).map((r: any) => r.id as string), truncated: rows.length > MAX_DOCS };
+        return {
+            ids: rows.slice(0, MAX_DOCS_PER_NOTEBOOK).map((r: any) => r.id as string),
+            truncated: rows.length > MAX_DOCS_PER_NOTEBOOK,
+        };
     }
 
+    // SQL 查不到时的回退路径（例如块索引尚未建立）
     const tree = await listDocTree(notebookId as NotebookId, "/").catch(() => [] as IDocTreeNode[]);
     const ids: string[] = [];
+    let truncated = false;
     const walk = (nodes: IDocTreeNode[]) => {
         for (const n of nodes) {
-            if (ids.length >= MAX_DOCS) return;
+            // 回退路径同样受上限约束，且必须如实报告被截断：
+            // 原先走到上限就静默返回 truncated: false，用户会以为整本笔记都参与了出题
+            if (ids.length >= MAX_DOCS_PER_NOTEBOOK) {
+                truncated = true;
+                return;
+            }
             if (n.id) ids.push(n.id);
             if (n.children) walk(n.children);
         }
     };
     walk(tree);
-    return { ids, truncated: false };
+    return { ids, truncated };
 }
 
 async function safeTitle(rootId?: string): Promise<string> {

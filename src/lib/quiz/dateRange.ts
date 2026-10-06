@@ -1,7 +1,7 @@
 import { sql, lsNotebooks, quoteSqlLiteral } from "@/api";
 import { t } from "@/lib/i18n";
 import type { DateGenConfig } from "@/lib/quiz/service";
-import { exportDocsMarkdown } from "./content";
+import { exportDocsMarkdown, MAX_DOCS_PER_NOTEBOOK } from "./content";
 
 /** 日期范围类型 */
 export type DateRange = "today" | "beforeToday";
@@ -38,13 +38,6 @@ export function dateClause(cfg: DateGenConfig, range: DateRange, now: Date = new
     past.setDate(past.getDate() - cfg.days);
     return `created >= '${fmtTS(past)}' AND created < '${fmtTS(start)}'`;
 }
-
-/**
- * 单个笔记本一次最多取多少篇文档。
- * 上限本身是为了避免一次查询把整库拉进来，但命中上限意味着「还有笔记没被取到」，
- * 必须让用户知道，否则会以为范围里的笔记都参与了出题。
- */
-export const MAX_DOCS_PER_NOTEBOOK = 200;
 
 interface CollectedDocs {
     ids: string[];

@@ -7,6 +7,15 @@ import PromiseLimitPool from "@/libs/promise-pool";
  */
 export const MAX_CONTENT_CHARS = 200_000;
 
+/**
+ * 单个笔记本一次最多取多少篇文档。
+ *
+ * 笔记本出题（selector）与日期范围出题（dateRange）都受此约束：
+ * 一次性把整个笔记本送进提示词既会撑爆上下文，也会把内核拖慢。
+ * 各自的模块负责在命中上限时告知用户。
+ */
+export const MAX_DOCS_PER_NOTEBOOK = 200;
+
 /** 并发导出文档的并发度，避免大笔记本一次性打满内核 */
 const EXPORT_CONCURRENCY = 4;
 

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { __resetFetchSyncPost, __setFetchSyncPost } from "@/test/siyuan-stub";
 import type { DateGenConfig } from "@/lib/quiz/service";
-import { MAX_CONTENT_CHARS } from "./content";
-import { dateClause, dayBoundary, fmtTS, loadDateRangeNotes, MAX_DOCS_PER_NOTEBOOK } from "./dateRange";
+import { MAX_CONTENT_CHARS, MAX_DOCS_PER_NOTEBOOK } from "./content";
+import { dateClause, dayBoundary, fmtTS, loadDateRangeNotes } from "./dateRange";
 
 const cfg = (days: number, baseHour = 4, baseMinute = 0): DateGenConfig => ({ days, baseHour, baseMinute });
 
