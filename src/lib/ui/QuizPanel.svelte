@@ -183,6 +183,19 @@
         startCountdown();
     });
 
+    /** 被标记的题目下标列表（按题序） */
+    const flaggedIndices = $derived(questions.map((q, i) => (session?.flagged?.[q.id] ? i : -1)).filter((i) => i >= 0));
+
+    /**
+     * 跳到下一道标记题：从当前题往后找，到末尾再从头找（循环）。
+     * 没有标记题时不做任何事（按钮同时也会置灰）。
+     */
+    function goToNextFlagged(): void {
+        if (flaggedIndices.length === 0) return;
+        const next = flaggedIndices.find((i) => i > activeIndex) ?? flaggedIndices[0];
+        goToQuestion(next);
+    }
+
     const countdownText = $derived(`${Math.floor(countdownLeft / 60)}:${String(countdownLeft % 60).padStart(2, "0")}`);
 
     /* ── 生命周期 ────────────────────────────────────────────────── */
@@ -885,6 +898,15 @@
                         </Badge>
                         {#if flaggedCount > 0}
                             <Badge variant="outline">{t("quiz.flaggedCount", String(flaggedCount))}</Badge>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onclick={goToNextFlagged}
+                                title={t("quiz.nextFlaggedHint")}
+                                aria-label={t("quiz.nextFlagged")}
+                            >
+                                {t("quiz.nextFlagged")} →
+                            </Button>
                         {/if}
                         {#if countdownEnabled}
                             <Badge variant={countdownLeft <= 60 ? "destructive" : "warning"}>

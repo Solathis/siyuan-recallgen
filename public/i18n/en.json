@@ -131,6 +131,7 @@
     "quiz.shortcutHint": "Shortcuts: ← → to change question, Ctrl/Cmd + Enter to submit",
     "quiz.progress": "Progress {0}",
     "quiz.flag": "Flag",
+    "quiz.nextFlagged": "Next flagged",
     "quiz.unflag": "Unflag",
     "quiz.flaggedCount": "{0} flagged",
     "quiz.retrySessionTitle": "{0} (retry {1} wrong)",
@@ -598,5 +599,7 @@
     "stats.reviewTypeHint": "Review due questions of type \"{0}\"",
     "stats.reviewDifficultyHint": "Review due {0} questions",
     "settings.general.reviewLimitHint": "Upper bound on due questions taken per review session; 0 means no limit",
-    "result.submitErrorHint": "The score and review schedule were not written. Retry submitting or check your disk; the results below are still viewable"
+    "result.submitErrorHint": "The score and review schedule were not written. Retry submitting or check your disk; the results below are still viewable",
+    "quiz.nextFlaggedHint": "Jump to the next question flagged for review (disabled when none)",
+    "quiz.noFlagged": "No flagged questions"
 }
