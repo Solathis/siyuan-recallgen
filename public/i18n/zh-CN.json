@@ -222,7 +222,6 @@
     "heatmap.noRecord": "无记录",
     "heatmap.scoreTip": "{0} · {1} 分（{2} 次）",
     "stats.heatmap": "学习轨迹",
-    "stats.dayFilter": "按日期筛选",
     "stats.title": "学习统计",
     "stats.range": "统计范围",
     "stats.rangeDays": "近 {0} 天",
@@ -607,7 +606,6 @@
     "result.submitErrorHint": "成绩与复习排程没有写入，请重试交卷或检查磁盘；下方结果仍可查看",
     "quiz.nextFlaggedHint": "跳到下一道被标记「稍后回看」的题目（无标记时不可用）",
     "quiz.nextUnansweredHint": "跳到下一道还没作答的题目（全部已答时不可用）",
-    "stats.dayFilterActive": "仅显示 {0} 的成绩",
     "bank.cramModeHint": "忽略 FSRS 排程，把题库里所有匹配的题目全部取出来（考前突击用）",
     "bank.cramBadge": "急训"
 }

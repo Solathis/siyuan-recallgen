@@ -222,7 +222,6 @@
     "heatmap.noRecord": "No record",
     "heatmap.scoreTip": "{0} · {1} pts ({2} times)",
     "stats.heatmap": "Study activity",
-    "stats.dayFilter": "Filter by date",
     "stats.title": "Study statistics",
     "stats.range": "Range",
     "stats.rangeDays": "Last {0} days",
@@ -607,7 +606,6 @@
     "result.submitErrorHint": "The score and review schedule were not written. Retry submitting or check your disk; the results below are still viewable",
     "quiz.nextFlaggedHint": "Jump to the next question flagged for review (disabled when none)",
     "quiz.nextUnansweredHint": "Jump to the next question you haven't answered (disabled when all answered)",
-    "stats.dayFilterActive": "Showing only {0}",
     "bank.cramModeHint": "Ignore the FSRS schedule and pull all matching questions (for cramming before an exam)",
     "bank.cramBadge": "Cram"
 }
