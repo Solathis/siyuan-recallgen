@@ -70,12 +70,15 @@
         config,
         lang = "zh",
         showRangePicker = true,
+        onDayClick,
     }: {
         records?: ScoreIndexEntry[];
         config: HMConfig;
         lang?: "zh" | "en";
         /** 设置页的预览不需要切换统计范围 */
         showRangePicker?: boolean;
+        /** 点击某个有记录的日期时触发（用于跳转到当天的成绩记录） */
+        onDayClick?: (date: string) => void;
     } = $props();
 
     /** 单元格边长（px）。固定尺寸 + 横向滚动，保证窄屏也能看清而不是被压成一条线 */
@@ -347,7 +350,10 @@
                                             onEnter(cell);
                                         }}
                                         onblur={onLeave}
-                                        onclick={() => onEnter(cell)}
+                                        onclick={() => {
+                                            onEnter(cell);
+                                            if (onDayClick && cell.date) onDayClick(cell.date);
+                                        }}
                                         onkeydown={(e) => onCellKeydown(e, colIndex, rowIndex)}
                                     ></button>
                                 {:else}

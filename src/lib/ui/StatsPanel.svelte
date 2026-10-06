@@ -27,6 +27,7 @@
         heatmapConfig = undefined,
         lang = "zh",
         onStartReview = () => {},
+        onDayClick,
     }: {
         records?: ScoreIndexEntry[];
         loading?: boolean;
@@ -35,6 +36,8 @@
         lang?: "zh" | "en";
         /** 按知识点开始一次复习；由插件层打开新的答题 Tab */
         onStartReview?: (scope: { tag?: string; type?: QuestionType; difficulty?: Difficulty }) => void;
+        /** 点击热力图某天时触发，用于跳转到当天成绩 */
+        onDayClick?: (date: string) => void;
     } = $props();
 
     let range = $state<RangeDays>(30);
@@ -128,7 +131,7 @@
                     <Card.Description>{t("stats.heatmapDesc")}</Card.Description>
                 </Card.Header>
                 <Card.Content>
-                    <Heatmap {records} config={heatmapConfig} {lang} />
+                    <Heatmap {records} config={heatmapConfig} {lang} {onDayClick} />
                 </Card.Content>
             </Card.Root>
         {/if}

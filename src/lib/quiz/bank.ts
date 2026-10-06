@@ -341,6 +341,8 @@ export interface ReviewScope {
     type?: QuestionType;
     /** 限定难度，用于「只练难题」这类复习方式 */
     difficulty?: Difficulty;
+    /** 急训模式：忽略 FSRS 排程，返回全部匹配的题目（考前突击用） */
+    cram?: boolean;
     sourceDocId?: string;
     /**
      * 没有到期题目时是否按掌握度从低到高补题（提前复习）。
@@ -355,7 +357,7 @@ export interface ReviewScope {
  * 抽成纯函数便于单测，也让 index.ts 的实现保持一行。
  */
 export function selectReviewItems(items: BankItem[], scope: ReviewScope = {}): BankItem[] {
-    const { now = Date.now(), limit = 0, tag, type, difficulty, sourceDocId, ahead = false } = scope;
+    const { now = Date.now(), limit = 0, tag, type, difficulty, sourceDocId, ahead = false, cram = false } = scope;
     const scoped = items.filter((item) => {
         if (sourceDocId && item.sourceDocId !== sourceDocId) return false;
         if (tag && !(item.question.tags ?? []).includes(tag)) return false;
@@ -363,6 +365,9 @@ export function selectReviewItems(items: BankItem[], scope: ReviewScope = {}): B
         if (difficulty && item.question.difficulty !== difficulty) return false;
         return true;
     });
+
+    // 急训模式：不管排程，全部取出
+    if (cram) return limit > 0 ? scoped.slice(0, limit) : scoped;
 
     const due = pickDueItems(scoped, now, limit);
     if (due.length > 0 || !ahead) return due;

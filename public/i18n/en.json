@@ -51,6 +51,7 @@
     "bank.weakCount": "{0} weak",
     "bank.searchPlaceholder": "Search question text",
     "bank.filterLabel": "Filter",
+    "bank.cramMode": "Cram mode",
     "bank.filterAll": "All",
     "bank.filterDue": "Due",
     "bank.filterWeak": "Weak",
@@ -221,6 +222,7 @@
     "heatmap.noRecord": "No record",
     "heatmap.scoreTip": "{0} · {1} pts ({2} times)",
     "stats.heatmap": "Study activity",
+    "stats.dayFilter": "Filter by date",
     "stats.title": "Study statistics",
     "stats.range": "Range",
     "stats.rangeDays": "Last {0} days",
@@ -274,6 +276,7 @@
     "history.deleteFailed": "Delete failed: {0}",
     "history.noSource": "No source",
     "history.searchPlaceholder": "Search title or source",
+    "history.clearDayFilter": "Click to remove date filter",
     "history.filterScore": "Filter by score",
     "history.filter_all": "All scores",
     "history.filter_high": "80 and above",
@@ -603,5 +606,8 @@
     "settings.general.reviewLimitHint": "Upper bound on due questions taken per review session; 0 means no limit",
     "result.submitErrorHint": "The score and review schedule were not written. Retry submitting or check your disk; the results below are still viewable",
     "quiz.nextFlaggedHint": "Jump to the next question flagged for review (disabled when none)",
-    "quiz.nextUnansweredHint": "Jump to the next question you haven't answered (disabled when all answered)"
+    "quiz.nextUnansweredHint": "Jump to the next question you haven't answered (disabled when all answered)",
+    "stats.dayFilterActive": "Showing only {0}",
+    "bank.cramModeHint": "Ignore the FSRS schedule and pull all matching questions (for cramming before an exam)",
+    "bank.cramBadge": "Cram"
 }

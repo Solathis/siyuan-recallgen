@@ -284,16 +284,17 @@
         try {
             // 按知识点复习时允许提前复习：用户是想练这个点，不该被排程挡住，
             // 因此只有题库里根本没有该知识点的题目时才会走到空态
-            const { dueTag: tag, dueType: type, dueDifficulty: difficulty } = tabData;
+            const { dueTag: tag, dueType: type, dueDifficulty: difficulty, cram } = tabData;
             // 按知识点/题型复习时允许提前复习：用户是想练这一类题，不该被排程挡住，
             // 因此只有题库里根本没有这类题目时才会走到空态
             const due = await service.dueBankQuestions({
-                limit: config.general.reviewLimit,
+                limit: cram ? 0 : config.general.reviewLimit,
                 sourceDocId: tabData.dueSourceDocId,
                 tag,
                 type,
                 difficulty,
                 ahead: Boolean(tag || type || difficulty),
+                cram,
             });
             if (cancelled) return;
             if (due.length === 0) {

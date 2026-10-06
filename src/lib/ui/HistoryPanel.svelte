@@ -14,6 +14,7 @@
     import * as Tabs from "@/lib/components/ui/tabs";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
+    import { dayKey } from "../quiz/charts";
     import { downloadText, exportStamp } from "./download";
     import { EXPORT_EXTENSION, EXPORT_MIME, buildExport, type ExportFormat } from "../quiz/export";
     import { PAGE_SIZE, limitGroups, nextLimit } from "../quiz/paging";
@@ -29,7 +30,7 @@
         service: QuizService;
         onOpenReview: (entry: ScoreIndexEntry) => void;
         /** 按知识点、题型或难度开始一次到期复习；由插件层打开新的答题 Tab */
-        onStartReview?: (scope: { tag?: string; type?: QuestionType; difficulty?: Difficulty }) => void;
+        onStartReview?: (scope: { tag?: string; type?: QuestionType; difficulty?: Difficulty; cram?: boolean }) => void;
     } = $props();
 
     let records = $state<ScoreIndexEntry[]>([]);
@@ -49,6 +50,12 @@
     let scoreFilter = $state<"all" | "high" | "mid" | "low">("all");
     /** 顶层视图：记录列表 / 学习统计 */
     let topView = $state<"records" | "stats" | "bank">("records");
+    /** 从热力图点某一天跳过来时，筛选出该天的成绩；null 表示不限日期 */
+    let dayFilter = $state<string | null>(null);
+
+    function clearDayFilter(): void {
+        dayFilter = null;
+    }
     /**
      * 已渲染条数上界。
      * 记录很多时一次性渲染全部条目会创建大量 DOM，这里分段渲染并触底加载。
@@ -74,6 +81,7 @@
     const filtered = $derived.by(() => {
         const q = query.trim().toLowerCase();
         return records.filter((r) => {
+            if (dayFilter && dayKey(r.timestamp) !== dayFilter) return false;
             if (q && !`${r.title} ${r.sourceTitle ?? ""}`.toLowerCase().includes(q)) return false;
             const p = scorePercent(r);
             if (scoreFilter === "high" && p < 80) return false;
@@ -178,13 +186,33 @@
     </Tabs.Root>
 
     {#if topView === "stats"}
-        <StatsPanel {records} {loading} heatmapConfig={config.heatmap} lang={config.general.language} {onStartReview} />
+        <StatsPanel
+            {records}
+            {loading}
+            heatmapConfig={config.heatmap}
+            lang={config.general.language}
+            {onStartReview}
+            onDayClick={(date) => {
+                topView = "records";
+                dayFilter = date;
+            }}
+        />
     {:else if topView === "bank"}
         <BankPanel {service} {onStartReview} lang={config.general.language} />
     {:else}
         <header class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-lg font-semibold">{t("history.title")}</h2>
             <div class="flex flex-wrap items-center gap-2">
+                {#if dayFilter}
+                    <button
+                        type="button"
+                        class="border-primary text-primary hover:bg-primary/10 inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs"
+                        onclick={clearDayFilter}
+                        title={t("history.clearDayFilter")}
+                    >
+                        📅 {dayFilter} ✕
+                    </button>
+                {/if}
                 <Input
                     class="h-8 w-44"
                     placeholder={t("history.searchPlaceholder")}

@@ -51,6 +51,7 @@
     "bank.weakCount": "薄弱 {0}",
     "bank.searchPlaceholder": "搜索题干",
     "bank.filterLabel": "筛选",
+    "bank.cramMode": "急训模式",
     "bank.filterAll": "全部",
     "bank.filterDue": "待复习",
     "bank.filterWeak": "薄弱",
@@ -221,6 +222,7 @@
     "heatmap.noRecord": "无记录",
     "heatmap.scoreTip": "{0} · {1} 分（{2} 次）",
     "stats.heatmap": "学习轨迹",
+    "stats.dayFilter": "按日期筛选",
     "stats.title": "学习统计",
     "stats.range": "统计范围",
     "stats.rangeDays": "近 {0} 天",
@@ -274,6 +276,7 @@
     "history.deleteFailed": "删除失败：{0}",
     "history.noSource": "未标注来源",
     "history.searchPlaceholder": "搜索标题或来源",
+    "history.clearDayFilter": "点击移除日期筛选",
     "history.filterScore": "按分数筛选",
     "history.filter_all": "全部分数",
     "history.filter_high": "80 分及以上",
@@ -603,5 +606,8 @@
     "settings.general.reviewLimitHint": "到期复习一次最多取这么多题；0 表示不限（到期题目较多时建议设上限）",
     "result.submitErrorHint": "成绩与复习排程没有写入，请重试交卷或检查磁盘；下方结果仍可查看",
     "quiz.nextFlaggedHint": "跳到下一道被标记「稍后回看」的题目（无标记时不可用）",
-    "quiz.nextUnansweredHint": "跳到下一道还没作答的题目（全部已答时不可用）"
+    "quiz.nextUnansweredHint": "跳到下一道还没作答的题目（全部已答时不可用）",
+    "stats.dayFilterActive": "仅显示 {0} 的成绩",
+    "bank.cramModeHint": "忽略 FSRS 排程，把题库里所有匹配的题目全部取出来（考前突击用）",
+    "bank.cramBadge": "急训"
 }

@@ -32,7 +32,13 @@
     }: {
         service: QuizService;
         /** 按知识点或题型开始一次复习；由插件层打开新的答题 Tab */
-        onStartReview?: (scope: { tag?: string; type?: QuestionType; difficulty?: Difficulty }) => void;
+        onStartReview?: (scope: {
+            tag?: string;
+            type?: QuestionType;
+            difficulty?: Difficulty;
+            /** 急训模式：忽略排程，全部取出 */
+            cram?: boolean;
+        }) => void;
         /** 界面语言；由外层传入，service.getConfig() 本身不是响应式的 */
         lang?: "zh" | "en";
     } = $props();
@@ -46,6 +52,8 @@
     let typeFilter = $state<string>("all");
     let tagFilter = $state<string>("all");
     let difficultyFilter = $state<string>("all");
+    /** 急训模式：忽略 FSRS 排程，把所有匹配的题目全部取出来（考前突击用） */
+    let cram = $state(false);
     let visible = $state(PAGE_SIZE);
 
     async function load() {
@@ -315,10 +323,15 @@
                         tag: reviewScope?.tag,
                         type: reviewScope?.type,
                         difficulty: reviewScope?.difficulty,
+                        cram,
                     })}
             >
-                {t("bank.reviewScope")}
+                {cram ? t("bank.cramBadge") + " · " : ""}{t("bank.reviewScope")}
             </Button>
+            <label class="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+                <input type="checkbox" class="accent-primary size-3.5" bind:checked={cram} />
+                {t("bank.cramMode")}
+            </label>
         </div>
     {/if}
 

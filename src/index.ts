@@ -148,20 +148,28 @@ export default class RecallGenPlugin extends Plugin {
                         props: {
                             service: self.buildService(),
                             onOpenReview: (entry: ScoreIndexEntry) => void self.openReviewTab(entry),
-                            onStartReview: (scope: { tag?: string; type?: QuestionType; difficulty?: Difficulty }) =>
+                            onStartReview: (scope: {
+                                tag?: string;
+                                type?: QuestionType;
+                                difficulty?: Difficulty;
+                                cram?: boolean;
+                            }) =>
                                 self.openQuizTab({
                                     mode: "reviewDue",
                                     sourceDocId: "",
                                     sourceTitle:
-                                        scope.tag ??
-                                        (scope.type
-                                            ? t(`type.${scope.type}`)
-                                            : scope.difficulty
-                                              ? t(`diff.${scope.difficulty}`)
-                                              : t("bank.reviewDue")),
+                                        (scope.cram ? t("bank.cramBadge") + " · " : "") +
+                                        (scope.tag
+                                            ? t(`bank.scopeTag`, scope.tag)
+                                            : scope.type
+                                              ? t(`type.${scope.type}`)
+                                              : scope.difficulty
+                                                ? t(`diff.${scope.difficulty}`)
+                                                : t("bank.reviewDue")),
                                     dueTag: scope.tag,
                                     dueType: scope.type,
                                     dueDifficulty: scope.difficulty,
+                                    cram: scope.cram,
                                 }),
                         },
                     }) as Record<string, unknown>

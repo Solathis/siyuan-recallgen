@@ -145,6 +145,8 @@ export interface QuizTabData {
     dueType?: QuestionType;
     /** reviewDue 模式下限定难度，只复习该难度的到期题目 */
     dueDifficulty?: Difficulty;
+    /** reviewDue 模式下启用急训：忽略排程，把匹配的题目全部取出 */
+    cram?: boolean;
     /** review 模式的成绩数据 */
     review?: ReviewPayload;
 }
