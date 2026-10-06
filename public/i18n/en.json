@@ -600,6 +600,5 @@
     "stats.reviewDifficultyHint": "Review due {0} questions",
     "settings.general.reviewLimitHint": "Upper bound on due questions taken per review session; 0 means no limit",
     "result.submitErrorHint": "The score and review schedule were not written. Retry submitting or check your disk; the results below are still viewable",
-    "quiz.nextFlaggedHint": "Jump to the next question flagged for review (disabled when none)",
-    "quiz.noFlagged": "No flagged questions"
+    "quiz.nextFlaggedHint": "Jump to the next question flagged for review (disabled when none)"
 }

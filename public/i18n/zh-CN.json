@@ -600,6 +600,5 @@
     "stats.reviewDifficultyHint": "复习「{0}」难度的到期题目",
     "settings.general.reviewLimitHint": "到期复习一次最多取这么多题；0 表示不限（到期题目较多时建议设上限）",
     "result.submitErrorHint": "成绩与复习排程没有写入，请重试交卷或检查磁盘；下方结果仍可查看",
-    "quiz.nextFlaggedHint": "跳到下一道被标记「稍后回看」的题目（无标记时不可用）",
-    "quiz.noFlagged": "没有已标记的题目"
+    "quiz.nextFlaggedHint": "跳到下一道被标记「稍后回看」的题目（无标记时不可用）"
 }
