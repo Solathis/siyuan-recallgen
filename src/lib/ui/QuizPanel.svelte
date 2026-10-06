@@ -67,6 +67,11 @@
      * 但不该被写进笔记，也不该当作「薄弱点分析」喂给答疑模型。
      */
     let analysisError = $state<string | null>(null);
+    /**
+     * 判分之后的步骤（成绩落盘 / 清理进度 / 排程更新）失败的原因。
+     * 此时结果已经算出来了，必须展示结果，但不能让用户以为已保存。
+     */
+    let submitError = $state<ErrorDescription | null>(null);
     let error = $state<ErrorDescription | null>(null);
     let progressValue = $state<number | null>(null);
     let progressLabel = $state("");
@@ -615,14 +620,19 @@
             try {
                 analysis = await service.analyze(results, session.questions);
                 analysisError = null;
+                submitError = null;
                 await service.updateScoreAnalysis(scoreId, analysis);
             } catch (e) {
                 analysis = null;
                 analysisError = (e as Error).message;
             }
+            submitError = null;
             panelState = "result";
         } catch (e) {
             error = describeError(e);
+            // 判分成功后的失败（成绩落盘等）不应让结果不可见——用户已经答完了。
+            // 但必须明确告知保存没有成功，否则用户以为一切正常，成绩记录其实丢了。
+            submitError = describeError(e);
             panelState = "result";
         }
     }
@@ -1001,6 +1011,7 @@
                     questions={session.questions}
                     {analysis}
                     {analysisError}
+                    {submitError}
                     {duration}
                     onsave={() => void saveToDoc(false)}
                     onsavewrong={() => void saveToDoc(true)}

@@ -18,6 +18,8 @@
         questions,
         analysis = null,
         analysisError = null,
+        /** 判分之后的保存类步骤失败的原因；有值时在结果上方给出持续可见的横幅 */
+        submitError = null,
         duration = 0,
         onsave = () => {},
         onsavewrong = () => {},
@@ -31,6 +33,7 @@
         analysis?: string | null;
         /** 分析失败的原因：展示给用户，但不作为分析内容参与答疑或写入文档 */
         analysisError?: string | null;
+        submitError?: import("../ai/errors").ErrorDescription | null;
         duration?: number;
         onsave?: () => void;
         onsavewrong?: () => void;
@@ -209,6 +212,19 @@
         原先「薄弱点分析」与「学习建议」两个标签页渲染的是同一段 analysis 文本，
         属于重复内容。现合并为单一「解析与建议」标签页。
     -->
+    {#if submitError}
+        <div
+            class="border-destructive bg-destructive/10 text-destructive mb-3 rounded-md border px-3 py-2 text-sm"
+            role="alert"
+        >
+            <p class="font-semibold">{t("result.submitError")}</p>
+            <p class="text-muted-foreground mt-1 text-xs">{t("result.submitErrorHint")}</p>
+            {#if submitError.detail}
+                <p class="mt-1 font-mono text-xs break-all">{submitError.detail}</p>
+            {/if}
+        </div>
+    {/if}
+
     <Tabs.Root value={activeTab} onValueChange={(v) => (activeTab = v as typeof activeTab)}>
         <Tabs.List>
             <Tabs.Trigger value="questions">{t("result.tabQuestions")}</Tabs.Trigger>

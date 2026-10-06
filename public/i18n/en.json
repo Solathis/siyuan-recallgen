@@ -200,6 +200,7 @@
     "result.partial": "Partial ({0})",
     "result.status_partial": "partially correct",
     "result.noAnalysis": "No weakness analysis available",
+    "result.submitError": "Graded, but saving this attempt failed",
     "result.retryWrong": "Retry wrong",
     "result.discard": "Discard",
     "result.saveWrong": "Save Wrong Only",
@@ -596,5 +597,6 @@
     "bank.filterAllDifficulties": "All difficulties",
     "stats.reviewTypeHint": "Review due questions of type \"{0}\"",
     "stats.reviewDifficultyHint": "Review due {0} questions",
-    "settings.general.reviewLimitHint": "Upper bound on due questions taken per review session; 0 means no limit"
+    "settings.general.reviewLimitHint": "Upper bound on due questions taken per review session; 0 means no limit",
+    "result.submitErrorHint": "The score and review schedule were not written. Retry submitting or check your disk; the results below are still viewable"
 }

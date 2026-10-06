@@ -200,6 +200,7 @@
     "result.partial": "部分得分（{0}）",
     "result.status_partial": "部分得分",
     "result.noAnalysis": "暂无薄弱点分析",
+    "result.submitError": "本次成绩已判分，但保存失败",
     "result.retryWrong": "重做错题",
     "result.discard": "放弃保存",
     "result.saveWrong": "仅保存错题",
@@ -596,5 +597,6 @@
     "bank.filterAllDifficulties": "全部难度",
     "stats.reviewTypeHint": "复习题型「{0}」的到期题目",
     "stats.reviewDifficultyHint": "复习「{0}」难度的到期题目",
-    "settings.general.reviewLimitHint": "到期复习一次最多取这么多题；0 表示不限（到期题目较多时建议设上限）"
+    "settings.general.reviewLimitHint": "到期复习一次最多取这么多题；0 表示不限（到期题目较多时建议设上限）",
+    "result.submitErrorHint": "成绩与复习排程没有写入，请重试交卷或检查磁盘；下方结果仍可查看"
 }
