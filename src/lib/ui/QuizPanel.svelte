@@ -673,6 +673,7 @@
         results = null;
         analysis = null;
         analysisError = null;
+        submitError = null;
         duration = 0;
         error = null;
         panelState = "answering";
