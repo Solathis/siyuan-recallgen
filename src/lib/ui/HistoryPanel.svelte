@@ -26,11 +26,13 @@
         service,
         onOpenReview,
         onStartReview = () => {},
+        openFlashcard = undefined,
     }: {
         service: QuizService;
         onOpenReview: (entry: ScoreIndexEntry) => void;
         /** 按知识点、题型或难度开始一次到期复习；由插件层打开新的答题 Tab */
         onStartReview?: (scope: { tag?: string; type?: QuestionType; difficulty?: Difficulty; cram?: boolean }) => void;
+        openFlashcard?: (items: import("../quiz/bank").BankItem[]) => void;
     } = $props();
 
     let records = $state<ScoreIndexEntry[]>([]);
@@ -198,7 +200,7 @@
             }}
         />
     {:else if topView === "bank"}
-        <BankPanel {service} {onStartReview} lang={config.general.language} />
+        <BankPanel {service} {onStartReview} {openFlashcard} lang={config.general.language} />
     {:else}
         <header class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-lg font-semibold">{t("history.title")}</h2>

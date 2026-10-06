@@ -4,6 +4,7 @@ import type { Custom } from "siyuan";
 import "./app.css";
 
 import QuizPanel from "@/lib/ui/QuizPanel.svelte";
+import FlashcardPanel from "@/lib/ui/FlashcardPanel.svelte";
 import HistoryPanel from "@/lib/ui/HistoryPanel.svelte";
 import SettingPanel from "@/lib/ui/SettingPanel.svelte";
 import { lsNotebooks } from "@/api";
@@ -33,6 +34,7 @@ const ICON = `<symbol id="iconRecallGen" viewBox="0 0 1024 1024"><path d="M689.8
 
 const QUIZ_TAB = "quiz";
 const HISTORY_TAB = "history";
+const FLASHCARD_TAB = "flashcard";
 
 export default class RecallGenPlugin extends Plugin {
     private config: RecallGenConfig = getDefaultConfig();
@@ -132,6 +134,54 @@ export default class RecallGenPlugin extends Plugin {
             },
         });
         this.addTab({
+            type: FLASHCARD_TAB,
+            init: function () {
+                const c = this as unknown as Custom;
+                const host = c.element as HTMLElement;
+                const div = document.createElement("div");
+                div.className = "rg-scope";
+                div.style.height = "100%";
+                div.style.overflow = "auto";
+                host.appendChild(div);
+                const flashItems = (c.data as { flashItems?: import("@/lib/quiz/bank").BankItem[] }).flashItems ?? [];
+                self.mounted.set(
+                    host,
+                    mount(FlashcardPanel, {
+                        target: div,
+                        props: {
+                            items: flashItems,
+                            onDone: (grades: Array<{ id: string; percent: number }>) => {
+                                // 把自评结果写回题库推进 FSRS 排程
+                                void self.buildService().recordBankOutcomes(
+                                    flashItems
+                                        .filter((fi) => grades.some((g) => g.id === fi.id))
+                                        .map((fi) => fi.question),
+                                    { sourceDocId: "", sourceTitle: t("flash.title") },
+                                    flashItems
+                                        .filter((fi) => grades.some((g) => g.id === fi.id))
+                                        .map((fi) => {
+                                            const g = grades.find((gr) => gr.id === fi.id)!;
+                                            return {
+                                                questionId: fi.id,
+                                                type: fi.question.type,
+                                                method: "local" as const,
+                                                correct: g.percent >= 60,
+                                                score: g.percent,
+                                                maxScore: 100,
+                                                // 闪卡没有传统作答，userAnswer 省略
+                                            };
+                                        })
+                                );
+                            },
+                        },
+                    }) as Record<string, unknown>
+                );
+            },
+            destroy: function () {
+                self.destroyMounted((this as unknown as Custom).element as HTMLElement);
+            },
+        });
+        this.addTab({
             type: HISTORY_TAB,
             init: function () {
                 const c = this as unknown as Custom;
@@ -148,6 +198,8 @@ export default class RecallGenPlugin extends Plugin {
                         props: {
                             service: self.buildService(),
                             onOpenReview: (entry: ScoreIndexEntry) => void self.openReviewTab(entry),
+                            openFlashcard: (items: import("@/lib/quiz/bank").BankItem[]) =>
+                                self.openFlashcardTab(items),
                             onStartReview: (scope: {
                                 tag?: string;
                                 type?: QuestionType;
@@ -400,6 +452,19 @@ export default class RecallGenPlugin extends Plugin {
                 icon: "iconRecallGen",
                 title: tabData.sourceTitle ? t("tab.quiz", tabData.sourceTitle) : t("tab.quizDefault"),
                 data: tabData,
+            },
+        });
+    }
+
+    /** 打开闪卡复习面板；完成后用自评得分率推进 FSRS 排程 */
+    openFlashcardTab(items: import("@/lib/quiz/bank").BankItem[]) {
+        openTab({
+            app: (this as unknown as { app: import("siyuan").App }).app,
+            custom: {
+                id: this.name + FLASHCARD_TAB,
+                icon: "iconRecallGen",
+                title: t("flash.title"),
+                data: { flashItems: items },
             },
         });
     }

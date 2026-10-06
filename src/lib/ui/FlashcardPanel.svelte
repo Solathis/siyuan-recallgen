@@ -1,0 +1,136 @@
+<script lang="ts">
+    import { Button } from "@/lib/components/ui/button";
+    import * as Card from "@/lib/components/ui/card";
+    import ProgressBar from "./ProgressBar.svelte";
+    import { t } from "../i18n";
+    import { renderMarkdownLatex } from "./latex";
+    import type { BankItem } from "@/lib/quiz/bank";
+
+    export type FlashGrade = "again" | "hard" | "good" | "easy";
+
+    /** 自评 → 得分率（用于 FSRS 排程） */
+    const GRADE_PERCENT: Record<FlashGrade, number> = { again: 0, hard: 50, good: 80, easy: 100 };
+    const GRADE_ORDER: FlashGrade[] = ["again", "hard", "good", "easy"];
+
+    let {
+        items,
+        onDone,
+    }: {
+        items: BankItem[];
+        /** 全部卡片完成时触发；调用方用返回的得分率做 FSRS 排程 */
+        onDone?: (grades: Array<{ id: string; percent: number }>) => void;
+    } = $props();
+
+    let index = $state(0);
+    let revealed = $state(false);
+    let counts = $state<Record<FlashGrade, number>>({ again: 0, hard: 0, good: 0, easy: 0 });
+    /** questionId → 得分率 */
+    let grades = $state<Map<string, number>>(new Map());
+    let done = $state(false);
+
+    const current = $derived(items[index] ?? null);
+    const isLast = $derived(index >= items.length - 1);
+    const gradeSummary = $derived(
+        GRADE_ORDER.filter((g) => counts[g] > 0)
+            .map((g) => t(`flash.${g}Count`, String(counts[g])))
+            .join(" · ")
+    );
+
+    function reveal(): void {
+        revealed = true;
+    }
+
+    function grade(grade: FlashGrade): void {
+        if (!current || done) return;
+        counts[grade]++;
+        grades.set(current.id, GRADE_PERCENT[grade]);
+
+        if (isLast) {
+            done = true;
+            onDone?.(Array.from(grades.entries()).map(([id, percent]) => ({ id, percent })));
+        } else {
+            index++;
+            revealed = false;
+        }
+    }
+
+    /** 正确答案的展示文本（按题型） */
+    function answerText(item: BankItem): string {
+        const q = item.question;
+        if (q.type === "single_choice" || q.type === "multiple_choice") {
+            const idx = Array.isArray(q.answer) ? q.answer : [q.answer as number];
+            return idx.map((i) => String.fromCharCode(65 + i)).join(", ");
+        }
+        if (q.type === "true_false") return q.answer ? t("common.true") : t("common.false");
+        if (q.type === "fill_blank")
+            return (Array.isArray(q.answer) ? q.answer : []).map((opts) => opts.join(" / ")).join("；");
+        if (q.type === "coding") return q.answer ?? "";
+        return q.reference_answer ?? "";
+    }
+</script>
+
+<div class="flex h-full flex-col items-center gap-4 px-4 py-6">
+    <div class="w-full max-w-lg">
+        <ProgressBar
+            value={items.length > 0 ? ((index + (done ? 1 : 0)) / items.length) * 100 : 0}
+            label={t("flash.progress", String(done ? items.length : index), String(items.length))}
+        />
+    </div>
+
+    {#if done}
+        <Card.Root class="w-full max-w-lg">
+            <Card.Header class="text-center">
+                <Card.Title class="text-lg">{t("flash.done")}</Card.Title>
+                <Card.Description>{t("flash.doneDesc", String(items.length), gradeSummary)}</Card.Description>
+            </Card.Header>
+        </Card.Root>
+    {:else if current}
+        <Card.Root class="flex min-h-[240px] w-full max-w-lg flex-col">
+            <Card.Header class="pb-1">
+                <Card.Description class="text-2xs">
+                    {t("flash.progress", String(index + 1), String(items.length))}
+                    · {current.question.difficulty}
+                </Card.Description>
+            </Card.Header>
+            <Card.Content class="flex flex-1 flex-col justify-center gap-4 pb-4">
+                <div class="rg-markdown text-reading leading-relaxed">
+                    {@html renderMarkdownLatex(current.question.question)}
+                </div>
+
+                {#if !revealed}
+                    <Button onclick={reveal} class="w-full" variant="outline">
+                        {t("flash.showAnswer")}
+                    </Button>
+                    <p class="text-muted-foreground text-center text-2xs">{t("flash.revealHint")}</p>
+                {:else}
+                    <div class="border-border bg-muted/30 rounded-md border p-3">
+                        <p class="text-muted-foreground mb-1 text-2xs font-semibold">{t("flash.answerLabel")}</p>
+                        <div class="rg-markdown text-sm">
+                            {@html renderMarkdownLatex(answerText(current))}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-4 gap-1.5">
+                        {#each GRADE_ORDER as g (g)}
+                            <Button
+                                variant={g === "again" ? "destructive" : g === "easy" ? "default" : "outline"}
+                                size="sm"
+                                onclick={() => grade(g)}
+                            >
+                                {t(`flash.${g}`)}
+                            </Button>
+                        {/each}
+                    </div>
+                {/if}
+            </Card.Content>
+        </Card.Root>
+
+        <div class="text-muted-foreground flex gap-3 text-xs">
+            {#each GRADE_ORDER as g (g)}
+                {#if counts[g] > 0}
+                    <span>{t(`flash.${g}Count`, String(counts[g]))}</span>
+                {/if}
+            {/each}
+        </div>
+    {/if}
+</div>

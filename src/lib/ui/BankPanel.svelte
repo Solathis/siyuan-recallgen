@@ -28,9 +28,12 @@
     let {
         service,
         onStartReview = () => {},
+        openFlashcard,
         lang = "zh",
     }: {
         service: QuizService;
+        /** 打开闪卡复习面板；急训模式下点复习按钮时触发 */
+        openFlashcard?: (items: BankItem[]) => void;
         /** 按知识点或题型开始一次复习；由插件层打开新的答题 Tab */
         onStartReview?: (scope: {
             tag?: string;
@@ -318,17 +321,24 @@
             <Button
                 size="sm"
                 variant="outline"
-                onclick={() =>
-                    onStartReview({
-                        tag: reviewScope?.tag,
-                        type: reviewScope?.type,
-                        difficulty: reviewScope?.difficulty,
-                        cram,
-                    })}
+                onclick={() => {
+                    if (cram && openFlashcard) {
+                        openFlashcard(scopeItems);
+                    } else {
+                        onStartReview({
+                            tag: reviewScope?.tag,
+                            type: reviewScope?.type,
+                            difficulty: reviewScope?.difficulty,
+                        });
+                    }
+                }}
             >
                 {cram ? t("bank.cramBadge") + " · " : ""}{t("bank.reviewScope")}
             </Button>
-            <label class="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs" title={t("bank.cramModeHint")}>
+            <label
+                class="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs"
+                title={t("bank.cramModeHint")}
+            >
                 <input type="checkbox" class="accent-primary size-3.5" bind:checked={cram} />
                 {t("bank.cramMode")}
             </label>
