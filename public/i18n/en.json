@@ -686,5 +686,6 @@
     "err.raw.failed": "Copy failed — please select the text manually",
     "gen.plan.charsLabel": "Content length",
     "quiz.elapsed": "Elapsed {0}",
-    "bank.dueLine": "{0} of {1} questions are due — start reviewing now"
+    "bank.dueLine": "{0} of {1} questions are due — start reviewing now",
+    "flash.empty": "No questions to review"
 }
