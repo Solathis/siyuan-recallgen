@@ -143,6 +143,21 @@
         return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     }
 
+    /**
+     * 行内时间文案。
+     *
+     * 按日期分组时组标题已经写了日期，行内只需时刻；
+     * 按来源分组时组标题是「第三章」这类文档名，**没有日期**——
+     * 原先行内仍然只显示「11:24」，于是完全看不出这条记录是哪天做的。
+     */
+    function timeLabel(entry: ScoreIndexEntry): string {
+        const time = timeStr(entry.timestamp);
+        if (groupBy === "date") return time;
+        const d = new Date(entry.timestamp);
+        const date = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        return d.getFullYear() === new Date().getFullYear() ? `${date} ${time}` : `${d.getFullYear()}-${date} ${time}`;
+    }
+
     /** 分数配色：全部走主题语义色，避免硬编码在暗色主题下不可读 */
     function scoreClass(p: number): string {
         if (p >= 80) return "text-success";
@@ -314,7 +329,7 @@
                                         <div class="min-w-0">
                                             <div class="truncate text-sm font-medium" title={r.title}>{r.title}</div>
                                             <div class="text-muted-foreground text-xs">
-                                                {t("result.qCount", String(r.questionCount))} · {timeStr(r.timestamp)}
+                                                {t("result.qCount", String(r.questionCount))} · {timeLabel(r)}
                                             </div>
                                         </div>
                                         <div class="bg-muted h-1 w-full overflow-hidden rounded-full">
@@ -336,14 +351,19 @@
                                             <AlertDialog.Root>
                                                 <AlertDialog.Trigger>
                                                     {#snippet child({ props })}
+                                                        <!--
+                                                            aria-label / title 必须写在开始标签里：
+                                                            放在标签之后会被当成文本渲染出来，
+                                                            页面上会直接出现「aria-label=删除 title=删除」。
+                                                        -->
                                                         <Button
                                                             {...props}
                                                             variant="ghost"
                                                             size="sm"
                                                             disabled={deleting === r.id}
-                                                        >
                                                             aria-label={t("common.delete")}
                                                             title={t("common.delete")}
+                                                        >
                                                             ✕
                                                         </Button>
                                                     {/snippet}
@@ -389,15 +409,18 @@
                                     <span class="text-muted-foreground shrink-0 text-xs"
                                         >{t("result.qCount", String(r.questionCount))}</span
                                     >
-                                    <span class="text-muted-foreground shrink-0 text-xs">{timeStr(r.timestamp)}</span>
+                                    <span class="text-muted-foreground shrink-0 text-xs">{timeLabel(r)}</span>
                                     <AlertDialog.Root>
                                         <AlertDialog.Trigger>
                                             {#snippet child({ props })}
+                                                <!-- 列表视图原先没给图标按钮任何可访问名称 -->
                                                 <Button
                                                     {...props}
                                                     variant="ghost"
                                                     size="sm"
-                                                    disabled={deleting === r.id}>✕</Button
+                                                    disabled={deleting === r.id}
+                                                    aria-label={t("common.delete")}
+                                                    title={t("common.delete")}>✕</Button
                                                 >
                                             {/snippet}
                                         </AlertDialog.Trigger>
@@ -451,20 +474,25 @@
                                         </Table.Cell>
                                         <Table.Cell class="text-right">{r.questionCount}</Table.Cell>
                                         <Table.Cell class="text-muted-foreground text-right text-xs">
-                                            {timeStr(r.timestamp)}
+                                            {timeLabel(r)}
                                         </Table.Cell>
                                         <Table.Cell>
                                             <AlertDialog.Root>
                                                 <AlertDialog.Trigger>
                                                     {#snippet child({ props })}
+                                                        <!--
+                                                            aria-label / title 必须写在开始标签里：
+                                                            放在标签之后会被当成文本渲染出来，
+                                                            页面上会直接出现「aria-label=删除 title=删除」。
+                                                        -->
                                                         <Button
                                                             {...props}
                                                             variant="ghost"
                                                             size="sm"
                                                             disabled={deleting === r.id}
-                                                        >
                                                             aria-label={t("common.delete")}
                                                             title={t("common.delete")}
+                                                        >
                                                             ✕
                                                         </Button>
                                                     {/snippet}
