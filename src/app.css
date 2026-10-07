@@ -152,6 +152,15 @@
     --text-reading: 0.9375rem;
     --text-reading--line-height: inherit;
 
+    /*
+     * 等宽字体。
+     * 界面里有 8 处用了 font-mono（代码错误信息、语言标记、选项序号、提示词编辑框），
+     * 而不注册这个令牌时 Tailwind 会给它自己的默认字体栈，
+     * 与 .rg-markdown code 用的 --b3-font-family-code 是两套字体——
+     * 用户在思源里改了代码字体，只有笔记里的代码块会跟着变。
+     */
+    --font-mono: var(--b3-font-family-code, ui-monospace, SFMono-Regular, monospace);
+
     --radius-sm: var(--b3-border-radius-s, calc(var(--radius) - 2px));
     /* 常规容器、输入框、按钮 */
     --radius-md: var(--radius);
