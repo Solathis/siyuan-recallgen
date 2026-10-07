@@ -361,7 +361,13 @@ export class QuizSelector {
 }
 
 /** 收集笔记本下所有文档 ID；truncated 表示命中了数量上限 */
-async function collectDocIds(notebookId: string): Promise<{ ids: string[]; truncated: boolean }> {
+/**
+ * 收集笔记本下的文档 id。
+ *
+ * 导出是为了单测：这里的两条路径都有「静默少给内容」的风险——
+ * 命中上限必须如实报告 truncated，SQL 不可用时必须回退到文档树。
+ */
+export async function collectDocIds(notebookId: string): Promise<{ ids: string[]; truncated: boolean }> {
     const rows = await sql(
         `SELECT id FROM blocks WHERE box = ${quoteSqlLiteral(notebookId)} AND type = ${quoteSqlLiteral("d")} ORDER BY hpath ASC LIMIT ${MAX_DOCS_PER_NOTEBOOK + 1}`
     ).catch(() => null);
