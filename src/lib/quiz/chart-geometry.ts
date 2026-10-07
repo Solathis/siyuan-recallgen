@@ -187,6 +187,59 @@ export function timeTicks(timestamps: number[], count = 3): number[] {
     return Array.from({ length: count + 1 }, (_, i) => Math.round(first + ((last - first) / count) * i));
 }
 
+/** 时间轴刻度标签：横坐标 + 文本 */
+export interface TimeAxisLabel {
+    /** 对应的数据点下标；同一图上唯一，可直接作为 keyed each 的 key */
+    index: number;
+    x: number;
+    text: string;
+}
+
+/**
+ * 生成时间轴刻度标签。
+ *
+ * 关键点是按**数据点下标**去重：`timeTicks` 从首末时间戳等分出刻度，
+ * 当数据跨度很短（例如刚做了两三次练习）时，多个刻度会「吸」到同一个数据点上，
+ * 于是出现两个坐标完全相同的日期标签——既重复，
+ * 也会让 `{#each ... (label.x)}` 拿到重复 key（Svelte 直接报 key 重复）。
+ */
+export function timeAxisLabels(
+    timestamps: number[],
+    options: {
+        width: number;
+        paddingLeft: number;
+        paddingRight: number;
+        tickCount?: number;
+        format: (ts: number) => string;
+    }
+): TimeAxisLabel[] {
+    const { width, paddingLeft, paddingRight, tickCount = 3, format } = options;
+    if (timestamps.length === 0) return [];
+    const innerWidth = width - paddingLeft - paddingRight;
+    const seen = new Set<number>();
+    const labels: TimeAxisLabel[] = [];
+    for (const stamp of timeTicks(timestamps, tickCount)) {
+        const index = nearestIndex(timestamps, stamp);
+        if (seen.has(index)) continue;
+        seen.add(index);
+        const x =
+            timestamps.length === 1
+                ? paddingLeft + innerWidth / 2
+                : paddingLeft + (index / (timestamps.length - 1)) * innerWidth;
+        labels.push({ index, x, text: format(stamp) });
+    }
+    return labels;
+}
+
+/** 最接近目标时间戳的数据点下标 */
+export function nearestIndex(timestamps: number[], target: number): number {
+    let best = 0;
+    for (let i = 1; i < timestamps.length; i++) {
+        if (Math.abs(timestamps[i] - target) < Math.abs(timestamps[best] - target)) best = i;
+    }
+    return best;
+}
+
 /**
  * 从序列中均匀取出 k 个下标（含首末）。count <= k 时返回全部下标。
  */

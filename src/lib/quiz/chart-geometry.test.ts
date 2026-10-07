@@ -6,6 +6,7 @@ import {
     pickMarkerIndices,
     polar,
     ticks,
+    timeAxisLabels,
     timeTicks,
     uniformIndices,
 } from "./chart-geometry";
@@ -341,5 +342,53 @@ describe("ticks 的退化输入", () => {
     it("max 非正时返回 [0]", () => {
         expect(ticks(0)).toEqual([0]);
         expect(ticks(-10)).toEqual([0]);
+    });
+});
+
+describe("timeAxisLabels", () => {
+    const DAY = 86_400_000;
+    const opts = () => ({
+        width: 640,
+        paddingLeft: 34,
+        paddingRight: 12,
+        format: (ts: number) => {
+            const d = new Date(ts);
+            return `${d.getMonth() + 1}/${d.getDate()}`;
+        },
+    });
+    const mk = (timestamps: number[]) => timeAxisLabels(timestamps, opts());
+
+    it("跨度正常时给出多个刻度，横坐标互不相同", () => {
+        const stamps = Array.from({ length: 10 }, (_, i) => i * 7 * DAY);
+        const labels = mk(stamps);
+        expect(labels.length).toBeGreaterThan(1);
+        expect(new Set(labels.map((l) => l.x)).size).toBe(labels.length);
+    });
+
+    it("跨度很短时不会产生重复刻度（重复会撞 keyed each 的 key）", () => {
+        // 三次练习挤在三天内：三个刻度会全部吸到同一个/相邻数据点上
+        const stamps = [0, DAY, 2 * DAY];
+        const labels = mk(stamps);
+        expect(new Set(labels.map((l) => l.index)).size).toBe(labels.length);
+        expect(new Set(labels.map((l) => l.x)).size).toBe(labels.length);
+        expect(labels.length).toBeLessThanOrEqual(3);
+    });
+
+    it("单个数据点居中显示", () => {
+        const labels = mk([5 * DAY]);
+        expect(labels).toHaveLength(1);
+        expect(labels[0].x).toBeCloseTo(34 + (640 - 34 - 12) / 2);
+    });
+
+    it("无数据时返回空", () => {
+        expect(timeAxisLabels([], opts())).toEqual([]);
+    });
+
+    it("下标始终落在数据范围内", () => {
+        const stamps = [0, 3 * DAY, 40 * DAY];
+        for (const label of mk(stamps)) {
+            expect(label.index).toBeGreaterThanOrEqual(0);
+            expect(label.index).toBeLessThan(stamps.length);
+        }
     });
 });

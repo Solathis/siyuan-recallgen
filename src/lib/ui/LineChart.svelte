@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { lineGeometry, pickMarkerIndices, ticks, timeTicks } from "@/lib/quiz/chart-geometry";
+    import { lineGeometry, pickMarkerIndices, ticks, timeAxisLabels } from "@/lib/quiz/chart-geometry";
 
     /**
      * 得分率折线图（时间轴）。
@@ -40,29 +40,24 @@
         return padding.top + innerHeight - (value / 100) * innerHeight;
     }
 
-    /** 时间轴刻度需要落在真实数据点的横坐标上 */
-    const xLabels = $derived.by(() => {
-        if (data.length === 0) return [];
-        const stamps = data.map((d) => d.timestamp);
-        const innerWidth = width - padding.left - padding.right;
-        return timeTicks(stamps, 3).map((stamp) => {
-            const index = nearestIndex(stamps, stamp);
-            const x =
-                data.length === 1
-                    ? padding.left + innerWidth / 2
-                    : padding.left + (index / (data.length - 1)) * innerWidth;
-            const date = new Date(stamp);
-            return { x, text: `${date.getMonth() + 1}/${date.getDate()}` };
-        });
-    });
-
-    function nearestIndex(stamps: number[], target: number): number {
-        let best = 0;
-        for (let i = 1; i < stamps.length; i++) {
-            if (Math.abs(stamps[i] - target) < Math.abs(stamps[best] - target)) best = i;
-        }
-        return best;
-    }
+    /**
+     * 时间轴刻度：落在真实数据点的横坐标上，并按数据点下标去重
+     * （跨度很短时多个刻度会吸到同一个点上，重复标签会撞 key）。
+     */
+    const xLabels = $derived(
+        timeAxisLabels(
+            data.map((d) => d.timestamp),
+            {
+                width,
+                paddingLeft: padding.left,
+                paddingRight: padding.right,
+                format: (ts) => {
+                    const date = new Date(ts);
+                    return `${date.getMonth() + 1}/${date.getDate()}`;
+                },
+            }
+        )
+    );
 
     function fmtDate(ts: number): string {
         const d = new Date(ts);
@@ -100,7 +95,7 @@
     {/if}
 
     <!-- 时间轴刻度 -->
-    {#each xLabels as label (label.x)}
+    {#each xLabels as label (label.index)}
         <text x={label.x} y={baseline + 16} text-anchor="middle" class="fill-muted-foreground text-3xs">
             {label.text}
         </text>
