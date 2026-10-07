@@ -232,6 +232,24 @@
             <p class="text-muted-foreground text-xs">{t("settings.general.reviewLimitHint")}</p>
         </div>
 
+        <!-- 每日学习目标 -->
+        <div class="flex flex-col gap-1.5">
+            <Label for="rg-daily-goal">{t("settings.general.dailyGoal")}</Label>
+            <Input
+                id="rg-daily-goal"
+                type="number"
+                min="0"
+                max="500"
+                class="w-32"
+                value={config.general.dailyGoal}
+                onchange={(e) =>
+                    patchGeneral({
+                        dailyGoal: Math.min(500, Math.max(0, Math.round(Number(e.currentTarget.value) || 0))),
+                    })}
+            />
+            <p class="text-muted-foreground text-xs">{t("settings.general.dailyGoalHint")}</p>
+        </div>
+
         <!-- 存储位置 -->
         <div class="flex flex-col gap-2">
             <Label for="rg-storage">{t("settings.general.storageLocation")}</Label>

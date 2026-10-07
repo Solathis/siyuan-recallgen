@@ -98,6 +98,8 @@ export interface GeneralConfig {
      * 到期题目可能积累很多（例如停用一段时间后），一次全取出来会让会话过长、
      * 面板要渲染几十上百道题；给一个上限让每次复习保持在可完成的规模。
      */
+    /** 每日学习目标（题数，0 = 不设目标）。用于统计页的今日进度显示 */
+    dailyGoal: number;
     reviewLimit: number;
     /** 答题面板宽度（px） */
     panelWidth: number;
@@ -247,6 +249,7 @@ export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
     notebookId: "",
     extraScopePct: 20,
     reviewLimit: 20,
+    dailyGoal: 10,
     panelWidth: 1100,
     multipleChoicePolicy: "partial",
     presets: [],

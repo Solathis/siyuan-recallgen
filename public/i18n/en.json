@@ -238,6 +238,7 @@
     "stats.days": "{0} day(s)",
     "stats.longestStreak": "Longest {0} day(s)",
     "stats.perQuestion": "Time per question",
+    "stats.todayProgress": "Today",
     "stats.activeDays": "{0} active day(s)",
     "stats.trend": "Score trend",
     "stats.trendDesc": "Score percentage over time for each quiz",
@@ -605,6 +606,7 @@
     "stats.reviewTypeHint": "Review due questions of type \"{0}\"",
     "stats.reviewDifficultyHint": "Review due {0} questions",
     "settings.general.reviewLimitHint": "Upper bound on due questions taken per review session; 0 means no limit",
+    "settings.general.dailyGoal": "Daily goal (questions, 0 = off)",
     "result.submitErrorHint": "The score and review schedule were not written. Retry submitting or check your disk; the results below are still viewable",
     "quiz.nextFlaggedHint": "Jump to the next question flagged for review (disabled when none)",
     "quiz.nextUnansweredHint": "Jump to the next question you haven't answered (disabled when all answered)",
@@ -632,5 +634,7 @@
     "bank.tagDelete": "Delete",
     "bank.tagRenamePrompt": "Enter new name (leave empty to cancel)",
     "bank.tagAffected": "{0} question(s) updated",
-    "bank.tagConfirmDelete": "Delete tag \"{0}\"? This affects {1} question(s)"
+    "bank.tagConfirmDelete": "Delete tag \"{0}\"? This affects {1} question(s)",
+    "settings.general.dailyGoalHint": "The stats panel shows today's answered count vs your goal to help maintain momentum",
+    "stats.todayDone": "{0} / {1}"
 }

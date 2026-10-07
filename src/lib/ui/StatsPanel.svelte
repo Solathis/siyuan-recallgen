@@ -16,6 +16,8 @@
         type RangeDays,
     } from "../quiz/charts";
     import { scorePercent } from "../quiz/stats";
+    import { createClock } from "./clock.svelte";
+    import { dayKey } from "../quiz/charts";
     import type { HeatmapConfig, QuestionType, ScoreIndexEntry, Difficulty } from "@/types/quiz";
     import DonutChart from "./DonutChart.svelte";
     import Heatmap from "./Heatmap.svelte";
@@ -45,6 +47,17 @@
     const inRange = $derived(filterByRange(records, range));
     const summary = $derived(summarize(inRange));
     const trend = $derived(scoreTrend(inRange));
+    const clock = createClock();
+
+    /** 今天的日期键 */
+    const todayKey = $derived(dayKey(clock.now));
+    /** 今日交卷次数 */
+    const todayQuizCount = $derived(records.filter((r) => dayKey(r.timestamp) === todayKey).length);
+    /** 今日已答题目数 */
+    const todayQuestions = $derived(
+        records.filter((r) => dayKey(r.timestamp) === todayKey).reduce((sum, r) => sum + r.questionCount, 0)
+    );
+
     const byType = $derived(accuracyByType(inRange));
     const byDifficulty = $derived(accuracyByDifficulty(inRange));
     const distribution = $derived(scoreDistribution(inRange));
@@ -138,7 +151,7 @@
 
         <!-- 总览 -->
         <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {#each [{ label: t("stats.quizCount"), value: String(summary.quizCount), sub: t("stats.questionCount", String(summary.questionCount)) }, { label: t("stats.average"), value: pct(summary.averagePercent), sub: t("stats.best", pct(summary.bestPercent)) }, { label: t("stats.streak"), value: t("stats.days", String(summary.currentStreak)), sub: t("stats.longestStreak", String(summary.longestStreak)) }, { label: t("stats.perQuestion"), value: summary.secondsPerQuestion === null ? "--" : `${summary.secondsPerQuestion.toFixed(0)}s`, sub: t("stats.activeDays", String(summary.activeDays)) }] as item (item.label)}
+            {#each [{ label: t("stats.quizCount"), value: String(summary.quizCount), sub: t("stats.questionCount", String(summary.questionCount)) }, { label: t("stats.average"), value: pct(summary.averagePercent), sub: t("stats.best", pct(summary.bestPercent)) }, { label: t("stats.streak"), value: t("stats.days", String(summary.currentStreak)), sub: t("stats.longestStreak", String(summary.longestStreak)) }, { label: t("stats.perQuestion"), value: summary.secondsPerQuestion === null ? "--" : `${summary.secondsPerQuestion.toFixed(0)}s`, sub: t("stats.activeDays", String(summary.activeDays)) }, { label: t("stats.todayProgress"), value: String(todayQuizCount), sub: t("stats.todayDone", String(todayQuestions), "—") }] as item (item.label)}
                 <Card.Root>
                     <Card.Content class="flex flex-col gap-0.5 pt-4">
                         <span class="text-xl font-bold">{item.value}</span>
