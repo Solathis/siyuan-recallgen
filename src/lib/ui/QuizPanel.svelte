@@ -40,11 +40,16 @@
     import * as Card from "@/lib/components/ui/card";
     import { describeError, type ErrorDescription } from "../ai/errors";
     import { isAbortError } from "../ai/client";
+    import { copyText } from "./clipboard";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
+    import { planBatches } from "../quiz/batching";
+    import type { GenPhase, GenStats } from "../quiz/generator";
     import { PASS_SCORE } from "@/types/quiz";
+    import type { AIProtocol } from "@/types/config";
     import type { GradingResult, PanelState, QuizSession, UserAnswer } from "@/types/quiz";
+    import GenPlan from "./GenPlan.svelte";
     import ProgressBar from "./ProgressBar.svelte";
     import QuestionView from "./QuestionView.svelte";
     import ResultPanel from "./ResultPanel.svelte";
@@ -84,6 +89,53 @@
     let abortCtrl: AbortController | null = null;
     let cancelled = false;
 
+    /* ── 生成过程信息展示 ────────────────────────────────────────── */
+
+    /** 生成过程的实时快照（阶段/批次/已收集/已丢弃），由生成器回调推送 */
+    let genStats = $state<GenStats | null>(null);
+    /** 「已用时」按开始时间戳算，避免 setInterval 被后台节流后走慢 */
+    let genStartedAt: number | null = null;
+    let genElapsed = $state(0);
+    let genTimer: ReturnType<typeof setInterval> | undefined;
+
+    function beginGenTimer(): void {
+        stopGenTimer();
+        genStats = null;
+        genElapsed = 0;
+        genStartedAt = Date.now();
+        genTimer = setInterval(() => {
+            if (genStartedAt !== null) genElapsed = Math.floor((Date.now() - genStartedAt) / 1000);
+        }, 500);
+    }
+
+    function stopGenTimer(): void {
+        if (genTimer !== undefined) clearInterval(genTimer);
+        genTimer = undefined;
+        genStartedAt = null;
+    }
+
+    /**
+     * 生成阶段名。
+     * 用显式 t() 而不是查表：字典死键检查靠扫描 t() 调用里的字符串字面量，
+     * 放进对象字面量里会被判成「没人用的键」。
+     */
+    function phaseLabel(phase: GenPhase): string {
+        if (phase === "reviewing") return t("gen.phase.reviewing");
+        if (phase === "regenerating") return t("gen.phase.regenerating");
+        return t("gen.phase.generating");
+    }
+
+    function protocolLabel(protocol: AIProtocol | undefined): string {
+        if (protocol === "responses") return "Responses API";
+        if (protocol === "messages") return "Messages API";
+        return "Chat Completions";
+    }
+
+    async function copyRaw(text: string): Promise<void> {
+        const ok = await copyText(text);
+        showMessage(ok ? t("err.raw.copied") : t("err.raw.failed"), ok ? 2000 : 6000, ok ? "info" : "error");
+    }
+
     /** 开始一轮新的生成/取题：先中止上一轮，再新建信号 */
     function beginRun(): AbortSignal {
         abortCtrl?.abort();
@@ -112,6 +164,21 @@
     }
     let config = $state(currentConfig());
     $effect(() => service.subscribeConfig((next) => (config = next)));
+
+    /* ── 出题计划展示用的派生值（依赖 config，必须声明在它之后）──────── */
+
+    const genModel = $derived(config.ai.models.find((m) => m.id === config.ai.roles.generator));
+    const genModelName = $derived(genModel?.name ?? "");
+    // 协议挂在端点上，不在模型上
+    const genProtocol = $derived(
+        protocolLabel(config.ai.endpoints.find((ep) => ep.id === genModel?.endpointId)?.protocol)
+    );
+    const reviewerName = $derived(
+        config.ai.roles.reviewer
+            ? (config.ai.models.find((m) => m.id === config.ai.roles.reviewer)?.name ?? null)
+            : null
+    );
+    const plannedBatches = $derived(Math.max(1, planBatches(config.general.difficulty).length));
 
     const questions = $derived(session?.questions ?? []);
     const answeredCount = $derived(questions.filter((q) => !!session?.answers[q.id]).length);
@@ -219,6 +286,7 @@
         window.removeEventListener("keydown", onKeydown);
         if (saveTimer) clearTimeout(saveTimer);
         stopCountdown();
+        stopGenTimer();
     });
 
     onMount(() => {
@@ -410,6 +478,7 @@
         panelState = "loading_generating";
         progressValue = null;
         progressLabel = t("quiz.loadingNotes");
+        beginGenTimer();
         try {
             const loaded = await service.loadDateRangeContent(
                 dateCfg,
@@ -426,6 +495,8 @@
             if (cancelled || isAbortError(e)) return;
             error = describeError(e);
             panelState = "configuring";
+        } finally {
+            stopGenTimer();
         }
     }
 
@@ -450,12 +521,15 @@
         panelState = "loading_generating";
         progressValue = null;
         progressLabel = t("quiz.generating");
+        beginGenTimer();
         try {
             const generated = await service.generate(
                 tabData.content ?? "",
-                (phase, round, detail) => {
+                (phase, round, detail, stats) => {
                     progressLabel = detail;
                     progressValue = phase === "generating" ? null : round * 30;
+                    // 生成器每批都会推送一次快照，界面据此显示「已收集 N 题 / 第 i/n 批」
+                    if (stats) genStats = stats;
                 },
                 signal
             );
@@ -490,6 +564,8 @@
             if (cancelled || isAbortError(e)) return;
             error = describeError(e);
             panelState = "answering";
+        } finally {
+            stopGenTimer();
         }
     }
 
@@ -842,24 +918,17 @@
                         </Card.Description>
                     </Card.Header>
                     <Card.Content class="flex flex-col gap-5">
-                        <!-- 出题设置摘要：让用户在生成前确认题型/难度/题量 -->
-                        <div class="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md border p-2.5">
-                            <span class="text-muted-foreground text-2xs font-semibold uppercase tracking-wide">
-                                {t("quiz.configSummary")}
-                            </span>
-                            <div class="flex flex-wrap gap-1.5">
-                                {#each config.general.allowedTypes as type (type)}
-                                    <Badge variant="secondary" class="text-2xs">{t(`type.${type}_short`)}</Badge>
-                                {/each}
-                            </div>
-                            <div class="text-muted-foreground flex w-full flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                                <span>{t("quiz.configTotal", String(config.general.difficulty.total))}</span>
-                                <span>{t("quiz.configEasy", String(config.general.difficulty.easy))}</span>
-                                <span>{t("quiz.configMedium", String(config.general.difficulty.medium))}</span>
-                                <span>{t("quiz.configHard", String(config.general.difficulty.hard))}</span>
-                                <span>{t("quiz.configExtraScope", String(config.general.extraScopePct))}</span>
-                            </div>
-                        </div>
+                        <!-- 出题计划：让用户在生成前确认题型/难度/模型/结构化输出 -->
+                        <GenPlan
+                            sourceTitle={tabData.sourceTitle}
+                            difficulty={config.general.difficulty}
+                            types={config.general.allowedTypes}
+                            batches={plannedBatches}
+                            modelName={genModelName}
+                            protocol={genProtocol}
+                            structured={config.ai.jsonSchemaEnabled}
+                            reviewer={reviewerName}
+                        />
 
                         <!-- 日期范围 -->
                         {#if tabData.dateRange === "beforeToday"}
@@ -908,19 +977,88 @@
                 </Card.Root>
             </div>
         {:else if panelState === "loading_generating" || panelState === "loading_grading"}
-            <div class="flex flex-col items-center justify-center gap-4 px-6 py-20">
-                <ProgressBar value={progressValue} label={progressLabel} />
+            <div class="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-10">
+                <div class="flex flex-col gap-3 rounded-lg border p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h3 class="text-sm font-semibold">
+                            {panelState === "loading_generating" ? t("gen.progress.title") : progressLabel}
+                        </h3>
+                        {#if panelState === "loading_generating"}
+                            <span class="text-muted-foreground text-xs">
+                                {t("gen.progress.elapsed")}
+                                {t("gen.progress.seconds", String(genElapsed))}
+                            </span>
+                        {/if}
+                    </div>
+
+                    <ProgressBar value={progressValue} label={progressLabel} />
+
+                    {#if panelState === "loading_generating"}
+                        <!-- 实时信息：光看进度条不知道「生成到哪了、有没有丢题」 -->
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+                            <div class="flex flex-col gap-0.5">
+                                <span class="text-muted-foreground">{t("gen.stat.phase")}</span>
+                                <span class="font-medium">
+                                    {genStats ? phaseLabel(genStats.phase) : t("gen.phase.generating")}
+                                </span>
+                            </div>
+                            <div class="flex flex-col gap-0.5">
+                                <span class="text-muted-foreground">{t("gen.stat.batch")}</span>
+                                <span class="font-medium">
+                                    {t(
+                                        "gen.stat.batchValue",
+                                        String(genStats?.batch ?? 1),
+                                        String(genStats?.batches ?? plannedBatches)
+                                    )}
+                                </span>
+                            </div>
+                            <div class="flex flex-col gap-0.5">
+                                <span class="text-muted-foreground">{t("gen.stat.collected")}</span>
+                                <span class="font-medium">
+                                    {genStats?.collected ?? 0}
+                                    <span class="text-muted-foreground font-normal">
+                                        / {genStats?.target ?? config.general.difficulty.total}
+                                    </span>
+                                </span>
+                            </div>
+                            <div class="flex flex-col gap-0.5">
+                                <span class="text-muted-foreground">{t("gen.stat.dropped")}</span>
+                                <span class="font-medium">{genStats?.dropped ?? 0}</span>
+                            </div>
+                        </div>
+
+                        {#if genStats?.note}
+                            <p class="text-warning text-xs">{genStats.note}</p>
+                        {/if}
+                        <p class="text-muted-foreground text-2xs">{t("gen.progress.phases", "3")}</p>
+
+                        <div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onclick={() => {
+                                    abortRun();
+                                    closeTab();
+                                }}
+                            >
+                                {t("quiz.cancelGenerate")}
+                            </Button>
+                        </div>
+                    {/if}
+                </div>
+
                 {#if panelState === "loading_generating"}
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onclick={() => {
-                            abortRun();
-                            closeTab();
-                        }}
-                    >
-                        {t("quiz.cancelGenerate")}
-                    </Button>
+                    <GenPlan
+                        sourceTitle={tabData.sourceTitle}
+                        chars={tabData.content?.length ?? 0}
+                        difficulty={config.general.difficulty}
+                        types={config.general.allowedTypes}
+                        batches={plannedBatches}
+                        modelName={genModelName}
+                        protocol={genProtocol}
+                        structured={config.ai.jsonSchemaEnabled}
+                        reviewer={reviewerName}
+                    />
                 {/if}
             </div>
         {:else if panelState === "answering"}
@@ -930,6 +1068,25 @@
                     <pre
                         class="bg-muted text-muted-foreground max-h-32 w-full overflow-auto rounded-md p-3 text-left text-xs">{error.detail}</pre>
                     <p class="text-muted-foreground text-sm">{error.hint}</p>
+                    {#if error.raw}
+                        <!-- 解析类失败只看一句报错无从排查：把模型原文摊开，能直接看出是截断还是形状不对 -->
+                        <details class="bg-muted/40 w-full rounded-md border p-3 text-left">
+                            <summary class="text-muted-foreground cursor-pointer text-xs font-medium">
+                                {t("err.raw.title")}
+                                <span class="text-2xs">（{error.raw.length} 字符）</span>
+                            </summary>
+                            <pre
+                                class="text-muted-foreground mt-2 max-h-60 overflow-auto text-2xs break-all whitespace-pre-wrap">{error.raw}</pre>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                class="mt-2"
+                                onclick={() => void copyRaw(error?.raw ?? "")}
+                            >
+                                {t("err.raw.copy")}
+                            </Button>
+                        </details>
+                    {/if}
                     <Button onclick={() => void retry()}>{t("common.retry")}</Button>
                 </div>
             {:else if questions.length === 0}

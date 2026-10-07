@@ -1,11 +1,13 @@
 import { AIError } from "./client";
 import { t } from "@/lib/i18n";
 
-/** 面向用户的错误说明：标题 + 可操作建议 + 原始信息 */
+/** 面向用户的错误说明：标题 + 可操作建议 + 原始信息 + 模型/服务端返回原文 */
 export interface ErrorDescription {
     title: string;
     hint: string;
     detail: string;
+    /** 模型或服务端返回的原文；有值时界面提供展开与复制，便于排查 */
+    raw?: string;
 }
 
 /**
@@ -17,28 +19,30 @@ export interface ErrorDescription {
  */
 export function describeError(error: unknown): ErrorDescription {
     const detail = error instanceof Error ? error.message : String(error);
+    const raw = error instanceof AIError ? error.raw : undefined;
+    const withRaw = (d: Omit<ErrorDescription, "raw">): ErrorDescription => (raw ? { ...d, raw } : d);
 
     if (error instanceof AIError) {
         switch (error.kind) {
             case "config":
-                return { title: t("err.config.title"), hint: t("err.config.hint"), detail };
+                return withRaw({ title: t("err.config.title"), hint: t("err.config.hint"), detail });
             case "timeout":
-                return { title: t("err.timeout.title"), hint: t("err.timeout.hint"), detail };
+                return withRaw({ title: t("err.timeout.title"), hint: t("err.timeout.hint"), detail });
             case "parse":
-                return { title: t("err.json.title"), hint: t("err.json.hint"), detail };
+                return withRaw({ title: t("err.json.title"), hint: t("err.json.hint"), detail });
             case "network":
                 // 不把 kind 名当参数塞进标题：之前会显示成「网络错误（network）」
-                return { title: t("err.network.title"), hint: t("err.network.hint"), detail };
+                return withRaw({ title: t("err.network.title"), hint: t("err.network.hint"), detail });
             case "truncated":
-                return { title: t("err.truncated.title"), hint: t("err.truncated.hint"), detail };
+                return withRaw({ title: t("err.truncated.title"), hint: t("err.truncated.hint"), detail });
             case "aborted":
-                return { title: t("err.aborted.title"), hint: t("err.aborted.hint"), detail };
+                return withRaw({ title: t("err.aborted.title"), hint: t("err.aborted.hint"), detail });
             case "http":
-                return describeHttp(error.status, detail);
+                return withRaw(describeHttp(error.status, detail));
         }
     }
 
-    return { title: t("err.generic.title"), hint: t("err.generic.hint"), detail };
+    return withRaw({ title: t("err.generic.title"), hint: t("err.generic.hint"), detail });
 }
 
 /** 按 HTTP 状态码给出针对性建议 */
