@@ -1105,7 +1105,7 @@
                         <details class="bg-muted/40 w-full rounded-md border p-3 text-left">
                             <summary class="text-muted-foreground cursor-pointer text-xs font-medium">
                                 {t("err.raw.title")}
-                                <span class="text-2xs">（{error.raw.length} 字符）</span>
+                                <span class="text-2xs">{t("err.raw.size", String(error.raw.length))}</span>
                             </summary>
                             <pre
                                 class="text-muted-foreground mt-2 max-h-60 overflow-auto text-2xs break-all whitespace-pre-wrap">{error.raw}</pre>

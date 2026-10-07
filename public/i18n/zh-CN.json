@@ -687,5 +687,6 @@
     "gen.plan.charsLabel": "内容长度",
     "quiz.elapsed": "已用时 {0}",
     "bank.dueLine": "共 {1} 题中有 {0} 题已到期，可立即开始复习",
-    "flash.empty": "没有可复习的题目"
+    "flash.empty": "没有可复习的题目",
+    "err.raw.size": "（{0} 字符）"
 }
