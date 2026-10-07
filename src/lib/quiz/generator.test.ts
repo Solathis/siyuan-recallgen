@@ -717,3 +717,81 @@ describe("生成进度快照", () => {
         __resetFetchSyncPost();
     });
 });
+
+describe("分批生成的并发度", () => {
+    const q = (n: number) => ({ type: "true_false", difficulty: "easy", question: `第 ${n} 题`, answer: true });
+    const reply = (questions: unknown[]) => ({
+        code: 0,
+        msg: "",
+        data: {
+            body: JSON.stringify({
+                choices: [{ message: { content: JSON.stringify({ questions }) }, finish_reason: "stop" }],
+            }),
+            status: 200,
+            contentType: "application/json",
+            headers: null,
+            elapsed: 1,
+            url: "",
+        },
+    });
+    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    /** 30 题会拆成 3 批；每批都给 1 题，于是还有一轮补题 */
+    const config30 = () => {
+        const config = getDefaultConfig();
+        config.general.difficulty = { total: 30, easy: 30, medium: 0, hard: 0 };
+        config.general.allowedTypes = ["true_false"];
+        config.ai.roles.reviewer = "";
+        return config;
+    };
+
+    it("多批同时发出：总耗时接近单批，而不是各批之和", { timeout: 30_000 }, async () => {
+        const PER_CALL_MS = 120;
+        let inFlight = 0;
+        let maxInFlight = 0;
+        let calls = 0;
+        __setFetchSyncPost(async () => {
+            calls++;
+            inFlight++;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            await delay(PER_CALL_MS);
+            inFlight--;
+            return reply([q(calls)]);
+        });
+
+        const started = Date.now();
+        const questions = await generateQuestions(config30(), "笔记内容");
+        const elapsed = Date.now() - started;
+        __resetFetchSyncPost();
+
+        expect(calls).toBeGreaterThanOrEqual(3);
+        // 串行时总耗时 ≈ 调用数 × 单次耗时；并发后应明显更短
+        expect(maxInFlight, "应有多批同时在飞").toBeGreaterThan(1);
+        expect(elapsed).toBeLessThan(PER_CALL_MS * calls * 0.75);
+        expect(questions.length).toBeGreaterThan(0);
+    });
+
+    it("并发完成后题目顺序仍与规划一致（保序合并）", { timeout: 30_000 }, async () => {
+        // 让后发的批次先返回，检验是否按槽位而不是按完成顺序合并
+        const answers = new Map<number, number>();
+        let calls = 0;
+        __setFetchSyncPost(async () => {
+            calls++;
+            const mine = calls;
+            // 第 1 批最慢、第 3 批最快
+            await delay(mine === 1 ? 120 : mine === 2 ? 60 : 10);
+            return reply([{ ...q(mine), question: `批 ${mine} 的题` }]);
+        });
+        const config = config30();
+        // 只保留首次生成，避免补题轮干扰顺序断言
+        config.general.difficulty = { total: 24, easy: 24, medium: 0, hard: 0 };
+        const questions = await generateQuestions(config, "笔记内容");
+        __resetFetchSyncPost();
+        void answers;
+
+        const texts = questions.map((x) => x.question);
+        expect(texts[0]).toBe("批 1 的题");
+        // 首批的题必须排在第二批之前，即使它更晚返回
+        if (texts.length > 1) expect(texts[1]).toBe("批 2 的题");
+    });
+});

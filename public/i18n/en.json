@@ -688,5 +688,7 @@
     "quiz.elapsed": "Elapsed {0}",
     "bank.dueLine": "{0} of {1} questions are due — start reviewing now",
     "flash.empty": "No questions to review",
-    "err.raw.size": "({0} chars)"
+    "err.raw.size": "({0} chars)",
+    "gen.parallelBatches": "Generating {0} batches in parallel ({1} questions)…",
+    "gen.parallelProgress": "{0}/{1} batches done, {2} questions collected"
 }
