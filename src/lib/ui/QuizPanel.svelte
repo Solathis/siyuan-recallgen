@@ -41,6 +41,7 @@
     import { describeError, type ErrorDescription } from "../ai/errors";
     import { isAbortError } from "../ai/client";
     import { copyText } from "./clipboard";
+    import { formatClock } from "./duration";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
@@ -123,6 +124,26 @@
         if (phase === "reviewing") return t("gen.phase.reviewing");
         if (phase === "regenerating") return t("gen.phase.regenerating");
         return t("gen.phase.generating");
+    }
+
+    /* ── 答题用时 ────────────────────────────────────────────────── */
+
+    let answerStartedAt = $state<number | null>(null);
+    let answerElapsed = $state(0);
+    let answerTimer: ReturnType<typeof setInterval> | undefined;
+
+    function beginAnswerTimer(): void {
+        stopAnswerTimer();
+        answerStartedAt = Date.now();
+        answerElapsed = 0;
+        answerTimer = setInterval(() => {
+            if (answerStartedAt !== null) answerElapsed = Math.floor((Date.now() - answerStartedAt) / 1000);
+        }, 1000);
+    }
+
+    function stopAnswerTimer(): void {
+        if (answerTimer !== undefined) clearInterval(answerTimer);
+        answerTimer = undefined;
     }
 
     function protocolLabel(protocol: AIProtocol | undefined): string {
@@ -275,7 +296,7 @@
         goToQuestion(next);
     }
 
-    const countdownText = $derived(`${Math.floor(countdownLeft / 60)}:${String(countdownLeft % 60).padStart(2, "0")}`);
+    const countdownText = $derived(formatClock(countdownLeft));
 
     /* ── 生命周期 ────────────────────────────────────────────────── */
 
@@ -287,6 +308,17 @@
         if (saveTimer) clearTimeout(saveTimer);
         stopCountdown();
         stopGenTimer();
+        stopAnswerTimer();
+    });
+
+    /**
+     * 进入答题状态就开始计时，离开就停。
+     * 放在 effect 里而不是各个入口分别调用：恢复会话、按日期出题、复习到期
+     * 都会进入 answering，逐个添加迟早会漏掉一个。
+     */
+    $effect(() => {
+        if (panelState === "answering" && questions.length > 0) beginAnswerTimer();
+        else stopAnswerTimer();
     });
 
     onMount(() => {
@@ -907,7 +939,7 @@
 <div bind:this={rootEl} class="flex h-full flex-col" style="--rg-panel-width: {config.general.panelWidth}px">
     <div class="mx-auto flex h-full w-full flex-col px-4" style="max-width: var(--rg-panel-width, 1100px)">
         {#if panelState === "configuring"}
-            <div class="flex justify-center px-2 py-8">
+            <div class="flex min-h-0 flex-1 justify-center overflow-y-auto px-2 py-8">
                 <Card.Root class="w-full max-w-xl">
                     <Card.Header>
                         <Card.Title>{t("quiz.dateConfigTitle")}</Card.Title>
@@ -1094,10 +1126,8 @@
                 <div class="text-muted-foreground py-20 text-center text-sm">{t("quiz.emptySession")}</div>
             {:else}
                 <header class="border-border flex shrink-0 flex-wrap items-center justify-between gap-2 border-b py-2">
+                    <!-- 已答数量下面的进度条与底部交卷栏都在显示，这里不再重复一遍 -->
                     <div class="flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary">
-                            {t("quiz.answered", String(answeredCount), String(questions.length))}
-                        </Badge>
                         {#if unansweredIndices.length > 0}
                             <Button
                                 variant="outline"
@@ -1150,7 +1180,6 @@
                             →
                         </Button>
                         <Button variant="outline" size="sm" onclick={askRegenerate}>{t("quiz.regenerate")}</Button>
-                        <Button variant="destructive" size="sm" onclick={askSubmit}>{t("quiz.submit")}</Button>
                     </div>
                 </header>
 
@@ -1158,17 +1187,9 @@
                     <ProgressBar value={progressPct} label={t("quiz.progress", answeredText)} />
                 </div>
 
-                <!-- 吸底交卷栏：长试卷不用滚到底才能交卷 -->
-                <div
-                    class="border-border bg-background/95 sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t px-1 py-2 backdrop-blur-sm"
-                >
-                    <span class="text-muted-foreground text-xs">{answeredText}</span>
-                    <Button variant="destructive" size="sm" onclick={askSubmit}>{t("quiz.submit")}</Button>
-                </div>
-
                 <!-- 题号导航：长试卷时不必靠滚动找题；已答/未答一眼可见 -->
                 <div
-                    class="flex flex-wrap items-center gap-1.5 px-1 pt-2"
+                    class="flex flex-wrap items-center gap-1.5 px-1 pb-2"
                     role="group"
                     aria-label={t("quiz.navLabel")}
                     title={t("quiz.shortcutHint")}
@@ -1238,6 +1259,26 @@
                         {/each}
                     </div>
                 </div>
+
+                <!--
+                    交卷栏固定在面板底部：它是 flex 列的最后一个子项、
+                    而滚动发生在上面那个题目列表内部，所以始终可见。
+                    原实现把它写成 `sticky bottom-0` 且放在题号导航之前，
+                    结果它停在进度条下方（滚不动也就吸不了底），
+                    交卷按钮在页面顶部出现两次，长试卷滚到底也看不到交卷栏。
+                -->
+                <div
+                    class="border-border bg-background/95 flex shrink-0 items-center justify-between gap-2 border-t px-1 py-2"
+                >
+                    <div class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+                        <span>{t("quiz.answered", String(answeredCount), String(questions.length))}</span>
+                        {#if flaggedCount > 0}
+                            <span class="text-warning">{t("quiz.flaggedCount", String(flaggedCount))}</span>
+                        {/if}
+                        <span>{t("quiz.elapsed", formatClock(answerElapsed))}</span>
+                    </div>
+                    <Button variant="destructive" size="sm" onclick={askSubmit}>{t("quiz.submit")}</Button>
+                </div>
             {/if}
         {:else if panelState === "result"}
             {#if error && !results}
@@ -1249,22 +1290,29 @@
                     <Button onclick={() => void submit()}>{t("err.retryGrade")}</Button>
                 </div>
             {:else if results && session}
-                <ResultPanel
-                    {service}
-                    {results}
-                    questions={session.questions}
-                    {analysis}
-                    {analysisError}
-                    {submitError}
-                    sourceDocId={session.sourceDocId}
-                    sourceTitle={session.sourceTitle}
-                    {duration}
-                    onsave={() => void saveToDoc(false)}
-                    onsavewrong={() => void saveToDoc(true)}
-                    {savingDoc}
-                    onretrywrong={retryWrong}
-                    ondiscard={closeTab}
-                />
+                <!--
+                    结果页自己滚动：它是最长的页面，原先直接挂在 h-full 的列里，
+                    能否滚到只取决于外层容器（思源 tab 体）的 overflow，
+                    遇到裁剪型容器就会出现「一键出结果但看不到按钮」。
+                -->
+                <div class="min-h-0 flex-1 overflow-y-auto">
+                    <ResultPanel
+                        {service}
+                        {results}
+                        questions={session.questions}
+                        {analysis}
+                        {analysisError}
+                        {submitError}
+                        sourceDocId={session.sourceDocId}
+                        sourceTitle={session.sourceTitle}
+                        {duration}
+                        onsave={() => void saveToDoc(false)}
+                        onsavewrong={() => void saveToDoc(true)}
+                        {savingDoc}
+                        onretrywrong={retryWrong}
+                        ondiscard={closeTab}
+                    />
+                </div>
             {/if}
         {/if}
     </div>

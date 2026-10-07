@@ -41,6 +41,15 @@
 
     /* ── 单选题 / 多选题 / 判断题 ─────────────────────────────────── */
 
+    /**
+     * 选项序号（A/B/C…）。
+     * 解析里经常写「选项 B 错在…」，而界面原先只有一排单选圈，
+     * 用户得自己数到第几个；标上序号才能对上号。
+     */
+    function optionLetter(index: number): string {
+        return String.fromCharCode(65 + index);
+    }
+
     const singleValue = $derived(answer?.type === "single_choice" ? answer.value : null);
     const multiValue = $derived(answer?.type === "multiple_choice" ? answer.value : []);
     const boolValue = $derived(answer?.type === "true_false" ? answer.value : null);
@@ -243,6 +252,7 @@
                         checked={singleValue === i}
                         onchange={() => setSingle(i)}
                     />
+                    <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs">{optionLetter(i)}</span>
                     <span class="rg-markdown min-w-0">{@html optionMarkup}</span>
                 </label>
             {/each}
@@ -262,6 +272,7 @@
                         checked={multiValue.includes(i)}
                         onchange={() => toggleMulti(i)}
                     />
+                    <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs">{optionLetter(i)}</span>
                     <span class="rg-markdown min-w-0">{@html optionMarkup}</span>
                 </label>
             {/each}

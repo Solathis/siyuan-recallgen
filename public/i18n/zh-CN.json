@@ -684,5 +684,6 @@
     "err.raw.copy": "复制",
     "err.raw.copied": "已复制到剪贴板",
     "err.raw.failed": "复制失败，请手动选中文本复制",
-    "gen.plan.charsLabel": "内容长度"
+    "gen.plan.charsLabel": "内容长度",
+    "quiz.elapsed": "已用时 {0}"
 }
