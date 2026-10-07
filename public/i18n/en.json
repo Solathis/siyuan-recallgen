@@ -118,6 +118,7 @@
     "bank.sessionTitle": "Due review ({0} questions)",
     "bank.noDueTitle": "Nothing is due right now",
     "bank.noDueHint": "Take a few quizzes first; questions become due here over time",
+    "bank.cramEmpty": "The bank is empty. Generate some quizzes first to add questions",
     "bank.noDueDetail": "The bank schedules each question with the FSRS spaced-repetition algorithm: correct answers lengthen the interval, wrong answers bring it back soon.",
     "quiz.generating": "AI is generating questions…",
     "quiz.loadingNotes": "Loading note content…",

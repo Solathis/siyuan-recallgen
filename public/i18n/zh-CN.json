@@ -118,6 +118,7 @@
     "bank.sessionTitle": "到期复习（{0} 题）",
     "bank.noDueTitle": "当前没有到期题目",
     "bank.noDueHint": "先做几套复习题，之后到期的题目会自动出现在这里",
+    "bank.cramEmpty": "题库里还没有题目，先通过出题功能往题库里加几道题",
     "bank.noDueDetail": "题库会按 FSRS 间隔重复算法安排每道题的复习时间：答对后间隔变长，答错则很快再次出现。",
     "quiz.generating": "AI 正在生成题目…",
     "quiz.loadingNotes": "正在加载笔记内容…",

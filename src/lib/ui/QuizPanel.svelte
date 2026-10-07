@@ -306,7 +306,9 @@
                           ? t("bank.noTypeQuestions", t(`type.${type}`))
                           : difficulty
                             ? t("bank.noDifficultyQuestions", t(`diff.${difficulty}`))
-                            : t("bank.noDueHint"),
+                            : cram
+                              ? t("bank.cramEmpty")
+                              : t("bank.noDueHint"),
                     detail: t("bank.noDueDetail"),
                 };
                 panelState = "answering";
