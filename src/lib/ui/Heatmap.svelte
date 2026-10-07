@@ -308,10 +308,24 @@
     </div>
 
     <div class="flex gap-1">
-        <!-- 星期标签 -->
-        <div class="py-px text-3xs leading-none text-muted-foreground">
+        <!--
+            星期标签。
+            顶部必须补一个与右侧月份行等高的占位：月份行在滚动容器内部，
+            而这一列在它外面，不补占位整列标签会整体上移一行，
+            于是「三」实际指向周二那一行（实测偏差 18px = 月份行高度）。
+        -->
+        <div class="text-3xs leading-none text-muted-foreground">
+            <!-- 结构与右侧月份行逐字相同，高度才能由同一套类保证一致 -->
+            <div class="flex gap-1 pb-1 text-3xs leading-none" aria-hidden="true">
+                <span class="shrink-0" style="width: {CELL}px">&nbsp;</span>
+            </div>
+            <!--
+                行距必须与格子列的 gap-1 同源（0.25rem）。原先写死 margin-bottom: 4px，
+                而格子用的是 rem 单位（插件基准字号下是 3.25px），每行差 0.75px，
+                七行下来最后一行的「日」会偏出 5px。
+            -->
             {#each weekdayLabels as label, i (i)}
-                <div class="flex items-center" style="height: {CELL}px; margin-bottom: 4px">{label}</div>
+                <div class="mb-1 flex items-center" style="height: {CELL}px">{label}</div>
             {/each}
         </div>
 
@@ -319,8 +333,14 @@
         <div class="min-w-0 flex-1 overflow-x-auto" role="group" aria-label={t("heatmap.ariaLabel")} bind:this={listEl}>
             <div class="w-max">
                 <div class="flex gap-1 pb-1 text-3xs leading-none text-muted-foreground">
+                    <!--
+                        标签盒宽只有一格（CELL），必须禁止换行：否则「10月」会在
+                        数字与「月」之间折成两行（CJK 可在任意字符间断行），
+                        整行因此从 11px 变成 20px，把左侧星期标签挤得整体上移一行。
+                        溢出到右侧空白列是预期的（月份之间隔约 4 列）。
+                    -->
                     {#each monthLabels as label, i (i)}
-                        <span class="shrink-0" style="width: {CELL}px">{label}</span>
+                        <span class="shrink-0 whitespace-nowrap" style="width: {CELL}px">{label}</span>
                     {/each}
                 </div>
                 <div class="flex gap-1">
@@ -352,7 +372,9 @@
                                         onblur={onLeave}
                                         onclick={() => {
                                             onEnter(cell);
-                                            if (onDayClick && cell.date) onDayClick(cell.date);
+                                            // 只在当天有记录时才跳转：空的日期点进去是一份空列表，
+                                            // 用户还得再清一次筛选（与 onDayClick 的说明一致）
+                                            if (onDayClick && cell.date && cell.count > 0) onDayClick(cell.date);
                                         }}
                                         onkeydown={(e) => onCellKeydown(e, colIndex, rowIndex)}
                                     ></button>
