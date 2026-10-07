@@ -103,8 +103,9 @@ describe("Tailwind data-* 变体与 bits-ui 输出属性的一致性", () => {
             if (selfSet.has(attr) || emitted.has(attr) || bridged.has(variant)) continue;
             unresolved.push(`${variant} (属性 ${attr}) 出现在 ${[...files].join(", ")}`);
         }
-        expect(unresolved, `以下变体没有任何元素会输出对应属性，样式永远不会生效：\n${unresolved.join("\n")}`)
-            .toEqual([]);
+        expect(unresolved, `以下变体没有任何元素会输出对应属性，样式永远不会生效：\n${unresolved.join("\n")}`).toEqual(
+            []
+        );
     });
 
     it("搭桥覆盖了所有简写变体，没有漏网的必选项", () => {
