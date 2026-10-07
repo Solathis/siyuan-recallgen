@@ -75,6 +75,9 @@
         byDifficulty.map((group) => ({
             label: t(`diff.${group.key}`),
             value: group.accuracy,
+            // 图例原先展示的是「该达标率占三者之和的比例」——这个数没有业务含义，
+            // 读者会误当成「该难度占多少题」。改为样本题数，与题型分区口径一致。
+            note: t("stats.samples", String(group.count)),
             color:
                 group.key === "easy"
                     ? "var(--color-success)"
@@ -150,7 +153,7 @@
         {/if}
 
         <!-- 总览 -->
-        <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {#each [{ label: t("stats.quizCount"), value: String(summary.quizCount), sub: t("stats.questionCount", String(summary.questionCount)) }, { label: t("stats.average"), value: pct(summary.averagePercent), sub: t("stats.best", pct(summary.bestPercent)) }, { label: t("stats.streak"), value: t("stats.days", String(summary.currentStreak)), sub: t("stats.longestStreak", String(summary.longestStreak)) }, { label: t("stats.perQuestion"), value: summary.secondsPerQuestion === null ? "--" : `${summary.secondsPerQuestion.toFixed(0)}s`, sub: t("stats.activeDays", String(summary.activeDays)) }, { label: t("stats.todayProgress"), value: String(todayQuizCount), sub: t("stats.todayDone", String(todayQuestions), "—") }] as item (item.label)}
                 <Card.Root>
                     <Card.Content class="flex flex-col gap-0.5 pt-4">

@@ -13,7 +13,8 @@
         thickness = 22,
         ariaLabel = "",
     }: {
-        slices: { label: string; value: number; color: string }[];
+        /** note 是可选的补充说明（例如样本量），显示在数值右侧的括号里 */
+        slices: { label: string; value: number; color: string; note?: string }[];
         size?: number;
         thickness?: number;
         ariaLabel?: string;
@@ -26,7 +27,6 @@
 
     /** 只保留正值切片：与 donutArcs 的过滤保持一致，下标才能对上 */
     const nonZero = $derived(slices.filter((s) => Number.isFinite(s.value) && s.value > 0));
-    const total = $derived(nonZero.reduce((sum, s) => sum + s.value, 0));
     const arcs = $derived(
         donutArcs(
             slices.map((s) => s.value),
@@ -64,7 +64,7 @@
                 <span class="size-2.5 shrink-0 rounded-full" style="background: {slice.color}"></span>
                 <span>{slice.label}</span>
                 <span class="text-muted-foreground">
-                    {slice.value.toFixed(0)}%{#if total > 0}（{((slice.value / total) * 100).toFixed(0)}%）{/if}
+                    {slice.value.toFixed(0)}%{#if slice.note}（{slice.note}）{/if}
                 </span>
             </li>
         {/each}
