@@ -386,12 +386,21 @@
                                     placeholder={t("bank.tagRenamePrompt")}
                                     onkeydown={(e) => e.key === "Enter" && void doRenameTag()}
                                 />
-                                <button type="button" class="text-primary" onclick={() => void doRenameTag()}>
+                                <!-- 图标按钮要给可访问名称：✓ / ✕ 读屏只会念成符号 -->
+                                <button
+                                    type="button"
+                                    class="text-primary"
+                                    aria-label={t("common.confirm")}
+                                    title={t("common.confirm")}
+                                    onclick={() => void doRenameTag()}
+                                >
                                     ✓
                                 </button>
                                 <button
                                     type="button"
                                     class="text-muted-foreground"
+                                    aria-label={t("common.cancel")}
+                                    title={t("common.cancel")}
                                     onclick={() => (renamingTag = null)}
                                 >
                                     ✕
