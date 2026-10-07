@@ -86,7 +86,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 - **Auto-Recording**: On submit the score index and the current month's detail shard are written immediately, independent of subsequent analysis. The history list loads only the lightweight index; detail is fetched on demand when reviewing
 - **History Tab**: open from the top-right icon; it has **Records**, **Statistics** and **Bank** views (the statistics view opens with the activity heatmap)
   - **Records**: group by date/source, thumbnail/list/table views, search by title and source, filter by score band, export as JSON/CSV/Markdown, delete a single record with confirmation, and click a record to replay the full result. The list renders in batches of 60 with load-on-scroll, so a long history does not create a huge DOM at once
-  - **Statistics**: each knowledge point in the weakest-areas ranking has a "Review" action that starts a session on that topic. Switch the range (last 7/30/90 days or all time) and see a score-trend line, accuracy by question type, score-band distribution, accuracy by difficulty donut, plus summary metrics (quiz and question counts, average/best score, current and longest streak, time per question) and a weakest-areas ranking
+  - **Statistics**: each knowledge point in the weakest-areas ranking has a "Review" action that starts a session on that topic. Switch the range (last 7/30/90 days or all time) and see a score-trend line, pass rate by question type, score-band distribution, pass rate by difficulty donut, plus summary metrics (quiz and question counts, average/best score, current and longest streak, time per question) and a weakest-areas ranking
 
 - **Spaced repetition**: after submitting, questions enter the bank keyed by stem fingerprint and FSRS schedules their next review; review what is due from the command palette or title menu
 
@@ -368,7 +368,10 @@ After submitting, every question enters the question bank keyed by a stem finger
 - **Progress is preserved**: generating again from the same note only updates the stem and source of existing questions; the review schedule and answer history are kept
 - **Mastery**: half accuracy, half stability, used for the bank overview and pruning policy
 - **Automatic pruning**: on load, questions that have not been reviewed for 180 days and have reached 85 mastery are removed so the bank cannot grow without bound
-- **Browse & manage**: the Bank view in the history panel supports searching by question text, filtering by state (all / due / weak) and by type, shows mastery, passed/seen counts and the next review time, and allows deleting a single question with confirmation
+- **Browse & manage**: the Bank view in the history panel supports searching by question text, filtering by state (all / due / weak), by question type and by difficulty, shows mastery, passed/seen counts and the next review time, and allows deleting a single question with confirmation. A row shows the date as well as the time when you group by source, and the toolbar has a one-click entry to review everything that is due
+- **Flashcard quick pass**: "Flashcard review" from the Bank view skips typing: read the question, reveal the answer, then self-grade **Again / Hard / Good / Easy**, which map to 0 / 50 / 80 / 100 and feed the same FSRS schedule. The card header shows progress, question type and difficulty; you can end early, and only the cards you actually graded are recorded
+- **Cram (drill) mode**: with any filter selected, ticking **cram** ignores the FSRS schedule and takes every question matching the filter, running it as a flashcard pass instead of a scheduled quiz — for last-minute drilling before an exam
+- **Anki export**: the Bank toolbar exports a tab-separated `.txt` (front / back / tags, cells escaped) that Anki imports directly, so an existing review deck can absorb the bank
 - **Filter and review by knowledge point**: the Bank view can filter by knowledge point (with counts in the dropdown); once selected it shows how many questions and how many are due, and "Review this topic" starts a session containing only that topic's due questions. Knowledge-point chips in the expanded detail also jump straight to that filter
 - **Per-question detail**: click a question to expand its **review history** (a mini trend line plus every recorded score, with the latest one marked; the most recent 20 attempts are kept) and its **spaced-repetition state** (FSRS phase, next review time, review/lapse counts, stability, difficulty, when it was added, and its source). Questions banked before this feature have no per-attempt detail, and the panel says so explicitly instead of showing an empty list
 - **Backup & migration**: in Settings → Data, the bank section can **export the bank** (JSON including schedules and answer history) and **import it back**. Import only adds, never overwrites: questions whose fingerprint already exists are skipped so an older machine's schedule cannot clobber the review progress made here. Parsing recomputes fingerprints from the stem, merges duplicates, and skips structurally invalid entries with a warning instead of failing the whole file
@@ -383,9 +386,9 @@ The **Statistics** view of the history panel provides the following charts. All 
 | Chart | Description |
 |-------|-------------|
 | Score trend | Score percentage of each quiz over time (time-axis line) |
-| Accuracy by type | Pass rate per question type, coloured by pass rate |
+| Pass rate by type | Pass rate per question type, coloured by pass rate |
 | Score distribution | Number of quizzes in the 0-59 / 60-69 / 70-79 / 80-89 / 90-100 bands |
-| Accuracy by difficulty | Pass rate for easy / medium / hard (donut) |
+| Pass rate by difficulty | Pass rate for easy / medium / hard (donut) |
 | Weakest areas | Weak question types, difficulty levels and knowledge points ranked by lowest pass rate; groups with fewer than 2 questions are excluded |
 
 Summary metrics: quiz and question counts, average and best score percentage, current and longest daily streak, average time per question, and active days.
