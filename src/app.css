@@ -18,6 +18,28 @@
 /* 思源用 .theme-dark 标记暗色主题，把它接到 Tailwind 的 dark: 变体上 */
 @custom-variant dark (&:where(.theme-dark, .theme-dark *));
 
+/*
+ * bits-ui 的状态属性名与 shadcn 组件的变体简写对不上，必须在这里搭桥。
+ *
+ * shadcn（nova 风格）组件写的是 data-checked: / data-unchecked: / data-open: /
+ * data-closed: / data-horizontal: / data-vertical: 这类简写；
+ * Tailwind 会把 data-xxx 简写编译成同名属性选择器（[data-checked]）。
+ * 但 bits-ui 2.x 输出的属性是 data-state="checked|unchecked|open|closed"
+ * 与 data-orientation="horizontal|vertical"，一个都对不上，
+ * 结果是：开关底色与滑块位移全部失效（看不出开/关）、分隔线高度 0（整条线消失）、
+ * 标签页方向失效、弹层进出场动画失效。
+ *
+ * 下面把简写重新指向 bits-ui 真正输出的属性。
+ * 注意：这不是兼容旧代码的双份逻辑，而是当前依赖组合下唯一能让样式生效的接法；
+ * 若将来 bits-ui 改成直接输出 data-checked，删掉这几行即可。
+ */
+@custom-variant data-checked (&[data-state="checked"]);
+@custom-variant data-unchecked (&[data-state="unchecked"]);
+@custom-variant data-open (&[data-state="open"]);
+@custom-variant data-closed (&[data-state="closed"]);
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+
 :root {
     /* 基础表面与文字 */
     --background: var(--b3-theme-background);
