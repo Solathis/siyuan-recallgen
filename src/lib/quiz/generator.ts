@@ -1,3 +1,4 @@
+import PromiseLimitPool from "@/libs/promise-pool";
 import { t } from "@/lib/i18n";
 import { dedupeQuestions, planBatches, renumberQuestions, scaleDistribution } from "./batching";
 import { callLLM, isAbortError, resolveAI, AIError, type ChatMessage, type ResolvedAIConfig } from "../ai/client";
@@ -77,6 +78,13 @@ export function collectFailedReviews(
 
     return { indices, reasons };
 }
+
+/**
+ * 并发出题批次数上限。
+ * 太高容易撞服务端的速率限制（429），把「快」变成「重试更慢」；
+ * 3 批已经能让 30 题的等待时间从「三批之和」降到接近单批。
+ */
+const MAX_CONCURRENT_BATCHES = 3;
 
 const MAX_REVIEW_ROUNDS = 3;
 
@@ -238,8 +246,13 @@ export async function generateQuestions(
     };
 
     /**
-     * 依次请求多批并收集结果。
-     * allowPartial：单批缺题时是否容忍（多批时保住已成功的批次）
+     * 并发请求多批并收集结果。
+     *
+     * 各批之间互不依赖（每批只是题目总量的一个切片），串行发等于把等待时间叠加：
+     * 30 题要 3 批、再加一轮补题就是 4~6 个来回，按每次十几秒算要等一分多钟。
+     * 这里用与判分、导出同一套 PromiseLimitPool 限并发。
+     *
+     * allowPartial：部分批次失败时是否保留已成功的批次
      * toppingUp：仅用于进度文案，区分「首次生成」与「补齐差额」
      */
     const runBatches = async (
@@ -247,34 +260,81 @@ export async function generateQuestions(
         options: { allowPartial: boolean; toppingUp: boolean }
     ): Promise<void> => {
         const { allowPartial, toppingUp } = options;
-        for (let i = 0; i < group.length; i++) {
-            // 每批开始前检查：取消后不再发新的请求（在途的那个无法撤回，但不会再有下一批）
-            throwIfAborted(signal);
-            report(batchLabel(i, group.length, group[i].total, toppingUp), {
-                phase: "generating",
-                batch: i + 1,
-                batches: group.length,
-            });
+        const total = group.length;
+        if (total === 0) return;
 
-            const outcome = await requestBatch(ctx, group[i]);
-            if (outcome.problem) {
-                // 分批时单批失败不该作废已成功的批次
-                if (allowPartial && collected.length > 0) {
-                    console.warn("[RecallGen] 某一批出题失败，保留已成功的批次", outcome.problem.rawType);
-                    report(t("gen.batchSkipped", String(i + 1)), { note: t("gen.batchSkipped", String(i + 1)) });
-                    continue;
-                }
-                throw problemError(outcome.problem);
-            }
-            skipped += outcome.dropped;
-            collected.push(...outcome.questions);
-            // 每批回来都刷新一次快照，让「已收集」实时可见
-            report(batchLabel(i, group.length, group[i].total, toppingUp), {
+        // 保序：第 i 批的结果放回第 i 个槽位，最后按槽位顺序合并。
+        // 直接按完成顺序 push 会让每次生成的题目顺序都不一样。
+        const slots: Question[][] = Array.from({ length: total }, () => []);
+        const problems: Array<{ index: number; problem: BatchProblem }> = [];
+        const errors: unknown[] = [];
+        let finished = 0;
+
+        const parallel = total > 1;
+        if (parallel) {
+            const grandTotal = group.reduce((sum, item) => sum + item.total, 0);
+            // 补题轮沿用「还差 N 题」的既有说法，用户才知道这是在补齐差额
+            report(
+                toppingUp
+                    ? t("gen.toppingUp", String(grandTotal))
+                    : t("gen.parallelBatches", String(total), String(grandTotal)),
+                { phase: "generating", batch: 1, batches: total }
+            );
+        } else {
+            report(batchLabel(0, 1, group[0].total, toppingUp), {
                 phase: "generating",
-                batch: i + 1,
-                batches: group.length,
+                batch: 1,
+                batches: 1,
             });
         }
+
+        const pool = new PromiseLimitPool<void>(Math.min(total, MAX_CONCURRENT_BATCHES));
+        for (let i = 0; i < total; i++) {
+            pool.add(async () => {
+                try {
+                    // 取消后不再发新请求（在途的无法撤回）
+                    throwIfAborted(signal);
+                    const outcome = await requestBatch(ctx, group[i]);
+                    if (outcome.problem) {
+                        problems.push({ index: i, problem: outcome.problem });
+                        return;
+                    }
+                    slots[i] = outcome.questions;
+                    skipped += outcome.dropped;
+                    finished++;
+                    report(
+                        parallel
+                            ? t("gen.parallelProgress", String(finished), String(total), String(collected.length))
+                            : batchLabel(0, 1, group[0].total, toppingUp),
+                        {
+                            phase: "generating",
+                            batch: Math.min(finished + 1, total),
+                            batches: total,
+                        }
+                    );
+                } catch (e) {
+                    errors.push(e);
+                }
+            });
+        }
+        await pool.awaitAll();
+
+        // 取消优先透传：用户点了取消，其余批次的失败都不重要
+        const aborted = errors.find((e) => isAbortError(e));
+        if (aborted) throw aborted;
+        // 网络/HTTP 这类硬失败仍然冒泡（与串行时一致）
+        if (errors.length > 0) throw errors[0];
+
+        if (problems.length > 0) {
+            const succeeded = slots.filter((slot) => slot.length > 0).length;
+            const failedAt = problems.map((p) => p.index + 1).join("、");
+            if (!allowPartial || succeeded === 0) throw problemError(problems[0].problem);
+            console.warn("[RecallGen] 部分批次出题失败，保留已成功的批次", failedAt);
+            const note = t("gen.batchSkipped", failedAt);
+            report(note, { note });
+        }
+
+        for (const slot of slots) collected.push(...slot);
     };
 
     await runBatches(batches, { allowPartial: true, toppingUp: false });

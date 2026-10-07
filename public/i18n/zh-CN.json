@@ -688,5 +688,7 @@
     "quiz.elapsed": "已用时 {0}",
     "bank.dueLine": "共 {1} 题中有 {0} 题已到期，可立即开始复习",
     "flash.empty": "没有可复习的题目",
-    "err.raw.size": "（{0} 字符）"
+    "err.raw.size": "（{0} 字符）",
+    "gen.parallelBatches": "正在并发生成 {0} 批（共 {1} 题）…",
+    "gen.parallelProgress": "已完成 {0}/{1} 批，已收集 {2} 题"
 }
