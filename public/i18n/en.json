@@ -684,5 +684,6 @@
     "err.raw.copy": "Copy",
     "err.raw.copied": "Copied to clipboard",
     "err.raw.failed": "Copy failed — please select the text manually",
-    "gen.plan.charsLabel": "Content length"
+    "gen.plan.charsLabel": "Content length",
+    "quiz.elapsed": "Elapsed {0}"
 }

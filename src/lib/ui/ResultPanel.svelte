@@ -8,6 +8,7 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { ChatTurn, QuizService } from "../quiz/service";
+    import { formatClock } from "./duration";
     import { renderMarkdownLatex } from "./latex";
     import { PASS_SCORE } from "@/types/quiz";
     import type { GradingResult, Question } from "@/types/quiz";
@@ -74,7 +75,7 @@
 
     function fmtDuration(sec: number): string {
         if (sec <= 0) return "--";
-        return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+        return formatClock(sec);
     }
 
     /* ── 题目详情 ────────────────────────────────────────────────── */
