@@ -437,15 +437,17 @@
                     onchange={(e) => patchAi({ timeout: Math.max(5, parseInt(e.currentTarget.value, 10) || 5) * 1000 })}
                 />
             </div>
-            <label class="flex items-center gap-2 text-sm">
+            <div class="flex items-center gap-3">
                 <Switch
                     checked={config.ai.jsonSchemaEnabled}
                     onCheckedChange={(checked) => patchAi({ jsonSchemaEnabled: checked })}
                     aria-label={t("settings.ai.jsonSchema")}
                 />
-                <span>{t("settings.ai.jsonSchema")}</span>
-                <span class="text-muted-foreground text-xs">{t("settings.ai.jsonSchemaDesc")}</span>
-            </label>
+                <div class="flex flex-col gap-0.5">
+                    <span class="text-sm font-medium">{t("settings.ai.jsonSchema")}</span>
+                    <span class="text-muted-foreground text-xs">{t("settings.ai.jsonSchemaDesc")}</span>
+                </div>
+            </div>
         </div>
     </Card.Content>
 </Card.Root>

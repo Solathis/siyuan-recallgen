@@ -153,6 +153,7 @@
     "quiz.confirmSubmitTitle": "Submit",
     "quiz.confirmSubmitMsg": "Are you sure you want to submit? This cannot be undone.",
     "quiz.dateConfigTitle": "📅 Date Range Configuration",
+    "quiz.configSummary": "Quiz Settings",
     "quiz.dateConfigTodayDesc": "Today mode: the base time defines the start of \"today\". E.g., set to 04:00, today's range is 4:00 to now.",
     "quiz.dateConfigBeforeDesc": "Recent N days mode: base time is the daily boundary. E.g., set to 04:00, notes from N days ago 4:00 to today 4:00.",
     "quiz.dateDaysLabel": "Day Range",
@@ -642,5 +643,10 @@
     "bank.tagConfirmDelete": "Delete tag \"{0}\"? This affects {1} question(s)",
     "settings.general.dailyGoalHint": "The stats panel shows today's answered count vs your goal to help maintain momentum",
     "stats.todayDone": "{0} / {1}",
-    "settings.ai.maxTokensCustom": "Custom"
+    "settings.ai.maxTokensCustom": "Custom",
+    "quiz.configTotal": "{0} total",
+    "quiz.configEasy": "Easy {0}",
+    "quiz.configMedium": "Med {0}",
+    "quiz.configHard": "Hard {0}",
+    "quiz.configExtraScope": "Beyond {0}%"
 }

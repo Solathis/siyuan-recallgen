@@ -831,8 +831,8 @@
 <div bind:this={rootEl} class="flex h-full flex-col" style="--rg-panel-width: {config.general.panelWidth}px">
     <div class="mx-auto flex h-full w-full flex-col px-4" style="max-width: var(--rg-panel-width, 1100px)">
         {#if panelState === "configuring"}
-            <div class="flex justify-center px-2 py-12">
-                <Card.Root class="w-full max-w-lg">
+            <div class="flex justify-center px-2 py-8">
+                <Card.Root class="w-full max-w-xl">
                     <Card.Header>
                         <Card.Title>{t("quiz.dateConfigTitle")}</Card.Title>
                         <Card.Description>
@@ -841,7 +841,27 @@
                                 : t("quiz.dateConfigBeforeDesc")}
                         </Card.Description>
                     </Card.Header>
-                    <Card.Content class="flex flex-col gap-4">
+                    <Card.Content class="flex flex-col gap-5">
+                        <!-- 出题设置摘要：让用户在生成前确认题型/难度/题量 -->
+                        <div class="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md border p-2.5">
+                            <span class="text-muted-foreground text-2xs font-semibold uppercase tracking-wide">
+                                {t("quiz.configSummary")}
+                            </span>
+                            <div class="flex flex-wrap gap-1.5">
+                                {#each config.general.allowedTypes as type (type)}
+                                    <Badge variant="secondary" class="text-2xs">{t(`type.${type}_short`)}</Badge>
+                                {/each}
+                            </div>
+                            <div class="text-muted-foreground flex w-full flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                                <span>{t("quiz.configTotal", String(config.general.difficulty.total))}</span>
+                                <span>{t("quiz.configEasy", String(config.general.difficulty.easy))}</span>
+                                <span>{t("quiz.configMedium", String(config.general.difficulty.medium))}</span>
+                                <span>{t("quiz.configHard", String(config.general.difficulty.hard))}</span>
+                                <span>{t("quiz.configExtraScope", String(config.general.extraScopePct))}</span>
+                            </div>
+                        </div>
+
+                        <!-- 日期范围 -->
                         {#if tabData.dateRange === "beforeToday"}
                             <div class="flex flex-col gap-2">
                                 <div class="flex items-center justify-between">

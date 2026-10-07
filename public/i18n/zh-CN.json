@@ -153,6 +153,7 @@
     "quiz.confirmSubmitTitle": "交卷",
     "quiz.confirmSubmitMsg": "确定要提交答案吗？提交后不可修改。",
     "quiz.dateConfigTitle": "📅 日期范围配置",
+    "quiz.configSummary": "出题设置",
     "quiz.dateConfigTodayDesc": "今日笔记模式：基点时间定义「今日」的起始。例如设为 04:00，则今日范围为 4:00 至现在。",
     "quiz.dateConfigBeforeDesc": "近 N 天模式：基点时间为每日分界点。例如设为 04:00，则从 N 天前 4:00 到今日 4:00 之间的笔记。",
     "quiz.dateDaysLabel": "天数范围",
@@ -642,5 +643,10 @@
     "bank.tagConfirmDelete": "确定删除标签「{0}」？该操作会影响 {1} 条题目",
     "settings.general.dailyGoalHint": "统计页会显示今日已答题数与目标的对比，帮助保持学习节奏",
     "stats.todayDone": "{0} / {1} 题",
-    "settings.ai.maxTokensCustom": "自定义"
+    "settings.ai.maxTokensCustom": "自定义",
+    "quiz.configTotal": "共 {0} 题",
+    "quiz.configEasy": "初级 {0}",
+    "quiz.configMedium": "中级 {0}",
+    "quiz.configHard": "高级 {0}",
+    "quiz.configExtraScope": "超纲 {0}%"
 }
