@@ -85,8 +85,11 @@ export function appendAttempt(history: BankAttempt[] | undefined, attempt: BankA
     return next.length > MAX_BANK_HISTORY ? next.slice(next.length - MAX_BANK_HISTORY) : next;
 }
 
+/** 平均分窗口；界面文案要显示实际参与平均的次数，因此这个值必须从这里取 */
+export const RECENT_AVG_WINDOW = 5;
+
 /** 最近 n 次作答的平均得分率；没有记录时返回 null */
-export function recentAverage(item: BankItem, window = 5): number | null {
+export function recentAverage(item: BankItem, window = RECENT_AVG_WINDOW): number | null {
     const history = item.history ?? [];
     if (history.length === 0) return null;
     const slice = history.slice(-window);

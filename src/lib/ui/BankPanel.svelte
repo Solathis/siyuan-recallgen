@@ -14,6 +14,7 @@
     import { lineGeometry } from "../quiz/chart-geometry";
     import {
         MAX_BANK_HISTORY,
+        RECENT_AVG_WINDOW,
         bankTags,
         cardPhase,
         dueState,
@@ -165,7 +166,10 @@
 
     const filtered = $derived.by(() => {
         const keyword = query.trim().toLowerCase();
-        const now = Date.now();
+        // 必须用共享时钟而不是 Date.now()：Date.now() 不是响应式依赖，
+        // 派生值只在筛选条件变化时重算，面板开着跨过到期时刻也不会刷新，
+        // 会出现「顶部徽标说到期 3 题、点『到期』却只筛出 2 题」。
+        const now = clock.now;
         return (
             items
                 .filter((item) => {
@@ -198,11 +202,12 @@
         }
     }
 
-    function fmtDue(card: BankItem["card"]): string {
-        const state = dueState(card);
+    /** now 由共享时钟传入：内部再读 Date.now() 会让文本与徽标/筛选的口径脱节 */
+    function fmtDue(card: BankItem["card"], now: number): string {
+        const state = dueState(card, now);
         if (state === "overdue") return t("bank.dueOverdue");
         if (state === "today") return t("bank.dueToday");
-        const days = Math.max(1, Math.round((card.due - Date.now()) / 86_400_000));
+        const days = Math.max(1, Math.round((card.due - now) / 86_400_000));
         return state === "soon" ? t("bank.dueInDays", String(days)) : t("bank.dueLater", String(days));
     }
 
@@ -345,6 +350,19 @@
             </Button>
         </div>
     </div>
+
+    <!--
+        到期题只在顶部有一个数字，却要先选某个标签/题型/难度才出现复习入口，
+        等于「看得到欠账、点不了开始」。池子里有到期题时直接给一个入口。
+    -->
+    {#if !loading && items.length > 0 && counts.due > 0}
+        <div
+            class="bg-primary/5 border-primary/20 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2"
+        >
+            <span class="text-xs">{t("bank.dueLine", String(counts.due), String(counts.total))}</span>
+            <Button size="sm" onclick={() => onStartReview({})}>{t("bank.reviewDue")}</Button>
+        </div>
+    {/if}
 
     <!-- 标签管理：展开后可重命名或删除知识点标签 -->
     {#if tagOptions.length > 0}
@@ -519,19 +537,31 @@
                             {t("bank.historyValue", String(item.timesPassed), String(item.timesSeen))}
                         </Table.Cell>
                         <Table.Cell class="text-2xs">
-                            {#if dueState(item.card) === "overdue"}
-                                <span class="text-warning font-medium">{fmtDue(item.card)}</span>
+                            {#if dueState(item.card, clock.now) === "overdue"}
+                                <span class="text-warning font-medium">{fmtDue(item.card, clock.now)}</span>
                             {:else}
-                                <span class="text-muted-foreground">{fmtDue(item.card)}</span>
+                                <span class="text-muted-foreground">{fmtDue(item.card, clock.now)}</span>
                             {/if}
                         </Table.Cell>
                         <Table.Cell>
                             <AlertDialog.Root>
                                 <AlertDialog.Trigger>
                                     {#snippet child({ props })}
-                                        <Button {...props} variant="ghost" size="sm" disabled={deleting === item.id}>
+                                        <!--
+                                            aria-label / title 必须写在开始标签里。
+                                            原实现把它们放在标签之后，Svelte 会把
+                                            `aria-label=` 当文本、把表达式当插值，
+                                            于是每一行的操作列都渲染出
+                                            「aria-label=删除 title=删除 ✕」这串字面量。
+                                        -->
+                                        <Button
+                                            {...props}
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={deleting === item.id}
                                             aria-label={t("common.delete")}
                                             title={t("common.delete")}
+                                        >
                                             ✕
                                         </Button>
                                     {/snippet}
@@ -566,7 +596,13 @@
                                             {t("bank.detailHistory", String(history.length))}
                                             {#if recent !== null}
                                                 <span class="text-muted-foreground font-normal">
-                                                    {t("bank.detailRecentAvg", recent.toFixed(0))}
+                                                    <!-- 次数用实际参与平均的条数：只有 2 条历史时
+                                                         说「最近 5 次平均」是假的 -->
+                                                    {t(
+                                                        "bank.detailRecentAvg",
+                                                        String(Math.min(RECENT_AVG_WINDOW, history.length)),
+                                                        recent.toFixed(0)
+                                                    )}
                                                 </span>
                                             {/if}
                                         </span>
