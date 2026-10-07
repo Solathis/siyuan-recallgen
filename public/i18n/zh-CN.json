@@ -73,6 +73,7 @@
     "bank.filterAllTypes": "全部题型",
     "bank.filterType": "按题型筛选",
     "bank.filterDifficulty": "按难度筛选",
+    "bank.ankiExport": "导出 Anki",
     "bank.loadFailed": "加载题库失败：{0}",
     "bank.empty": "题库还是空的：做几套复习题后，题目会自动入库",
     "bank.noMatch": "没有符合筛选条件的题目",

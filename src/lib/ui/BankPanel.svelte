@@ -21,7 +21,9 @@
         recentAverage,
         type BankItem,
     } from "../quiz/bank";
+    import { buildAnkiExport } from "../quiz/bank";
     import { nextLimit, PAGE_SIZE } from "../quiz/paging";
+    import { downloadText, exportStamp } from "./download";
     import type { QuizService } from "../quiz/service";
     import type { QuestionType, Difficulty } from "@/types/quiz";
 
@@ -301,6 +303,19 @@
                     </Select.Content>
                 </Select.Root>
             {/if}
+            <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || items.length === 0}
+                onclick={() =>
+                    downloadText(
+                        `recallgen-anki-${exportStamp()}.txt`,
+                        buildAnkiExport(items),
+                        "text/tab-separated-values"
+                    )}
+            >
+                {t("bank.ankiExport")}
+            </Button>
             <Button variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
                 {t("common.refresh")}
             </Button>

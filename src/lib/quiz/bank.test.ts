@@ -26,6 +26,9 @@ import {
     summarizeBank,
     toCardState,
     toReviewQuestions,
+    buildAnkiExport,
+    renameTag,
+    deleteTag,
     type BankItem,
 } from "./bank";
 
@@ -702,5 +705,123 @@ describe("按难度复习", () => {
 
     it("该难度没有题目时返回空", () => {
         expect(selectReviewItems(items, { now: NOW, difficulty: "medium" })).toHaveLength(0);
+    });
+});
+
+describe("buildAnkiExport", () => {
+    it("TSV 格式：正面、背面、标签三列", () => {
+        const item = createBankItem(
+            {
+                id: "q-1",
+                type: "true_false",
+                difficulty: "easy",
+                question: "1+1=2",
+                answer: true,
+                tags: ["代数"],
+            } as never,
+            { sourceDocId: "d", sourceTitle: "t" },
+            Date.now()
+        );
+        const lines = buildAnkiExport([item]).split("\n");
+        expect(lines).toHaveLength(1);
+        const cols = lines[0].split("\t");
+        expect(cols).toHaveLength(3);
+        expect(cols[0]).toContain("1+1=2");
+        expect(cols[1]).toContain("✓");
+        expect(cols[2]).toContain("代数");
+    });
+
+    it("选择题的正确答案带字母标号", () => {
+        const item = createBankItem(
+            {
+                id: "q-1",
+                type: "single_choice",
+                difficulty: "easy",
+                question: "1+1=?",
+                options: ["1", "2"],
+                answer: 1,
+            } as never,
+            { sourceDocId: "d", sourceTitle: "t" },
+            Date.now()
+        );
+        const back = buildAnkiExport([item]).split("\t")[1];
+        expect(back).toContain("B");
+        expect(back).toContain("A. 1");
+        expect(back).toContain("B. 2");
+    });
+
+    it("制表符和换行被转义，不破坏 TSV 结构", () => {
+        const item = createBankItem(
+            {
+                id: "q-1",
+                type: "subjective",
+                difficulty: "easy",
+                question: "含\t制表符和\n换行",
+                answer: "答案",
+            } as never,
+            { sourceDocId: "d", sourceTitle: "t" },
+            Date.now()
+        );
+        const line = buildAnkiExport([item]);
+        expect(line.split("\t").length).toBe(3);
+    });
+
+    it("解析附在答案后面", () => {
+        const item = createBankItem(
+            {
+                id: "q-1",
+                type: "true_false",
+                difficulty: "easy",
+                question: "题",
+                answer: true,
+                explanation: "因为",
+            } as never,
+            { sourceDocId: "d", sourceTitle: "t" },
+            Date.now()
+        );
+        const back = buildAnkiExport([item]).split("\t")[1];
+        expect(back).toContain("💡 因为");
+    });
+
+    it("空题库输出空串", () => {
+        expect(buildAnkiExport([])).toBe("");
+    });
+});
+
+describe("标签管理", () => {
+    /** 造一批带标签的题库条目 */
+    const makeTagged = (text: string, tags: string[]): BankItem => {
+        const base = createBankItem(question(text), { sourceDocId: "d", sourceTitle: "t" }, NOW);
+        return { ...base, question: { ...base.question, tags } };
+    };
+
+    it("重命名标签", () => {
+        const items = [makeTagged("甲", ["旧名", "其他"]), makeTagged("乙", ["旧名"]), makeTagged("丙", ["无关"])];
+        expect(renameTag(items, "旧名", "新名")).toBe(2);
+        expect(items[0].question.tags).toEqual(["新名", "其他"]);
+        expect(items[1].question.tags).toEqual(["新名"]);
+        expect(items[2].question.tags).toEqual(["无关"]);
+    });
+
+    it("重命名到已存在的标签时合并去重", () => {
+        const items = [makeTagged("甲", ["旧名", "目标"]), makeTagged("乙", ["目标"])];
+        renameTag(items, "旧名", "目标");
+        expect(items[0].question.tags).toEqual(["目标"]);
+        expect(items[1].question.tags).toEqual(["目标"]);
+    });
+
+    it("删除标签", () => {
+        const items = [makeTagged("甲", ["删我", "留我"]), makeTagged("乙", ["删我"]), makeTagged("丙", ["无关"])];
+        expect(deleteTag(items, "删我")).toBe(2);
+        expect(items[0].question.tags).toEqual(["留我"]);
+        expect(items[1].question.tags).toBeUndefined();
+        expect(items[2].question.tags).toEqual(["无关"]);
+    });
+
+    it("没有匹配标签时不影响任何条目", () => {
+        const items = [makeTagged("甲", ["有的"])];
+        expect(renameTag(items, "没有的", "新")).toBe(0);
+        expect(deleteTag(items, "没有的")).toBe(0);
+        expect(items[0].question.tags).toEqual(["有的"]);
     });
 });

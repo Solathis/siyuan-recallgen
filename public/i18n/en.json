@@ -73,6 +73,7 @@
     "bank.filterAllTypes": "All types",
     "bank.filterType": "Filter by type",
     "bank.filterDifficulty": "Filter by difficulty",
+    "bank.ankiExport": "Export Anki",
     "bank.loadFailed": "Failed to load the question bank: {0}",
     "bank.empty": "The bank is empty. Take a few quizzes and questions will be banked automatically.",
     "bank.noMatch": "No questions match the current filters",

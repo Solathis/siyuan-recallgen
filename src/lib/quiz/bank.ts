@@ -403,6 +403,85 @@ export function applyResult(item: BankItem, percent: number, now = Date.now()): 
     };
 }
 
+/**
+ * 导出题库为 Anki 可导入的制表符分隔文本。
+ *
+ * Anki 的「从文件导入」支持 TSV：第一列正面（题目），第二列背面（答案），
+ * 第三列标签（空格分隔，可选）。每行一条记录，无表头。
+ * HTML 选项（Anki 默认允许 HTML），因此保留 Markdown/LaTeX 渲染源码。
+ */
+export function buildAnkiExport(items: BankItem[]): string {
+    return items
+        .map((item) => {
+            const front = ankiCell(item.question.question);
+            const back = ankiCell(ankiAnswer(item));
+            const tags = ankiCell((item.question.tags ?? []).join(" "));
+            return [front, back, tags].join("\t");
+        })
+        .join("\n");
+}
+
+/** Anki 单元格转义：制表符和换行会破坏 TSV 结构 */
+function ankiCell(text: string): string {
+    return text.replace(/\t/g, " ").replace(/\r?\n/g, "<br>");
+}
+
+/** 按题型生成 Anki 背面（正确答案 + 解析） */
+function ankiAnswer(item: BankItem): string {
+    const q = item.question;
+    let answer = "";
+    if (q.type === "single_choice" || q.type === "multiple_choice") {
+        const idx = Array.isArray(q.answer) ? q.answer : [q.answer as number];
+        const labels = idx.map((i) => String.fromCharCode(65 + i)).join(", ");
+        const opts = (q.options ?? []).map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`).join("<br>");
+        answer = `${labels}<br>${opts}`;
+    } else if (q.type === "true_false") {
+        answer = q.answer ? "✓" : "✗";
+    } else if (q.type === "fill_blank") {
+        answer = (Array.isArray(q.answer) ? q.answer : []).map((opts) => opts.join(" / ")).join("；");
+    } else if (q.type === "coding") {
+        answer = q.answer ?? "";
+    } else {
+        answer = q.reference_answer ?? "";
+    }
+    if (q.explanation) answer += `<br><br>💡 ${q.explanation}`;
+    return answer;
+}
+
+/**
+ * 重命名知识点标签：遍历所有条目，将匹配的标签替换为新名。
+ * 如果目标标签已存在，合并（取并集去重）。
+ * 返回受影响的条目数。
+ */
+export function renameTag(items: BankItem[], oldTag: string, newTag: string): number {
+    let affected = 0;
+    for (const item of items) {
+        const tags = item.question.tags ?? [];
+        if (!tags.includes(oldTag)) continue;
+        const next = tags.map((t) => (t === oldTag ? newTag : t));
+        // 合并重复
+        item.question.tags = [...new Set(next)];
+        affected++;
+    }
+    return affected;
+}
+
+/**
+ * 删除知识点标签：遍历所有条目，移除匹配的标签。
+ * 返回受影响的条目数。
+ */
+export function deleteTag(items: BankItem[], tag: string): number {
+    let affected = 0;
+    for (const item of items) {
+        const tags = item.question.tags ?? [];
+        if (!tags.includes(tag)) continue;
+        const next = tags.filter((t) => t !== tag);
+        item.question.tags = next.length > 0 ? next : undefined;
+        affected++;
+    }
+    return affected;
+}
+
 /** 由题目创建题库条目 */
 export function createBankItem(
     question: Question,
