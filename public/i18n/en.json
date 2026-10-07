@@ -52,6 +52,7 @@
     "bank.searchPlaceholder": "Search question text",
     "bank.filterLabel": "Filter",
     "bank.cramMode": "Cram mode",
+    "bank.tagManage": "Manage tags",
     "bank.filterAll": "All",
     "bank.filterDue": "Due",
     "bank.filterWeak": "Weak",
@@ -626,5 +627,10 @@
     "flash.answerLabel": "Answer",
     "flash.startBtn": "Flashcard Review",
     "flash.startHint": "Quickly go through due cards without typing; self-assess your recall",
-    "flash.nextCard": "Next →"
+    "flash.nextCard": "Next →",
+    "bank.tagRename": "Rename",
+    "bank.tagDelete": "Delete",
+    "bank.tagRenamePrompt": "Enter new name (leave empty to cancel)",
+    "bank.tagAffected": "{0} question(s) updated",
+    "bank.tagConfirmDelete": "Delete tag \"{0}\"? This affects {1} question(s)"
 }

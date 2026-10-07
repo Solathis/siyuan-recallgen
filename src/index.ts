@@ -12,7 +12,9 @@ import { BankStore, ConfigStore, ScoreStore, ProgressStore } from "@/lib/storage
 import {
     applyResult,
     createBankItem,
+    deleteTag,
     questionFingerprint,
+    renameTag,
     selectReviewItems,
     toReviewQuestions,
 } from "@/lib/quiz/bank";
@@ -416,6 +418,18 @@ export default class RecallGenPlugin extends Plugin {
                 return toReviewQuestions(selectReviewItems(items, scope));
             },
             bankSummary: () => this.bankStore.summary(),
+            renameBankTag: async (oldTag, newTag) => {
+                const items = await this.bankStore.list();
+                const count = renameTag(items, oldTag, newTag);
+                if (count > 0) await this.bankStore.upsertMany(items);
+                return count;
+            },
+            deleteBankTag: async (tag) => {
+                const items = await this.bankStore.list();
+                const count = deleteTag(items, tag);
+                if (count > 0) await this.bankStore.upsertMany(items);
+                return count;
+            },
             listBank: () => this.bankStore.list(),
             exportBank: () => this.bankStore.list(),
             importBank: (items) => this.bankStore.importItems(items),

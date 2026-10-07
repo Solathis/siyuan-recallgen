@@ -52,6 +52,7 @@
     "bank.searchPlaceholder": "搜索题干",
     "bank.filterLabel": "筛选",
     "bank.cramMode": "急训模式",
+    "bank.tagManage": "标签管理",
     "bank.filterAll": "全部",
     "bank.filterDue": "待复习",
     "bank.filterWeak": "薄弱",
@@ -626,5 +627,10 @@
     "flash.answerLabel": "答案",
     "flash.startBtn": "闪卡复习",
     "flash.startHint": "快速过一遍到期题目，不看打字作答，自评记忆效果",
-    "flash.nextCard": "下一题 →"
+    "flash.nextCard": "下一题 →",
+    "bank.tagRename": "重命名",
+    "bank.tagDelete": "删除",
+    "bank.tagRenamePrompt": "输入新名称（留空取消）",
+    "bank.tagAffected": "已更新 {0} 条题目",
+    "bank.tagConfirmDelete": "确定删除标签「{0}」？该操作会影响 {1} 条题目"
 }

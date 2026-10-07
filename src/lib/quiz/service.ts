@@ -92,6 +92,10 @@ export interface QuizService {
     dueBankQuestions(scope?: import("./bank").ReviewScope): Promise<Question[]>;
     /** 题库规模概览 */
     bankSummary(): Promise<BankSummary>;
+    /** 重命名知识点标签，返回受影响条目数 */
+    renameBankTag(oldTag: string, newTag: string): Promise<number>;
+    /** 删除知识点标签，返回受影响条目数 */
+    deleteBankTag(tag: string): Promise<number>;
     /** 题库全部条目，用于题库浏览界面 */
     listBank(): Promise<BankItem[]>;
     /** 导出题库全部条目（含排程与复习历史）用于备份 */

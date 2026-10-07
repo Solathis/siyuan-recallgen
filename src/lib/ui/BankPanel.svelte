@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { showMessage } from "siyuan";
+    import { confirm, showMessage } from "siyuan";
     import * as AlertDialog from "@/lib/components/ui/alert-dialog";
     import { Badge } from "@/lib/components/ui/badge";
     import { Button } from "@/lib/components/ui/button";
@@ -88,6 +88,25 @@
         visible = PAGE_SIZE;
     });
 
+    async function doRenameTag(): Promise<void> {
+        if (!renamingTag || !renameValue.trim()) {
+            renamingTag = null;
+            return;
+        }
+        const count = await service.renameBankTag(renamingTag, renameValue.trim());
+        showMessage(t("bank.tagAffected", String(count)), 4000);
+        renamingTag = null;
+        renameValue = "";
+        await load();
+    }
+
+    async function doDeleteTag(tag: string): Promise<void> {
+        const count = await service.deleteBankTag(tag);
+        showMessage(t("bank.tagAffected", String(count)), 4000);
+        if (tagFilter === tag) tagFilter = "all";
+        await load();
+    }
+
     /** 到期数量与时间相关：读共享时钟，面板长期打开时也会随过期题目更新 */
     const clock = createClock();
 
@@ -103,6 +122,11 @@
 
     /** 题库里出现过的知识点标签（按题数倒序），用于筛选与「按知识点复习」 */
     const tagOptions = $derived(bankTags(items));
+    /** 标签管理展开状态 */
+    let showTagManage = $state(false);
+    /** 正在重命名的标签 */
+    let renamingTag = $state<string | null>(null);
+    let renameValue = $state("");
 
     /**
      * 当前筛选能否直接拿去开一次复习：
@@ -321,6 +345,74 @@
             </Button>
         </div>
     </div>
+
+    <!-- 标签管理：展开后可重命名或删除知识点标签 -->
+    {#if tagOptions.length > 0}
+        <div class="flex flex-col gap-1">
+            <button
+                type="button"
+                class="text-muted-foreground flex items-center gap-1 text-xs hover:text-foreground"
+                onclick={() => (showTagManage = !showTagManage)}
+            >
+                {showTagManage ? "▾" : "▸"}
+                {t("bank.tagManage")} ({tagOptions.length})
+            </button>
+            {#if showTagManage}
+                <div class="flex flex-col gap-1 pl-3">
+                    {#each tagOptions as option (option.tag)}
+                        <div class="flex items-center gap-1.5 text-xs">
+                            {#if renamingTag === option.tag}
+                                <input
+                                    class="border-input bg-background w-28 rounded-md border px-1.5 py-0.5 text-xs"
+                                    bind:value={renameValue}
+                                    placeholder={t("bank.tagRenamePrompt")}
+                                    onkeydown={(e) => e.key === "Enter" && void doRenameTag()}
+                                />
+                                <button type="button" class="text-primary" onclick={() => void doRenameTag()}>
+                                    ✓
+                                </button>
+                                <button
+                                    type="button"
+                                    class="text-muted-foreground"
+                                    onclick={() => (renamingTag = null)}
+                                >
+                                    ✕
+                                </button>
+                            {:else}
+                                <span class="min-w-0 truncate">{option.tag}</span>
+                                <span class="text-muted-foreground">({option.count})</span>
+                                <span class="flex-1"></span>
+                                <button
+                                    type="button"
+                                    class="text-primary shrink-0 opacity-60 hover:opacity-100"
+                                    title={t("bank.tagRename")}
+                                    onclick={() => {
+                                        renamingTag = option.tag;
+                                        renameValue = option.tag;
+                                    }}
+                                >
+                                    ✎
+                                </button>
+                                <button
+                                    type="button"
+                                    class="text-destructive shrink-0 opacity-60 hover:opacity-100"
+                                    title={t("bank.tagDelete")}
+                                    onclick={() =>
+                                        confirm(
+                                            t("bank.tagConfirmDelete", option.tag, String(option.count)),
+                                            "",
+                                            () => void doDeleteTag(option.tag)
+                                        )}
+                                >
+                                    ✕
+                                </button>
+                            {/if}
+                        </div>
+                    {/each}
+                </div>
+            {/if}
+        </div>
+    {/if}
 
     <!-- 按知识点筛选时给出一条可执行的复习入口，而不是只能看列表 -->
     {#if reviewScope && !loading && items.length > 0}
