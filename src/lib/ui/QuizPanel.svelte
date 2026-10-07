@@ -743,10 +743,20 @@
 
     function askSubmit() {
         const unanswered = questions.length - answeredCount;
+        const flaggedUnanswered = questions.filter((q) => session?.flagged?.[q.id] && !session?.answers[q.id]).length;
+        let description: string;
+        if (unanswered > 0 && flaggedUnanswered > 0) {
+            description = t("quiz.confirmSubmitUnansweredFlagged", String(unanswered), String(flaggedUnanswered));
+        } else if (unanswered > 0) {
+            description = t("quiz.confirmSubmitUnanswered", String(unanswered));
+        } else if (flaggedCount > 0) {
+            description = t("quiz.confirmSubmitFlagged", String(flaggedCount));
+        } else {
+            description = t("quiz.confirmSubmitMsg");
+        }
         pending = {
             title: t("quiz.confirmSubmitTitle"),
-            description:
-                unanswered > 0 ? t("quiz.confirmSubmitUnanswered", String(unanswered)) : t("quiz.confirmSubmitMsg"),
+            description,
             confirmLabel: t("quiz.submit"),
             run: () => void submit(),
         };

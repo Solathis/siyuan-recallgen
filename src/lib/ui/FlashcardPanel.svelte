@@ -40,6 +40,13 @@
         revealed = true;
     }
 
+    /** 提前结束：把已自评的卡片结果交给调用方，未评的不算 */
+    function finishEarly(): void {
+        if (done || grades.size === 0) return;
+        done = true;
+        onDone?.(Array.from(grades.entries()).map(([id, percent]) => ({ id, percent })));
+    }
+
     function grade(grade: FlashGrade): void {
         if (!current || done) return;
         counts[grade]++;
@@ -70,11 +77,18 @@
 </script>
 
 <div class="flex h-full flex-col items-center gap-4 px-4 py-6">
-    <div class="w-full max-w-lg">
-        <ProgressBar
-            value={items.length > 0 ? ((index + (done ? 1 : 0)) / items.length) * 100 : 0}
-            label={t("flash.progress", String(done ? items.length : index), String(items.length))}
-        />
+    <div class="flex w-full max-w-lg items-center justify-between gap-2">
+        <div class="min-w-0 flex-1">
+            <ProgressBar
+                value={items.length > 0 ? ((index + (done ? 1 : 0)) / items.length) * 100 : 0}
+                label={t("flash.progress", String(done ? items.length : index), String(items.length))}
+            />
+        </div>
+        {#if !done && index > 0}
+            <Button variant="ghost" size="sm" onclick={finishEarly}>
+                {t("flash.finishEarly")}
+            </Button>
+        {/if}
     </div>
 
     {#if done}
