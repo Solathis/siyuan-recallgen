@@ -225,12 +225,33 @@ export function accuracyByDifficulty(entries: ScoreIndexEntry[]): GroupAccuracy[
  * 旧记录没有标签时返回空数组。
  */
 export function accuracyByTag(entries: ScoreIndexEntry[]): GroupAccuracy[] {
-    const keys = new Set<string>();
+    // 单次遍历累积，而不是对每个标签再遍历一遍全部条目：
+    // 标签数与条目数成正比时，原先的 O(标签数 × 条目数) 会变成明显的性能瓶颈
+    const acc = new Map<string, { count: number; passed: number; score: number; maxScore: number }>();
     for (const entry of entries) {
-        for (const key of Object.keys(entry.byTag ?? {})) keys.add(key);
+        const byTag = entry.byTag;
+        if (!byTag) continue;
+        for (const [key, agg] of Object.entries(byTag)) {
+            if (!agg) continue;
+            const cur = acc.get(key);
+            if (cur) {
+                cur.count += agg.count;
+                cur.passed += agg.passed;
+                cur.score += agg.score;
+                cur.maxScore += agg.maxScore;
+            } else {
+                acc.set(key, { ...agg });
+            }
+        }
     }
-    return [...keys]
-        .map((key) => accuracyOf(entries, (e) => e.byTag?.[key], key))
+    return [...acc.entries()]
+        .map(([key, agg]) => ({
+            key,
+            count: agg.count,
+            passed: agg.passed,
+            accuracy: agg.count > 0 ? (agg.passed / agg.count) * 100 : 0,
+            percent: Number.isFinite(agg.maxScore) && agg.maxScore > 0 ? (agg.score / agg.maxScore) * 100 : 0,
+        }))
         .filter((group) => group.count > 0)
         .sort((a, b) => b.count - a.count);
 }

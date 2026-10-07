@@ -310,7 +310,7 @@
     <div class="flex gap-1">
         <!-- 星期标签 -->
         <div class="py-px text-3xs leading-none text-muted-foreground">
-            {#each weekdayLabels as label}
+            {#each weekdayLabels as label, i (i)}
                 <div class="flex items-center" style="height: {CELL}px; margin-bottom: 4px">{label}</div>
             {/each}
         </div>
@@ -319,7 +319,7 @@
         <div class="min-w-0 flex-1 overflow-x-auto" role="group" aria-label={t("heatmap.ariaLabel")} bind:this={listEl}>
             <div class="w-max">
                 <div class="flex gap-1 pb-1 text-3xs leading-none text-muted-foreground">
-                    {#each monthLabels as label}
+                    {#each monthLabels as label, i (i)}
                         <span class="shrink-0" style="width: {CELL}px">{label}</span>
                     {/each}
                 </div>
@@ -371,7 +371,7 @@
     <div class="flex items-center gap-1 text-2xs text-muted-foreground">
         <span>{t("heatmap.less")}</span>
         <span class="bg-muted border-border inline-block size-3 rounded-sm border"></span>
-        {#each sortedRanges as r}
+        {#each sortedRanges as r, i (i)}
             <span
                 class="border-border inline-block size-3 rounded-sm border"
                 style="background:{isSafeCssColor(r.color) ? r.color : 'transparent'}"
