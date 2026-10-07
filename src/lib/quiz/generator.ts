@@ -8,16 +8,39 @@ import {
     buildTools,
     buildToolChoice,
     buildJsonObjectResponseFormat,
+    describeJsonShape,
+    extractQuestionArray,
+    parseJsonDetailed,
     parseJsonLoose,
 } from "../ai/schema";
 import type { GeneralConfig, PromptConfig, RecallGenConfig } from "@/types/config";
 import type { DifficultyDistribution } from "@/types/quiz";
 import type { Difficulty, Question, QuestionType } from "@/types/quiz";
 
-/** 审题进度回调：phase=当前阶段, round=当前轮次(1-based), detail=描述 */
-export type GenProgressCallback = (phase: GenPhase, round: number, detail: string) => void;
+/**
+ * 生成进度回调：phase=当前阶段, round=当前轮次(1-based), detail=描述。
+ * stats 是本轮的实时快照，供生成页展示「已收集/批次/丢弃」这类信息。
+ */
+export type GenProgressCallback = (phase: GenPhase, round: number, detail: string, stats?: GenStats) => void;
 
 export type GenPhase = "generating" | "reviewing" | "regenerating";
+
+/** 生成过程的实时快照（用于界面展示，不参与逻辑） */
+export interface GenStats {
+    phase: GenPhase;
+    /** 本轮配置要求的总题量 */
+    target: number;
+    /** 已成功收集的题目数 */
+    collected: number;
+    /** 当前批次序号（1-based） */
+    batch: number;
+    /** 批次数 */
+    batches: number;
+    /** 因格式不合格被丢弃的题目数 */
+    dropped: number;
+    /** 附加说明（例如某批失败已跳过） */
+    note?: string;
+}
 
 /** 审题结果 */
 interface ReviewItem {
@@ -68,11 +91,44 @@ interface BatchContext {
     signal?: AbortSignal;
 }
 
-/** 一批的请求结果；missing 表示模型没给出可用的 questions 数组 */
+/** 原始返回最多保留多少字符给用户查看（够看出模型给了什么，又不至于撑爆界面） */
+const RAW_SNIPPET_LIMIT = 4000;
+
+/**
+ * 一批请求没能给出可用题目数组时的诊断信息。
+ *
+ * 关键是区分「模型没说完」和「模型给的形状不对」：
+ * 前者要调大 Max Tokens，后者是别名/嵌套问题，两者的处置办法完全不同。
+ */
+interface BatchProblem {
+    /** 解析结果的类型：object / string / null … */
+    rawType: string;
+    /** 解析结果的顶层字段（数组则显示 [n]） */
+    keys: string[];
+    /** JSON 未闭合，典型是输出被截断 */
+    truncated: boolean;
+    /** 靠 jsonrepair 才解析成功（说明模型没给严格 JSON） */
+    repaired: boolean;
+    /** 原始返回长度 */
+    chars: number;
+    /** 原始返回片段，供用户在界面上查看与复制 */
+    raw: string;
+}
+
+/** 一批的请求结果；problem 表示模型没给出可用的 questions 数组 */
 interface BatchOutcome {
     questions: Question[];
     dropped: number;
-    missing?: { rawType: string };
+    problem?: BatchProblem;
+}
+
+/** 把诊断信息翻成可操作的错误 */
+function problemError(problem: BatchProblem): AIError {
+    if (problem.truncated) {
+        return new AIError(t("gen.truncatedQuestions"), undefined, "truncated", problem.raw);
+    }
+    const keys = problem.keys.length > 0 ? problem.keys.join("、") : t("gen.noKeys");
+    return new AIError(t("gen.missingQuestions", keys, String(problem.chars)), undefined, "parse", problem.raw);
 }
 
 /** 进度文案：常规批次显示「第 i/n 批」，补题批次显示「还差 N 题」 */
@@ -85,27 +141,52 @@ function batchLabel(index: number, count: number, total: number, toppingUp: bool
 async function requestBatch(ctx: BatchContext, counts: DifficultyDistribution): Promise<BatchOutcome> {
     const messages = buildGenerateMessages(ctx.prompts, ctx.general, ctx.content, ctx.types, counts);
     const result = await callLLM(ctx.genAI, messages as ChatMessage[], { ...ctx.callOpts, signal: ctx.signal });
-    const parsed = parseJsonLoose(result.content) as Record<string, unknown> | null;
+    const diag = parseJsonDetailed(result.content);
+    const hit = extractQuestionArray(diag.value);
 
-    // 兼容 AI 返回 {questions:[]} / {data:[]} / {items:[]} / 直接返回数组等情况
-    let rawQuestions: unknown[] | null = null;
-    if (Array.isArray(parsed?.questions)) {
-        rawQuestions = parsed.questions;
-    } else if (Array.isArray(parsed?.data)) {
-        rawQuestions = parsed.data;
-    } else if (Array.isArray(parsed)) {
-        rawQuestions = parsed;
-    } else if (Array.isArray(parsed?.items)) {
-        rawQuestions = parsed.items;
-    }
-    if (!rawQuestions) {
-        return { questions: [], dropped: 0, missing: { rawType: parsed === null ? "null" : typeof parsed } };
+    if (!hit) {
+        const shape = describeJsonShape(diag.value);
+        return {
+            questions: [],
+            dropped: 0,
+            problem: {
+                rawType: shape.type,
+                keys: shape.keys,
+                truncated: diag.truncated,
+                repaired: diag.repaired,
+                chars: result.content.length,
+                raw: result.content.slice(0, RAW_SNIPPET_LIMIT),
+            },
+        };
     }
 
     let dropped = 0;
-    const questions = validateQuestions(rawQuestions, ctx.types, () => {
-        dropped++;
-    });
+    let questions: Question[];
+    try {
+        questions = validateQuestions(hit.items, ctx.types, () => {
+            dropped++;
+        });
+    } catch (e) {
+        // 全部校验失败时，如果原文本来就是截断的，真正的原因就是「模型没说完」：
+        // 修复后的残缺 JSON 恰好能凑出一个字段不全的题目，
+        // 若按「校验失败」上报，用户会去怀疑模型能力而不是 Max Tokens。
+        if (diag.truncated) {
+            const shape = describeJsonShape(diag.value);
+            return {
+                questions: [],
+                dropped: 0,
+                problem: {
+                    rawType: shape.type,
+                    keys: shape.keys,
+                    truncated: true,
+                    repaired: diag.repaired,
+                    chars: result.content.length,
+                    raw: result.content.slice(0, RAW_SNIPPET_LIMIT),
+                },
+            };
+        }
+        throw e;
+    }
     return { questions, dropped };
 }
 
@@ -140,6 +221,21 @@ export async function generateQuestions(
     const collected: Question[] = [];
     let skipped = 0;
     const ctx: BatchContext = { prompts, general, content, types, genAI, callOpts, signal };
+    /** 本轮要求的题目总量（补题轮会改写成差额），仅用于进度展示 */
+    let targetTotal = Math.max(0, Math.round(difficulty.total));
+    /** 界面展示用的实时快照 */
+    let stats: GenStats = {
+        phase: "generating",
+        target: targetTotal,
+        collected: 0,
+        batch: 1,
+        batches: Math.max(1, batches.length),
+        dropped: 0,
+    };
+    const report = (detail: string, patch: Partial<GenStats> = {}): void => {
+        stats = { ...stats, target: targetTotal, collected: collected.length, dropped: skipped, ...patch };
+        onProgress?.(stats.phase, Math.max(1, stats.batch), detail, stats);
+    };
 
     /**
      * 依次请求多批并收集结果。
@@ -154,19 +250,30 @@ export async function generateQuestions(
         for (let i = 0; i < group.length; i++) {
             // 每批开始前检查：取消后不再发新的请求（在途的那个无法撤回，但不会再有下一批）
             throwIfAborted(signal);
-            onProgress?.("generating", 1, batchLabel(i, group.length, group[i].total, toppingUp));
+            report(batchLabel(i, group.length, group[i].total, toppingUp), {
+                phase: "generating",
+                batch: i + 1,
+                batches: group.length,
+            });
 
             const outcome = await requestBatch(ctx, group[i]);
-            if (outcome.missing) {
+            if (outcome.problem) {
                 // 分批时单批失败不该作废已成功的批次
                 if (allowPartial && collected.length > 0) {
-                    console.warn("[RecallGen] 某一批出题失败，保留已成功的批次", outcome.missing.rawType);
+                    console.warn("[RecallGen] 某一批出题失败，保留已成功的批次", outcome.problem.rawType);
+                    report(t("gen.batchSkipped", String(i + 1)), { note: t("gen.batchSkipped", String(i + 1)) });
                     continue;
                 }
-                throw new AIError(t("gen.missingQuestions", outcome.missing.rawType), undefined, "parse");
+                throw problemError(outcome.problem);
             }
             skipped += outcome.dropped;
             collected.push(...outcome.questions);
+            // 每批回来都刷新一次快照，让「已收集」实时可见
+            report(batchLabel(i, group.length, group[i].total, toppingUp), {
+                phase: "generating",
+                batch: i + 1,
+                batches: group.length,
+            });
         }
     };
 
@@ -177,6 +284,7 @@ export async function generateQuestions(
     const shortfall = Math.max(0, Math.round(difficulty.total) - collected.length);
     if (shortfall > 0) {
         throwIfAborted(signal);
+        targetTotal = shortfall;
         try {
             await runBatches(planBatches(scaleDistribution(difficulty, shortfall)), {
                 allowPartial: true,
@@ -193,13 +301,17 @@ export async function generateQuestions(
     let questions = renumberQuestions(dedupeQuestions(collected));
     const discarded = skipped + (collected.length - questions.length);
     if (discarded > 0) {
-        onProgress?.("generating", 1, t("gen.dropped", String(questions.length), String(discarded)));
+        targetTotal = Math.max(0, Math.round(difficulty.total));
+        report(t("gen.dropped", String(questions.length), String(discarded)), {
+            phase: "generating",
+            collected: questions.length,
+        });
     }
 
-    // 2. 审题循环（仅当审题者模型存在时执行）
+    // 3. 审题循环（仅当审题者模型存在时执行）
     if (ai.roles.reviewer && ai.models.some((m) => m.id === ai.roles.reviewer)) {
         throwIfAborted(signal);
-        questions = await reviewLoop(config, questions, content, onProgress, signal);
+        questions = await reviewLoop(config, questions, content, report, signal);
     }
 
     return questions;
@@ -210,7 +322,7 @@ async function reviewLoop(
     config: RecallGenConfig,
     questions: Question[],
     content: string,
-    onProgress?: GenProgressCallback,
+    report: (detail: string, patch?: Partial<GenStats>) => void,
     signal?: AbortSignal
 ): Promise<Question[]> {
     const { ai } = config;
@@ -223,7 +335,13 @@ async function reviewLoop(
 
     for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
         throwIfAborted(signal);
-        onProgress?.("reviewing", round, t("gen.reviewing", String(round)));
+        const canvas = {
+            phase: "reviewing" as GenPhase,
+            batch: round,
+            batches: MAX_REVIEW_ROUNDS,
+            collected: questions.length,
+        };
+        report(t("gen.reviewing", String(round)), canvas);
 
         const reviewMessages = buildReviewMessages(prompts, questions, config.general.language);
         const reviewResult = await callLLM(reviewAI, reviewMessages as ChatMessage[], {
@@ -236,7 +354,7 @@ async function reviewLoop(
         const reviews = reviewParsed?.reviews;
         if (!Array.isArray(reviews)) {
             // 审题结果解析失败，跳过审题（提示一下，否则用户只看到「审题中」就没有下文）
-            onProgress?.("reviewing", round, t("gen.reviewSkipped"));
+            report(t("gen.reviewSkipped"), canvas);
             break;
         }
 
@@ -246,23 +364,28 @@ async function reviewLoop(
         const { indices: failedIndices, reasons } = collectFailedReviews(reviews, questions.length);
 
         if (failedIndices.length === 0) {
-            onProgress?.("reviewing", round, t("gen.reviewPassed", String(round), String(questions.length)));
+            report(t("gen.reviewPassed", String(round), String(questions.length)), canvas);
             break;
         }
 
         if (round === MAX_REVIEW_ROUNDS) {
-            onProgress?.("reviewing", round, t("gen.reviewMaxRounds", String(failedIndices.length)));
+            report(t("gen.reviewMaxRounds", String(failedIndices.length)), canvas);
             break;
         }
 
         // 重新生成失败题
-        onProgress?.("regenerating", round, t("gen.regenerating", String(round), String(failedIndices.length)));
+        report(t("gen.regenerating", String(round), String(failedIndices.length)), {
+            ...canvas,
+            phase: "regenerating",
+        });
         const failedQuestions = failedIndices.map((i) => questions[i]);
         const regenMessages = buildRegenerateMessages(prompts, config.general, failedQuestions, reasons, content);
         const regenResult = await callLLM(genAI, regenMessages as ChatMessage[], { ...genOpts, signal });
 
-        const regenParsed = parseJsonLoose(regenResult.content) as { questions?: unknown[] } | null;
-        if (!regenParsed || !Array.isArray(regenParsed.questions)) {
+        // 与生成路径同样宽容：模型可能换个键名装这批重做的题目
+        const regenHit = extractQuestionArray(parseJsonLoose(regenResult.content));
+        if (!regenHit || regenHit.items.length === 0) {
+            report(t("gen.regenFailed"), { ...canvas, phase: "regenerating" });
             break; // 重新生成失败，保留原题
         }
 
@@ -272,16 +395,15 @@ async function reviewLoop(
             const target = failedIndices[i];
             const current = questions[target];
             if (!current) continue;
-            const result = coerceQuestion(regenParsed.questions[i], current.id, types);
+            const result = coerceQuestion(regenHit.items[i], current.id, types);
             if (!result.ok || !result.question) continue;
             questions[target] = result.question;
             replaced++;
         }
-        onProgress?.(
-            "regenerating",
-            round,
-            t("gen.regenerated", String(round), String(replaced), String(failedIndices.length))
-        );
+        report(t("gen.regenerated", String(round), String(replaced), String(failedIndices.length)), {
+            ...canvas,
+            phase: "regenerating",
+        });
     }
 
     return questions;
@@ -371,10 +493,14 @@ export function validateQuestions(
     }
 
     if (out.length === 0) {
+        // kind 必须是 parse：默认值 http 会让错误页按「网络/服务端」给出建议，
+        // 而这其实是模型返回内容的问题，提示方向完全相反
         throw new AIError(
             raw.length === 0
                 ? t("gen.emptyQuestions")
-                : t("gen.allInvalid", String(raw.length), reasons.slice(0, 3).join("; "))
+                : t("gen.allInvalid", String(raw.length), reasons.slice(0, 3).join("; ")),
+            undefined,
+            "parse"
         );
     }
     return out;

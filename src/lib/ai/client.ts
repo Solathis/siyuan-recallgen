@@ -14,7 +14,13 @@ export class AIError extends Error {
     constructor(
         message: string,
         readonly status?: number,
-        readonly kind: AIErrorKind = "http"
+        readonly kind: AIErrorKind = "http",
+        /**
+         * 出错时模型/服务端返回的原文。
+         * 解析类失败（尤其是截断）只看一句「缺少 questions 数组」无法排查，
+         * 把原文带上后界面可以展开给用户看、也方便复制出来反馈。
+         */
+        readonly raw?: string
     ) {
         super(message);
         this.name = "AIError";
@@ -232,7 +238,7 @@ async function forward(
 
 function checkHttpOk(fr: ForwardResponse): void {
     if (fr.status < 200 || fr.status >= 300) {
-        throw new AIError(`AI HTTP ${fr.status}: ${fr.body.slice(0, 500)}`, fr.status);
+        throw new AIError(`AI HTTP ${fr.status}: ${fr.body.slice(0, 500)}`, fr.status, "http", fr.body);
     }
 }
 
@@ -291,7 +297,7 @@ function extractChatContent(parsed: unknown): string {
             choices?: Array<{
                 message?: {
                     content?: string;
-                    tool_calls?: Array<{ function?: { arguments?: string } }>;
+                    tool_calls?: Array<{ function?: { arguments?: unknown } }>;
                 };
             }>;
         }
@@ -301,6 +307,8 @@ function extractChatContent(parsed: unknown): string {
     // 优先从 tool_calls 提取（function calling 模式）
     const toolArgs = msg.tool_calls?.[0]?.function?.arguments;
     if (typeof toolArgs === "string" && toolArgs.length > 0) return toolArgs;
+    // 少数 OpenAI 兼容网关会把 arguments 直接给成对象（不做字符串化），这里补一层
+    if (toolArgs && typeof toolArgs === "object") return JSON.stringify(toolArgs);
     // 回退到 content
     return typeof msg.content === "string" && msg.content.length > 0 ? msg.content : "";
 }

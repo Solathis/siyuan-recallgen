@@ -3,7 +3,14 @@ import { AIError } from "@/lib/ai/client";
 import { __resetFetchSyncPost, __setFetchSyncPost } from "@/test/siyuan-stub";
 import { getDefaultConfig } from "@/types/config";
 import type { Question, QuestionType } from "@/types/quiz";
-import { coerceQuestion, collectFailedReviews, generateQuestions, toTags, validateQuestions } from "./generator";
+import {
+    coerceQuestion,
+    collectFailedReviews,
+    generateQuestions,
+    toTags,
+    validateQuestions,
+    type GenStats,
+} from "./generator";
 
 const ALL: QuestionType[] = ["single_choice", "multiple_choice", "fill_blank", "true_false", "subjective", "coding"];
 
@@ -548,6 +555,165 @@ describe("补齐时的进度文案", () => {
         await generateQuestions(config, "笔记", (_phase, _round, detail) => labels.push(detail));
         expect(labels.some((l) => l.includes("补齐"))).toBe(false);
         expect(labels.some((l) => l.includes("生成"))).toBe(true);
+        __resetFetchSyncPost();
+    });
+});
+
+describe("返回形状与截断的诊断", () => {
+    const proxyBody = (content: string, finish = "stop") => ({
+        code: 0,
+        msg: "",
+        data: {
+            body: JSON.stringify({ choices: [{ message: { content }, finish_reason: finish }] }),
+            status: 200,
+            contentType: "application/json",
+            headers: null,
+            elapsed: 1,
+            url: "",
+        },
+    });
+    const q = (n: number) => ({ type: "true_false", difficulty: "easy", question: `第 ${n} 题`, answer: true });
+    const oneQuestion = () => {
+        const config = getDefaultConfig();
+        config.general.difficulty = { total: 1, easy: 1, medium: 0, hard: 0 };
+        config.general.allowedTypes = ["true_false"];
+        config.ai.roles.reviewer = "";
+        return config;
+    };
+    /** 捕获 reject 的错误对象，便于断言 kind / raw / message；没抛错就直接失败 */
+    const failure = async (config: ReturnType<typeof getDefaultConfig>): Promise<AIError> => {
+        const err = await generateQuestions(config, "笔记内容").then(
+            () => null,
+            (e: unknown) => e
+        );
+        expect(err, "本该抛出解析错误，实际却成功了").toBeInstanceOf(AIError);
+        return err as AIError;
+    };
+
+    it("被截断的输出报「输出被截断」，并带上模型原文（而不是一句缺少 questions）", async () => {
+        const truncated = '{"questions":[{"type":"true_false","difficulty":"easy","question":"第 1 题';
+        __setFetchSyncPost(() => proxyBody(truncated));
+        const err = await failure(oneQuestion());
+        expect(err).toBeInstanceOf(AIError);
+        expect(err.kind).toBe("truncated");
+        expect(err.message).toMatch(/截断/);
+        expect(err.raw).toContain('"questions"');
+        __resetFetchSyncPost();
+    });
+
+    it("形状确实不对时，错误里列出顶层字段名并附原文", async () => {
+        __setFetchSyncPost(() => proxyBody(JSON.stringify({ summary: "好的", meta: 1 })));
+        const err = await failure(oneQuestion());
+        expect(err.kind).toBe("parse");
+        expect(err.message).toContain("summary");
+        expect(err.message).toContain("meta");
+        expect(err.raw).toContain("summary");
+        __resetFetchSyncPost();
+    });
+
+    it("截断后只剩残缺对象时不再误报成「形状不对」", async () => {
+        // `{"questions":` 会被 jsonrepair 修成 {questions:null}：这属于截断，不是形状问题
+        __setFetchSyncPost(() => proxyBody('{"questions":'));
+        const err = await failure(oneQuestion());
+        expect(err.kind).toBe("truncated");
+        __resetFetchSyncPost();
+    });
+
+    it("题目放在 data / items / 中文键下也能正常出题", async () => {
+        for (const key of ["data", "items", "list", "result", "题目", "题目列表"]) {
+            __setFetchSyncPost(() => proxyBody(JSON.stringify({ [key]: [q(1)] })));
+            const questions = await generateQuestions(oneQuestion(), "笔记内容");
+            expect(questions, `键 ${key}`).toHaveLength(1);
+        }
+        __resetFetchSyncPost();
+    });
+
+    it("整条回复就是一道题时也能出题", async () => {
+        __setFetchSyncPost(() => proxyBody(JSON.stringify(q(1))));
+        const questions = await generateQuestions(oneQuestion(), "笔记内容");
+        expect(questions).toHaveLength(1);
+        __resetFetchSyncPost();
+    });
+
+    it("数组被多包一层（result.quiz.questions）也能出题", async () => {
+        __setFetchSyncPost(() => proxyBody(JSON.stringify({ result: { quiz: { questions: [q(1)] } } })));
+        const questions = await generateQuestions(oneQuestion(), "笔记内容");
+        expect(questions).toHaveLength(1);
+        __resetFetchSyncPost();
+    });
+
+    it("重做不合格题时同样接受别名键（原先只认 questions，会静默放弃重做）", async () => {
+        const config = oneQuestion();
+        // 让审题循环真的跑起来：把审题者指向同一个存在的模型
+        config.ai.roles.reviewer = config.ai.roles.generator;
+        const original = { ...q(1), question: "原题" };
+        const redone = { ...q(1), question: "重做后的题" };
+        let call = 0;
+        __setFetchSyncPost(() => {
+            call++;
+            if (call === 1) return proxyBody(JSON.stringify({ questions: [original] }));
+            if (call === 2)
+                return proxyBody(JSON.stringify({ reviews: [{ index: 0, passed: false, reason: "太简单" }] }));
+            if (call === 3) return proxyBody(JSON.stringify({ data: [redone] })); // 别名键
+            return proxyBody(JSON.stringify({ reviews: [{ index: 0, passed: true }] }));
+        });
+        const questions = await generateQuestions(config, "笔记内容");
+        expect(call).toBe(4);
+        expect(questions[0].question).toBe("重做后的题");
+        __resetFetchSyncPost();
+    });
+});
+
+describe("生成进度快照", () => {
+    const q = (n: number) => ({ type: "true_false", difficulty: "easy", question: `第 ${n} 题`, answer: true });
+    const reply = (questions: unknown[]) => ({
+        code: 0,
+        msg: "",
+        data: {
+            body: JSON.stringify({
+                choices: [{ message: { content: JSON.stringify({ questions }) }, finish_reason: "stop" }],
+            }),
+            status: 200,
+            contentType: "application/json",
+            headers: null,
+            elapsed: 1,
+            url: "",
+        },
+    });
+
+    it("每批开始时推送快照：目标题量、已收集、批次序号", async () => {
+        const config = getDefaultConfig();
+        // 30 题超过单次上限，会被拆成多批
+        config.general.difficulty = { total: 30, easy: 30, medium: 0, hard: 0 };
+        config.general.allowedTypes = ["true_false"];
+        config.ai.roles.reviewer = "";
+        __setFetchSyncPost(() => reply([q(1)]));
+        const snapshots: GenStats[] = [];
+        await generateQuestions(config, "笔记内容", (_phase, _round, _detail, stats) => {
+            if (stats) snapshots.push({ ...stats });
+        });
+        expect(snapshots.length).toBeGreaterThan(0);
+        expect(snapshots[0]).toMatchObject({ phase: "generating", target: 30, collected: 0, batch: 1 });
+        expect(snapshots[0].batches).toBeGreaterThan(1);
+        // 收集数必须随批次推进而增长
+        expect(Math.max(...snapshots.map((s) => s.collected))).toBeGreaterThan(0);
+        __resetFetchSyncPost();
+    });
+
+    it("丢弃不合格题目会体现在快照里", async () => {
+        const config = getDefaultConfig();
+        config.general.difficulty = { total: 1, easy: 1, medium: 0, hard: 0 };
+        config.general.allowedTypes = ["true_false"];
+        config.ai.roles.reviewer = "";
+        // 一题没题干、一题类型未启用：都会被丢弃
+        __setFetchSyncPost(() =>
+            reply([{ type: "true_false", difficulty: "easy", question: "" }, q(2), { type: "coding", question: "x" }])
+        );
+        const snapshots: GenStats[] = [];
+        await generateQuestions(config, "笔记内容", (_p, _r, _d, stats) => {
+            if (stats) snapshots.push({ ...stats });
+        });
+        expect(Math.max(...snapshots.map((s) => s.dropped))).toBeGreaterThanOrEqual(1);
         __resetFetchSyncPost();
     });
 });

@@ -527,7 +527,7 @@
     "gen.regenerating": "Round {0}: regenerating {1} failed question(s)…",
     "gen.regenerated": "Round {0}: replaced {1}/{2} question(s)",
     "gen.dropped": "Generated {0} question(s), dropped {1} invalid one(s)",
-    "gen.missingQuestions": "AI response is missing the questions array (parsed type: {0})",
+    "gen.missingQuestions": "No questions array in the AI response (top-level fields: {0}; {1} characters). Common shapes (questions / data / items) were tried too — expand \"Raw response\" below to see what the model actually returned.",
     "gen.emptyQuestions": "AI returned an empty questions array",
     "gen.allInvalid": "All {0} question(s) failed validation: {1}",
     "validate.notObject": "Question is not an object",
@@ -648,5 +648,9 @@
     "quiz.configEasy": "Easy {0}",
     "quiz.configMedium": "Med {0}",
     "quiz.configHard": "Hard {0}",
-    "quiz.configExtraScope": "Beyond {0}%"
+    "quiz.configExtraScope": "Beyond {0}%",
+    "gen.truncatedQuestions": "The AI output was cut off mid-JSON, so no questions could be read. Usually the model's Max Tokens is too small or this round asks for too many questions: raise Max Tokens in Settings → AI endpoints & models, or generate fewer questions.",
+    "gen.noKeys": "(no fields)",
+    "gen.batchSkipped": "Batch {0} returned no usable questions and was skipped",
+    "gen.regenFailed": "Regenerating the failed questions did not succeed; kept the originals"
 }

@@ -123,10 +123,32 @@ export function buildJsonObjectResponseFormat(): unknown {
  * 处理 AI 回复中包含前导文字、代码围栏、后置文字等情况。
  */
 export function parseJsonLoose(text: string): unknown {
+    return parseJsonDetailed(text).value;
+}
+
+/** JSON 解析诊断：除了结果，还说明「是否需要修复」与「是否疑似被截断」 */
+export interface JsonParseDiagnosis {
+    value: unknown;
+    /** 模型没给出严格合法 JSON，靠 jsonrepair 才解析出来 */
+    repaired: boolean;
+    /** 括号/引号未闭合，典型是输出被 maxTokens 截断 */
+    truncated: boolean;
+}
+
+/**
+ * 带诊断的宽松解析。
+ *
+ * 为什么需要 truncated：被截断的 JSON 会被 jsonrepair「修」成看似合法的残缺对象
+ * （`{"questions":` → `{questions:null}`），只看解析结果无法区分
+ * 「模型给错了形状」和「模型没说完」，用户只会拿到一句
+ * 「缺少 questions 数组（解析结果类型：object）」，完全猜不到要调大 Max Tokens。
+ */
+export function parseJsonDetailed(text: string): JsonParseDiagnosis {
     const cleaned = stripCodeFence(text);
+    const truncated = isJsonTruncated(cleaned);
     // 1. 直接解析
     try {
-        return JSON.parse(cleaned);
+        return { value: JSON.parse(cleaned), repaired: false, truncated };
     } catch {
         /* 继续容错 */
     }
@@ -134,22 +156,176 @@ export function parseJsonLoose(text: string): unknown {
     const extracted = extractJsonObject(cleaned);
     if (extracted) {
         try {
-            return JSON.parse(extracted);
+            return { value: JSON.parse(extracted), repaired: false, truncated };
         } catch {
             /* 继续修复 */
         }
         try {
-            return JSON.parse(jsonrepair(extracted));
+            return { value: JSON.parse(jsonrepair(extracted)), repaired: true, truncated };
         } catch (e) {
             throw new Error(t("schema.parseFailed", (e as Error).message, cleaned.slice(0, 200)));
         }
     }
     // 3. 对全文做 jsonrepair 最后尝试
     try {
-        return JSON.parse(jsonrepair(cleaned));
+        return { value: JSON.parse(jsonrepair(cleaned)), repaired: true, truncated };
     } catch (e) {
         throw new Error(t("schema.parseFailed", (e as Error).message, cleaned.slice(0, 200)));
     }
+}
+
+/**
+ * 判断文本里的 JSON 是否「没写完」。
+ *
+ * 做法：从第一个 `{` 或 `[` 开始按括号深度扫描（忽略字符串内部），
+ * 若走到末尾深度都没回到 0（或停在未闭合的字符串里），就是被截断了。
+ * 纯文本（没有 JSON 起始符）返回 false——那是形状问题，不是截断问题。
+ */
+export function isJsonTruncated(text: string): boolean {
+    const begin = firstJsonStart(text);
+    if (begin < 0) return false;
+    let depth = 0;
+    let inStr = false;
+    let escape = false;
+    for (let i = begin; i < text.length; i++) {
+        const ch = text[i];
+        if (inStr) {
+            if (escape) escape = false;
+            else if (ch === "\\") escape = true;
+            else if (ch === '"') inStr = false;
+            continue;
+        }
+        if (ch === '"') {
+            inStr = true;
+            continue;
+        }
+        if (ch === "{" || ch === "[") depth++;
+        else if (ch === "}" || ch === "]") {
+            depth--;
+            if (depth === 0) return false;
+        }
+    }
+    return true;
+}
+
+/** 第一个 `{` 或 `[` 的位置；没有则返回 -1 */
+function firstJsonStart(text: string): number {
+    const obj = text.indexOf("{");
+    const arr = text.indexOf("[");
+    if (obj >= 0 && arr >= 0) return Math.min(obj, arr);
+    return obj >= 0 ? obj : arr;
+}
+
+/** 题目数组的抽取结果；path 仅用于诊断信息 */
+export interface QuestionArrayHit {
+    items: unknown[];
+    path: string;
+}
+
+/** 模型可能用这些键装题目数组（中英文都见过） */
+const QUESTION_KEYS = [
+    "questions",
+    "question",
+    "data",
+    "items",
+    "list",
+    "quiz",
+    "result",
+    "results",
+    "题目",
+    "题目列表",
+    "试题",
+];
+
+/** 单个元素是否像一道题 */
+function isQuestionLike(value: unknown): boolean {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const o = value as Record<string, unknown>;
+    return typeof o.question === "string" || typeof o.type === "string" || "answer" in o;
+}
+
+/**
+ * 把值当成题目数组来认；不像则返回 null。
+ *
+ * 允许夹杂少量不合格元素（交给校验层逐题丢弃），
+ * 但过半都不像题目时说明这不是题目数组（例如误命中 tags:["a","b"]）。
+ */
+function asQuestionArray(value: unknown): unknown[] | null {
+    if (!Array.isArray(value)) return null;
+    if (value.length === 0) return value;
+    const like = value.filter(isQuestionLike).length;
+    return like * 2 >= value.length ? value : null;
+}
+
+function tryParseJson(text: string): unknown {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return undefined;
+    }
+}
+
+/** 在对象里递归找题目数组，取最长的那个（深度上限 3） */
+function findQuestionArrayDeep(value: unknown, depth: number, path: string): QuestionArrayHit | null {
+    if (depth <= 0 || !value || typeof value !== "object" || Array.isArray(value)) return null;
+    let best: QuestionArrayHit | null = null;
+    const better = (hit: QuestionArrayHit | null): void => {
+        if (hit && hit.items.length > 0 && (!best || hit.items.length > best.items.length)) best = hit;
+    };
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+        const here = `${path}.${key}`;
+        better({ items: asQuestionArray(child) ?? [], path: here });
+        better(findQuestionArrayDeep(child, depth - 1, here));
+        if (typeof child === "string") {
+            better({ items: asQuestionArray(tryParseJson(child)) ?? [], path: `${here}(string)` });
+        }
+    }
+    return best;
+}
+
+/**
+ * 从任意解析结果里找出题目数组。
+ *
+ * 只认 `parsed.questions` 时，模型把题目放在 `data`/`items`/中文键下、
+ * 整条回复就是一道题、或数组被多包了一层，都会变成「缺少 questions 数组」，
+ * 而模型其实已经给出了可用的题目。
+ */
+export function extractQuestionArray(parsed: unknown): QuestionArrayHit | null {
+    if (parsed === null || parsed === undefined) return null;
+
+    const top = asQuestionArray(parsed);
+    if (top) return { items: top, path: "$" };
+
+    if (typeof parsed !== "object" || Array.isArray(parsed)) return null;
+
+    const obj = parsed as Record<string, unknown>;
+    // 先按约定键找；空数组先记下但继续找，避免 {data:[], questions:[…]} 选错
+    let emptyHit: QuestionArrayHit | null = null;
+    for (const key of QUESTION_KEYS) {
+        if (!(key in obj)) continue;
+        const hit = asQuestionArray(obj[key]);
+        if (hit && hit.length > 0) return { items: hit, path: key };
+        if (hit && !emptyHit) emptyHit = { items: hit, path: key };
+        if (typeof obj[key] === "string") {
+            const fromString = asQuestionArray(tryParseJson(obj[key] as string));
+            if (fromString && fromString.length > 0) return { items: fromString, path: `${key}(string)` };
+        }
+    }
+    if (emptyHit) return emptyHit;
+
+    const deep = findQuestionArrayDeep(obj, 3, "$");
+    if (deep) return deep;
+    // 整条回复就是一道题
+    if (isQuestionLike(parsed)) return { items: [parsed], path: "$(single)" };
+    return null;
+}
+
+/** 顶层形状摘要，用于把「解析不出来」变成可诊断的错误信息 */
+export function describeJsonShape(value: unknown): { type: string; keys: string[] } {
+    if (value === null) return { type: "null", keys: [] };
+    if (Array.isArray(value)) return { type: "array", keys: [`[${value.length}]`] };
+    if (typeof value === "object") return { type: "object", keys: Object.keys(value as object).slice(0, 8) };
+    return { type: typeof value, keys: [] };
 }
 
 /** 剥离 LLM 常见的 ```json 包裹（仅在文本开头时生效，避免截断 JSON 内部的代码块） */
