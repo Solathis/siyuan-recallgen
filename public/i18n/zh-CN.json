@@ -93,7 +93,7 @@
     "bank.removed": "已从题库删除",
     "bank.removeFailed": "删除失败：{0}",
     "bank.detailHistory": "复习历史（{0} 次）",
-    "bank.detailRecentAvg": "· 最近 5 次平均 {0} 分",
+    "bank.detailRecentAvg": "· 最近 {0} 次平均 {1} 分",
     "bank.detailHistoryEmpty": "这道题还没被考过",
     "bank.detailHistoryLegacy": "早期版本未记录逐次明细，已有 {0} 次作答",
     "bank.detailHistoryChart": "复习成绩趋势",
@@ -685,5 +685,6 @@
     "err.raw.copied": "已复制到剪贴板",
     "err.raw.failed": "复制失败，请手动选中文本复制",
     "gen.plan.charsLabel": "内容长度",
-    "quiz.elapsed": "已用时 {0}"
+    "quiz.elapsed": "已用时 {0}",
+    "bank.dueLine": "共 {1} 题中有 {0} 题已到期，可立即开始复习"
 }

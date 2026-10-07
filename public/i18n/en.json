@@ -93,7 +93,7 @@
     "bank.removed": "Removed from the question bank",
     "bank.removeFailed": "Delete failed: {0}",
     "bank.detailHistory": "Review history ({0} attempts)",
-    "bank.detailRecentAvg": "· last 5 average {0}",
+    "bank.detailRecentAvg": "· avg {1} over last {0} attempt(s)",
     "bank.detailHistoryEmpty": "This question has not been attempted yet",
     "bank.detailHistoryLegacy": "Earlier versions did not record per-attempt detail; {0} attempts on file",
     "bank.detailHistoryChart": "Score trend across reviews",
@@ -685,5 +685,6 @@
     "err.raw.copied": "Copied to clipboard",
     "err.raw.failed": "Copy failed — please select the text manually",
     "gen.plan.charsLabel": "Content length",
-    "quiz.elapsed": "Elapsed {0}"
+    "quiz.elapsed": "Elapsed {0}",
+    "bank.dueLine": "{0} of {1} questions are due — start reviewing now"
 }
