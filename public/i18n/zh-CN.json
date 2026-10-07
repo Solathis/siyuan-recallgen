@@ -331,6 +331,7 @@
     "settings.ai.colName": "模型名称",
     "settings.ai.colTemp": "温度",
     "settings.ai.colMaxTokens": "Max Tokens",
+    "settings.ai.maxTokensAuto": "自动",
     "settings.ai.colAction": "操作",
     "settings.ai.noModels": "该端点下暂无模型",
     "settings.ai.noEndpoints": "暂无端点，请点击下方按钮添加",
@@ -640,5 +641,6 @@
     "bank.tagAffected": "已更新 {0} 条题目",
     "bank.tagConfirmDelete": "确定删除标签「{0}」？该操作会影响 {1} 条题目",
     "settings.general.dailyGoalHint": "统计页会显示今日已答题数与目标的对比，帮助保持学习节奏",
-    "stats.todayDone": "{0} / {1} 题"
+    "stats.todayDone": "{0} / {1} 题",
+    "settings.ai.maxTokensCustom": "自定义"
 }

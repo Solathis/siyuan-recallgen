@@ -222,13 +222,29 @@ describe("mergeImportedConfig - 端点与模型", () => {
             config: {
                 ai: {
                     endpoints: [{ id: "ep-1", name: "端点", baseUrl: "https://x" }],
-                    models: [{ id: "m-1", name: "模型", endpointId: "ep-1", temperature: 9, maxTokens: 1 }],
+                    models: [{ id: "m-1", name: "模型", endpointId: "ep-1", temperature: 9, maxTokens: -100 }],
                 },
             },
         });
         const { config } = mergeImportedConfig(base(), text);
         expect(config.ai.models[0].temperature).toBe(2);
-        expect(config.ai.models[0].maxTokens).toBe(256);
+        expect(config.ai.models[0].maxTokens).toBe(0); // 负数收敛为 0（自动模式）
+    });
+
+    it("maxTokens 为 0 表示自动模式（不发送 max_tokens 到 API）", () => {
+        const text = JSON.stringify({
+            app: "recallgen",
+            version: 1,
+            includesSecrets: true,
+            config: {
+                ai: {
+                    endpoints: [{ id: "ep-1", name: "端点", baseUrl: "https://x" }],
+                    models: [{ id: "m-1", name: "模型", endpointId: "ep-1", maxTokens: 0 }],
+                },
+            },
+        });
+        const { config } = mergeImportedConfig(base(), text);
+        expect(config.ai.models[0].maxTokens).toBe(0);
     });
 
     it("未知协议回落到 chat", () => {

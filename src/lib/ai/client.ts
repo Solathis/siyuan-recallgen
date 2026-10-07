@@ -311,9 +311,11 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
         model: rc.model,
         messages,
         temperature: opts.temperature ?? rc.temperature,
-        max_tokens: opts.maxTokens ?? rc.maxTokens,
         stream: false,
     };
+    const maxTokens = opts.maxTokens ?? rc.maxTokens;
+    // maxTokens 为 0 表示「由 API 决定」，不发送 max_tokens 让服务端用模型默认值
+    if (maxTokens > 0) body.max_tokens = maxTokens;
     if (opts.tools) {
         body.tools = opts.tools;
         body.tool_choice = opts.toolChoice ?? "auto";
@@ -380,8 +382,9 @@ async function callResponses(rc: ResolvedAIConfig, messages: ChatMessage[], opts
         model: rc.model,
         input: messages,
         temperature: opts.temperature ?? rc.temperature,
-        max_output_tokens: opts.maxTokens ?? rc.maxTokens,
     };
+    const respMaxTokens = opts.maxTokens ?? rc.maxTokens;
+    if (respMaxTokens > 0) body.max_output_tokens = respMaxTokens;
     // 开启 JSON Schema 时上层给的是 tools，这里优先映射成结构化输出格式
     const fmt = toolsToResponsesFormat(opts.tools) ?? toResponsesFormat(opts.responseFormat);
     if (fmt) body.text = { format: fmt };
@@ -436,9 +439,10 @@ async function callMessages(rc: ResolvedAIConfig, messages: ChatMessage[], opts:
     const body: Record<string, unknown> = {
         model: rc.model,
         messages: apiMessages,
-        max_tokens: opts.maxTokens ?? rc.maxTokens,
         stream: false,
     };
+    const msgMaxTokens = opts.maxTokens ?? rc.maxTokens;
+    if (msgMaxTokens > 0) body.max_tokens = msgMaxTokens;
     if (system) body.system = system;
     body.temperature = opts.temperature ?? rc.temperature;
     // 强制调用指定工具：Anthropic 没有 response_format，结构化输出只能靠 tool use

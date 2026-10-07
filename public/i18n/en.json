@@ -331,6 +331,7 @@
     "settings.ai.colName": "Model Name",
     "settings.ai.colTemp": "Temp",
     "settings.ai.colMaxTokens": "Max Tokens",
+    "settings.ai.maxTokensAuto": "Auto",
     "settings.ai.colAction": "Action",
     "settings.ai.noModels": "No models under this endpoint",
     "settings.ai.noEndpoints": "No endpoints yet, click below to add",
@@ -640,5 +641,6 @@
     "bank.tagAffected": "{0} question(s) updated",
     "bank.tagConfirmDelete": "Delete tag \"{0}\"? This affects {1} question(s)",
     "settings.general.dailyGoalHint": "The stats panel shows today's answered count vs your goal to help maintain momentum",
-    "stats.todayDone": "{0} / {1}"
+    "stats.todayDone": "{0} / {1}",
+    "settings.ai.maxTokensCustom": "Custom"
 }

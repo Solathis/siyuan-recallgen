@@ -120,7 +120,7 @@
             name: nextModelName(endpointId),
             endpointId,
             temperature: 0.7,
-            maxTokens: 4096,
+            maxTokens: 16384,
         };
         patchAi({ models: [...config.ai.models, model] });
     }
@@ -318,16 +318,33 @@
                                 onchange={(e) =>
                                     patchModel(model.id, { temperature: parseFloat(e.currentTarget.value) })}
                             />
-                            <Input
-                                type="number"
-                                step="256"
-                                min="256"
-                                class="text-center"
-                                aria-label={t("settings.ai.colMaxTokens")}
-                                value={model.maxTokens}
-                                onchange={(e) =>
-                                    patchModel(model.id, { maxTokens: parseInt(e.currentTarget.value, 10) })}
-                            />
+                            {#if model.maxTokens === 0}
+                                <Select.Root
+                                    type="single"
+                                    value="auto"
+                                    onValueChange={(v) =>
+                                        patchModel(model.id, { maxTokens: v === "custom" ? 16384 : parseInt(v, 10) })}
+                                >
+                                    <Select.Trigger class="h-8 w-20 text-xs" aria-label={t("settings.ai.colMaxTokens")}>
+                                        {t("settings.ai.maxTokensAuto")}
+                                    </Select.Trigger>
+                                    <Select.Content>
+                                        <Select.Item value="auto">{t("settings.ai.maxTokensAuto")}</Select.Item>
+                                        <Select.Item value="custom">{t("settings.ai.maxTokensCustom")}</Select.Item>
+                                    </Select.Content>
+                                </Select.Root>
+                            {:else}
+                                <Input
+                                    type="number"
+                                    step="1024"
+                                    min="0"
+                                    class="text-center"
+                                    aria-label={t("settings.ai.colMaxTokens")}
+                                    value={model.maxTokens}
+                                    onchange={(e) =>
+                                        patchModel(model.id, { maxTokens: parseInt(e.currentTarget.value, 10) || 0 })}
+                                />
+                            {/if}
                             <Button variant="ghost" size="sm" onclick={() => removeModel(model.id)}>
                                 {t("common.delete")}
                             </Button>

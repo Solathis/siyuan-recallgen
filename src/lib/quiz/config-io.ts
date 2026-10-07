@@ -221,7 +221,7 @@ function sanitizeModels(value: unknown, endpoints: AIEndpoint[], warnings: strin
             name: typeof candidate.name === "string" && candidate.name ? candidate.name : candidate.id,
             endpointId: candidate.endpointId,
             temperature: clampNumber(candidate.temperature, DEFAULT_AI_CONFIG.models[0].temperature, 0, 2),
-            maxTokens: clampInt(candidate.maxTokens, DEFAULT_AI_CONFIG.models[0].maxTokens, 256, 200_000),
+            maxTokens: clampInt(candidate.maxTokens, DEFAULT_AI_CONFIG.models[0].maxTokens, 0, 200_000),
         });
     }
     return out;
