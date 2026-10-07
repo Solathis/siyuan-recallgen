@@ -80,9 +80,19 @@
 <div class="flex h-full flex-col items-center gap-4 px-4 py-6">
     <div class="flex w-full max-w-lg items-center justify-between gap-2">
         <div class="min-w-0 flex-1">
+            <!--
+                文案要与卡片标题同口径（第几张 / 共几张）。
+                原先这里传的是 0 基下标，于是在第一张卡上出现
+                进度条写「0 / 10」、卡片里写「1 / 10」的矛盾。
+            -->
             <ProgressBar
                 value={items.length > 0 ? ((index + (done ? 1 : 0)) / items.length) * 100 : 0}
-                label={t("flash.progress", String(done ? items.length : index), String(items.length))}
+                label={t(
+                    "flash.progress",
+                    // 空列表时下标会算出 1（1 / 0），用 min 收口
+                    String(done ? items.length : Math.min(index + 1, items.length)),
+                    String(items.length)
+                )}
             />
         </div>
         {#if !done && index > 0}
@@ -104,7 +114,8 @@
             <Card.Header class="pb-1">
                 <Card.Description class="text-2xs">
                     {t("flash.progress", String(index + 1), String(items.length))}
-                    · {current.question.difficulty}
+                    · {t(`type.${current.question.type}_short`)}
+                    · {t(`diff.${current.question.difficulty}`)}
                 </Card.Description>
             </Card.Header>
             <Card.Content class="flex flex-1 flex-col justify-center gap-4 pb-4">
@@ -154,5 +165,8 @@
                 {/if}
             {/each}
         </div>
+    {:else}
+        <!-- 空列表原先什么都不渲染：面板整块空白，用户不知道是没题还是坏了 -->
+        <div class="text-muted-foreground py-16 text-center text-sm">{t("flash.empty")}</div>
     {/if}
 </div>
