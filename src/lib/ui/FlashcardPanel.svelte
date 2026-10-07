@@ -2,6 +2,7 @@
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import ProgressBar from "./ProgressBar.svelte";
+    import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { renderMarkdownLatex } from "./latex";
     import type { BankItem } from "@/lib/quiz/bank";
@@ -99,7 +100,7 @@
             </Card.Header>
         </Card.Root>
     {:else if current}
-        <Card.Root class="flex min-h-[240px] w-full max-w-lg flex-col">
+        <Card.Root class="flex min-h-[300px] w-full max-w-lg flex-col shadow-sm">
             <Card.Header class="pb-1">
                 <Card.Description class="text-2xs">
                     {t("flash.progress", String(index + 1), String(items.length))}
@@ -112,27 +113,34 @@
                 </div>
 
                 {#if !revealed}
-                    <Button onclick={reveal} class="w-full" variant="outline">
+                    <Button onclick={reveal} class="w-full" size="lg">
                         {t("flash.showAnswer")}
                     </Button>
                     <p class="text-muted-foreground text-center text-2xs">{t("flash.revealHint")}</p>
                 {:else}
-                    <div class="border-border bg-muted/30 rounded-md border p-3">
+                    <div class="border-border bg-muted/30 mt-1 rounded-md border border-t-2 p-3 pt-3">
                         <p class="text-muted-foreground mb-1 text-2xs font-semibold">{t("flash.answerLabel")}</p>
                         <div class="rg-markdown text-sm">
                             {@html renderMarkdownLatex(answerText(current))}
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-4 gap-1.5">
+                    <div class="grid grid-cols-4 gap-2">
                         {#each GRADE_ORDER as g (g)}
-                            <Button
-                                variant={g === "again" ? "destructive" : g === "easy" ? "default" : "outline"}
-                                size="sm"
+                            <button
+                                type="button"
+                                class={cn(
+                                    "rounded-md border py-2.5 text-xs font-semibold transition-colors",
+                                    g === "again" &&
+                                        "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20",
+                                    g === "hard" && "border-warning/30 bg-warning/10 text-warning hover:bg-warning/20",
+                                    g === "good" && "border-success/30 bg-success/10 text-success hover:bg-success/20",
+                                    g === "easy" && "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+                                )}
                                 onclick={() => grade(g)}
                             >
                                 {t(`flash.${g}`)}
-                            </Button>
+                            </button>
                         {/each}
                     </div>
                 {/if}

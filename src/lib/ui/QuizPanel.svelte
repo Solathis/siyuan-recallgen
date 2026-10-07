@@ -981,6 +981,14 @@
                     <ProgressBar value={progressPct} label={t("quiz.progress", answeredText)} />
                 </div>
 
+                <!-- 吸底交卷栏：长试卷不用滚到底才能交卷 -->
+                <div
+                    class="border-border bg-background/95 sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t px-1 py-2 backdrop-blur-sm"
+                >
+                    <span class="text-muted-foreground text-xs">{answeredText}</span>
+                    <Button variant="destructive" size="sm" onclick={askSubmit}>{t("quiz.submit")}</Button>
+                </div>
+
                 <!-- 题号导航：长试卷时不必靠滚动找题；已答/未答一眼可见 -->
                 <div
                     class="flex flex-wrap items-center gap-1.5 px-1 pt-2"
