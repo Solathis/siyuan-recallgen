@@ -58,6 +58,12 @@ export function previewConfig(): RecallGenConfig {
         },
     ];
     config.ai.roles = { generator: "m-fast", reviewer: "m-strong", grader: "m-strong" };
+    /*
+     * 测试模型必须指向上面真实存在的 id。
+     * 默认配置里是 "m-default"，这里替换了模型列表却没改它，
+     * 设置页的「测试连接 → 模型」下拉就会是个空选项——看着像界面坏了。
+     */
+    config.ai.testModelId = "m-fast";
     config.ai.jsonSchemaEnabled = true;
     config.general.difficulty = { total: 8, easy: 3, medium: 3, hard: 2 };
     config.general.countdownEnabled = true;
@@ -554,7 +560,17 @@ function makeScoreRecords(): ScoreRecord[] {
 
         for (let k = 0; k < count; k++) {
             const source = previewQuestions[(i + k) % previewQuestions.length];
-            questions.push(source);
+            /*
+             * 题目 id 必须与判分结果里的 questionId 完全一致。
+             * buildIndexEntry 是按 questionId 回查题目的：题型随判分结果一起存，
+             * 所以只有题型统计能算出来；难度与知识点都要从题目上取。
+             * 两侧不一致时 byDifficulty 与 byTag 全空，统计页的「难度达标率」
+             * 会渲染成一张没有图例的空环、「知识点」一栏整片空白——
+             * 看着像界面坏了，实际是种子数据的 id 对不上。
+             * 同一份记录里同一道题可能再次出现，因此 id 带上记录内序号保证唯一。
+             */
+            const questionId = `${source.id}#${i}-${k}`;
+            questions.push({ ...source, id: questionId } as Question);
             // 先决定有没有作答，再决定得分：两者独立，才会出现「答错」而不是清一色「未答」
             const answered = rand() > 0.18;
             const roll = rand();
@@ -568,7 +584,7 @@ function makeScoreRecords(): ScoreRecord[] {
             const objective = !["subjective", "coding"].includes(source.type);
 
             detail.push({
-                questionId: `${source.id}#${i}-${k}`,
+                questionId,
                 type: source.type,
                 method: objective ? "local" : "ai",
                 correct: objective ? score >= 100 : null,

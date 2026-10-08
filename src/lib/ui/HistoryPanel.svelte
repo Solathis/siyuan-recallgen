@@ -192,7 +192,7 @@
     }
 </script>
 
-<div class="flex flex-col gap-4 p-4">
+<div class="@container flex flex-col gap-4 p-4">
     <!-- 顶层视图切换：记录列表与学习统计 -->
     <Tabs.Root value={topView} onValueChange={(v) => (topView = v as typeof topView)}>
         <Tabs.List>
@@ -217,8 +217,41 @@
     {:else if topView === "bank"}
         <BankPanel {service} {onStartReview} {openFlashcard} lang={config.general.language} />
     {:else}
-        <header class="flex flex-wrap items-center justify-between gap-3">
-            <h2 class="text-lg font-semibold">{t("history.title")}</h2>
+        <!--
+            顶栏拆成两行：第一行标题与次要操作，第二行搜索与筛选。
+            原实现把标题、日期筛选片、搜索框、分数下拉、刷新、导出全塞进一个
+            flex-wrap 行，面板一窄就折成三层且每层长度不一，看着像没排版。
+        -->
+        <header class="flex flex-col gap-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <h2 class="text-lg font-semibold">{t("history.title")}</h2>
+                <div class="flex items-center gap-1.5">
+                    <Button variant="ghost" size="sm" onclick={() => void load()} disabled={loading}>
+                        {t("common.refresh")}
+                    </Button>
+                    <DropdownMenu.Root>
+                        <DropdownMenu.Trigger>
+                            {#snippet child({ props })}
+                                <Button {...props} variant="outline" size="sm" disabled={filtered.length === 0}>
+                                    {t("history.export")}
+                                </Button>
+                            {/snippet}
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Content align="end">
+                            <DropdownMenu.Item onclick={() => exportAs("json")}
+                                >{t("history.exportJson")}</DropdownMenu.Item
+                            >
+                            <DropdownMenu.Item onclick={() => exportAs("csv")}
+                                >{t("history.exportCsv")}</DropdownMenu.Item
+                            >
+                            <DropdownMenu.Item onclick={() => exportAs("markdown")}
+                                >{t("history.exportMarkdown")}</DropdownMenu.Item
+                            >
+                        </DropdownMenu.Content>
+                    </DropdownMenu.Root>
+                </div>
+            </div>
+
             <div class="flex flex-wrap items-center gap-2">
                 {#if dayFilter}
                     <button
@@ -231,7 +264,7 @@
                     </button>
                 {/if}
                 <Input
-                    class="h-8 w-44"
+                    class="h-8 w-full @xl:w-56"
                     placeholder={t("history.searchPlaceholder")}
                     aria-label={t("history.searchPlaceholder")}
                     bind:value={query}
@@ -251,26 +284,6 @@
                         <Select.Item value="low">{t("history.filter_low")}</Select.Item>
                     </Select.Content>
                 </Select.Root>
-                <Button variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
-                    {t("common.refresh")}
-                </Button>
-                <DropdownMenu.Root>
-                    <DropdownMenu.Trigger>
-                        {#snippet child({ props })}
-                            <Button {...props} variant="outline" size="sm" disabled={filtered.length === 0}>
-                                {t("history.export")}
-                            </Button>
-                        {/snippet}
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Content align="end">
-                        <DropdownMenu.Item onclick={() => exportAs("json")}>{t("history.exportJson")}</DropdownMenu.Item
-                        >
-                        <DropdownMenu.Item onclick={() => exportAs("csv")}>{t("history.exportCsv")}</DropdownMenu.Item>
-                        <DropdownMenu.Item onclick={() => exportAs("markdown")}
-                            >{t("history.exportMarkdown")}</DropdownMenu.Item
-                        >
-                    </DropdownMenu.Content>
-                </DropdownMenu.Root>
             </div>
         </header>
 
@@ -317,25 +330,34 @@
                     </h3>
 
                     {#if viewMode === "thumbnail"}
-                        <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+                        <!-- 卡片略放宽一点、加分与进度条之间的层次；180px 时一行数字就占满，标题被压成两行 -->
+                        <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
                             {#each group.items as r (r.id)}
                                 {@const p = scorePercent(r)}
-                                <Card.Root class="group relative overflow-hidden">
+                                <Card.Root class="group relative overflow-hidden transition-shadow hover:shadow-rg-md">
                                     <Card.Content class="flex flex-col gap-2 pt-4">
-                                        <div class="flex items-baseline gap-3">
-                                            <span class={cn("text-2xl font-bold", scoreClass(p))}>{p.toFixed(0)}</span>
+                                        <div class="flex items-baseline gap-2">
+                                            <span
+                                                class={cn(
+                                                    "text-2xl leading-none font-bold tabular-nums",
+                                                    scoreClass(p)
+                                                )}>{p.toFixed(0)}</span
+                                            >
                                             <span class="text-muted-foreground text-xs">{t("history.pts")}</span>
                                         </div>
                                         <div class="min-w-0">
-                                            <div class="truncate text-sm font-medium" title={r.title}>{r.title}</div>
+                                            <div class="line-clamp-2 text-sm font-medium" title={r.title}>
+                                                {r.title}
+                                            </div>
                                             <div class="text-muted-foreground text-xs">
                                                 {t("result.qCount", String(r.questionCount))} · {timeLabel(r)}
                                             </div>
                                         </div>
-                                        <div class="bg-muted h-1 w-full overflow-hidden rounded-full">
+                                        <!-- 1px 的发丝线在卡片里几乎看不见，读不出「这次是达标还是没达标」 -->
+                                        <div class="bg-muted h-1.5 w-full overflow-hidden rounded-full">
                                             <div
                                                 class={cn(
-                                                    "h-full rounded-full",
+                                                    "h-full rounded-full transition-[width] duration-300 ease-out",
                                                     p >= PASS_SCORE ? "bg-success" : "bg-destructive"
                                                 )}
                                                 style="width: {Math.min(100, Math.max(0, p))}%"

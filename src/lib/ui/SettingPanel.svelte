@@ -111,34 +111,42 @@
     </nav>
 
     <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <!--
+            表单列限宽。
+            设置项原先一律铺满内容区（宽屏下接近 1100px），于是 Base URL、API Key、
+            端点名这些短字段被拉到一整行，「标签-输入框」的对应关系被距离拉断；
+            这里统一收成可读的栏宽，需要更宽的分区（如数据管理的表格）再单独放宽。
+        -->
         <div class="min-h-0 flex-1 overflow-y-auto p-4">
-            {#if active === "ai"}
-                <SettingsAI config={localConfig} {onTestConnection} onsave={handleSave} />
-            {:else if active === "roles"}
-                <SettingsAIRoles config={localConfig} onsave={handleSave} />
-            {:else if active === "general"}
-                <SettingsGeneral config={localConfig} onsave={handleSave} {service} />
-            {:else if active === "prompts"}
-                <SettingsPrompts config={localConfig} onsave={handleSave} />
-            {:else if active === "heatmap"}
-                <SettingsHeatmap config={localConfig} {scores} onsave={handleSave} />
-            {:else if active === "data"}
-                <SettingsData
-                    {onClearScores}
-                    {onClearProgress}
-                    {onClearBank}
-                    {onExportBank}
-                    {onImportBank}
-                    config={localConfig}
-                    onImportConfig={handleImportConfig}
-                    {onExportScores}
-                    {onImportScores}
-                    existingScoreIds={scores.map((score) => score.id)}
-                    scoreCount={scores.length}
-                    bankSize={bank.total}
-                    bankDue={bank.due}
-                />
-            {/if}
+            <div class="mx-auto flex w-full max-w-3xl flex-col">
+                {#if active === "ai"}
+                    <SettingsAI config={localConfig} {onTestConnection} onsave={handleSave} />
+                {:else if active === "roles"}
+                    <SettingsAIRoles config={localConfig} onsave={handleSave} />
+                {:else if active === "general"}
+                    <SettingsGeneral config={localConfig} onsave={handleSave} {service} />
+                {:else if active === "prompts"}
+                    <SettingsPrompts config={localConfig} onsave={handleSave} />
+                {:else if active === "heatmap"}
+                    <SettingsHeatmap config={localConfig} {scores} onsave={handleSave} />
+                {:else if active === "data"}
+                    <SettingsData
+                        {onClearScores}
+                        {onClearProgress}
+                        {onClearBank}
+                        {onExportBank}
+                        {onImportBank}
+                        config={localConfig}
+                        onImportConfig={handleImportConfig}
+                        {onExportScores}
+                        {onImportScores}
+                        existingScoreIds={scores.map((score) => score.id)}
+                        scoreCount={scores.length}
+                        bankSize={bank.total}
+                        bankDue={bank.due}
+                    />
+                {/if}
+            </div>
         </div>
     </div>
 </div>
