@@ -36,7 +36,9 @@
     "format:check": "prettier --check .",
     "check": "pnpm run typecheck && pnpm run format:check",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "preview": "vite --config vite.preview.config.ts",
+    "preview:build": "vite build --config vite.preview.config.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

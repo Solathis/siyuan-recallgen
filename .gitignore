@@ -7,6 +7,8 @@ dev
 build
 tmp
 coverage
+# 预览台（vite.preview.config.ts）的产物
+dist-preview
 .env.local
 .env.*.local
 .zcode
