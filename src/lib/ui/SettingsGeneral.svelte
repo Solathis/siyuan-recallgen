@@ -128,7 +128,7 @@
         <!-- 难度分布 -->
         <div class="flex flex-col gap-2">
             <span class="text-sm font-medium">{t("settings.general.difficulty")}</span>
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div class="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
                 {#each [["total", t("settings.general.totalCount")], ["easy", t("diff.easy")], ["medium", t("diff.medium")], ["hard", t("diff.hard")]] as [key, label] (key)}
                     <div class="flex flex-col gap-1.5">
                         <Label for={`rg-diff-${key}`}>{label}</Label>
@@ -258,7 +258,7 @@
                 value={config.general.storageLocation}
                 onValueChange={(v) => patchGeneral({ storageLocation: v as StorageLocation })}
             >
-                <Select.Trigger id="rg-storage" class="w-full sm:w-72">
+                <Select.Trigger id="rg-storage" class="w-full @xl:w-72">
                     {config.general.storageLocation === "sibling"
                         ? t("settings.general.storageSibling")
                         : t("settings.general.storageNotebook")}
@@ -278,7 +278,7 @@
                             value={config.general.notebookId}
                             onValueChange={(v) => patchGeneral({ notebookId: v })}
                         >
-                            <Select.Trigger id="rg-notebook" class="w-full sm:w-72"
+                            <Select.Trigger id="rg-notebook" class="w-full @xl:w-72"
                                 >{selectedNotebookName}</Select.Trigger
                             >
                             <Select.Content>
@@ -370,7 +370,7 @@
                 value={config.general.multipleChoicePolicy ?? "partial"}
                 onValueChange={(v) => patchGeneral({ multipleChoicePolicy: v as MultipleChoicePolicy })}
             >
-                <Select.Trigger id="rg-mc-policy" class="w-full sm:w-72">
+                <Select.Trigger id="rg-mc-policy" class="w-full @xl:w-72">
                     {config.general.multipleChoicePolicy === "strict"
                         ? t("settings.general.mcPolicyStrict")
                         : t("settings.general.mcPolicyPartial")}
@@ -391,7 +391,7 @@
                 value={config.general.language}
                 onValueChange={(v) => patchGeneral({ language: v as "zh" | "en" })}
             >
-                <Select.Trigger id="rg-language" class="w-full sm:w-72">
+                <Select.Trigger id="rg-language" class="w-full @xl:w-72">
                     {config.general.language === "zh"
                         ? t("settings.general.languageZh")
                         : t("settings.general.languageEn")}

@@ -210,6 +210,8 @@
 
     const questions = $derived(session?.questions ?? []);
     const answeredCount = $derived(questions.filter((q) => !!session?.answers[q.id]).length);
+    /** 出题计划只在生成阶段展示；判分阶段没有它，布局也要跟着退回单列 */
+    const showGenPlan = $derived(panelState === "loading_generating");
 
     /* ── 日期范围配置 ────────────────────────────────────────────── */
 
@@ -956,8 +958,14 @@
     -->
     <div class="@container mx-auto flex h-full w-full flex-col px-4" style="max-width: var(--rg-panel-width, 1100px)">
         {#if panelState === "configuring"}
-            <div class="flex min-h-0 flex-1 justify-center overflow-y-auto px-2 py-8">
-                <Card.Root class="w-full max-w-xl">
+            <!--
+                配置页自适应。
+                原实现是一张 max-w-xl（576px）的卡居中，宽面板下左右各空出四百像素；
+                现在放宽到 64rem，并在容器够宽时把「出题计划」与「参数」并排两栏——
+                前者是只读概览、后者是要调的东西，分开之后一眼能看出「改哪儿、影响什么」。
+            -->
+            <div class="rg-safe-center flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-6">
+                <Card.Root class="h-fit w-full max-w-4xl">
                     <Card.Header>
                         <Card.Title>{t("quiz.dateConfigTitle")}</Card.Title>
                         <Card.Description>
@@ -966,7 +974,7 @@
                                 : t("quiz.dateConfigBeforeDesc")}
                         </Card.Description>
                     </Card.Header>
-                    <Card.Content class="flex flex-col gap-5">
+                    <Card.Content class="grid grid-cols-1 items-start gap-5 @3xl:grid-cols-2">
                         <!-- 出题计划：让用户在生成前确认题型/难度/模型/结构化输出 -->
                         <GenPlan
                             sourceTitle={tabData.sourceTitle}
@@ -979,45 +987,48 @@
                             reviewer={reviewerName}
                         />
 
-                        <!-- 日期范围 -->
-                        {#if tabData.dateRange === "beforeToday"}
-                            <div class="flex flex-col gap-2">
-                                <div class="flex items-center justify-between">
-                                    <label class="text-sm font-medium" for="rg-date-days"
-                                        >{t("quiz.dateDaysLabel")}</label
-                                    >
-                                    <span class="text-primary text-sm font-semibold">
-                                        {dateCfg.days === 0
-                                            ? t("quiz.dateDaysAll")
-                                            : t("quiz.dateDaysVal", String(dateCfg.days))}
-                                    </span>
+                        <!-- 右栏与左侧的出题计划用同一种面板底，两栏才读得出是并列关系 -->
+                        <div class="bg-muted/40 flex flex-col gap-5 rounded-md border p-3">
+                            <!-- 日期范围 -->
+                            {#if tabData.dateRange === "beforeToday"}
+                                <div class="flex flex-col gap-2">
+                                    <div class="flex items-center justify-between">
+                                        <label class="text-sm font-medium" for="rg-date-days"
+                                            >{t("quiz.dateDaysLabel")}</label
+                                        >
+                                        <span class="text-rg-accent text-sm font-semibold tabular-nums">
+                                            {dateCfg.days === 0
+                                                ? t("quiz.dateDaysAll")
+                                                : t("quiz.dateDaysVal", String(dateCfg.days))}
+                                        </span>
+                                    </div>
+                                    <input
+                                        id="rg-date-days"
+                                        class="accent-primary w-full"
+                                        type="range"
+                                        min="0"
+                                        max="90"
+                                        step="1"
+                                        bind:value={dateCfg.days}
+                                    />
+                                    <p class="text-muted-foreground text-xs">{t("quiz.dateDaysHint")}</p>
                                 </div>
+                            {/if}
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="text-sm font-medium" for="rg-date-base">{t("quiz.dateBaseLabel")}</label>
                                 <input
-                                    id="rg-date-days"
-                                    class="accent-primary w-full"
-                                    type="range"
-                                    min="0"
-                                    max="90"
-                                    step="1"
-                                    bind:value={dateCfg.days}
+                                    id="rg-date-base"
+                                    class="border-input bg-background rounded-md border px-2 py-1 text-sm"
+                                    type="time"
+                                    bind:value={dateBaseTime}
+                                    onchange={onBaseTimeChange}
                                 />
-                                <p class="text-muted-foreground text-xs">{t("quiz.dateDaysHint")}</p>
                             </div>
-                        {/if}
-                        <div class="flex items-center justify-between gap-3">
-                            <label class="text-sm font-medium" for="rg-date-base">{t("quiz.dateBaseLabel")}</label>
-                            <input
-                                id="rg-date-base"
-                                class="border-input bg-background rounded-md border px-2 py-1 text-sm"
-                                type="time"
-                                bind:value={dateBaseTime}
-                                onchange={onBaseTimeChange}
-                            />
+                            <p class="text-muted-foreground text-xs">{t("quiz.dateBaseHint")}</p>
+                            {#if error}
+                                <p class="text-destructive text-sm">{error.detail}</p>
+                            {/if}
                         </div>
-                        <p class="text-muted-foreground text-xs">{t("quiz.dateBaseHint")}</p>
-                        {#if error}
-                            <p class="text-destructive text-sm">{error.detail}</p>
-                        {/if}
                     </Card.Content>
                     <Card.Footer class="flex gap-2">
                         <Button onclick={startDateGenerate}>{t("quiz.dateGenerate")}</Button>
@@ -1026,7 +1037,7 @@
                 </Card.Root>
             </div>
         {:else if panelState === "loading_generating" || panelState === "loading_grading"}
-            <div class="flex min-h-0 flex-1 justify-center overflow-y-auto px-2 py-6">
+            <div class="rg-safe-center flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-6">
                 <!--
                     只做进场（in:），不做退场。
                     这里是一整屏状态容器：用 transition: 会在切到结果页时给旧内容播一段
@@ -1034,127 +1045,135 @@
                     更糟的是面板不在前台时（思源里切到别的 tab）WAAPI 动画会被浏览器暂停，
                     退场永远播不完，旧界面就一直在那不退。进场动效没有这个问题。
                 -->
-                <div class="flex w-full max-w-2xl flex-col gap-4" in:rise={{ y: 8 }}>
+                <div class="flex w-full max-w-5xl flex-col gap-4" in:rise={{ y: 8 }}>
                     <!--
+                        容器够宽时进度卡与出题计划并排：进度是「正在发生什么」、
+                        计划是「按什么在生成」，两栏并看比上下堆叠更好读，
+                        也避免宽面板中间只剩一列 672px 的窄条。
+                        只有生成阶段有出题计划，判分阶段退回单列占满整宽。
+                    -->
+                    <div class={cn("grid grid-cols-1 items-start gap-4", showGenPlan && "@3xl:grid-cols-2")}>
+                        <!--
                         进度卡：原实现是一张 max-w-2xl 的小卡悬在整屏中间，
                         进度条和四格统计各占一行却互不对齐，看着像没做完的临时页面。
                         现在收成一张有明确层级的卡：标题行（阶段 + 用时）、步骤条、
                         进度条、统计行，全部左对齐同一列。
                     -->
-                    <Card.Root>
-                        <Card.Header>
-                            <div class="flex flex-wrap items-baseline justify-between gap-2">
-                                <Card.Title>
-                                    {panelState === "loading_generating" ? t("gen.progress.title") : progressLabel}
-                                </Card.Title>
+                        <Card.Root>
+                            <Card.Header>
+                                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                                    <Card.Title>
+                                        {panelState === "loading_generating" ? t("gen.progress.title") : progressLabel}
+                                    </Card.Title>
+                                    {#if panelState === "loading_generating"}
+                                        <span class="text-muted-foreground text-xs tabular-nums">
+                                            {t("gen.progress.elapsed")}
+                                            {t("gen.progress.seconds", String(genElapsed))}
+                                        </span>
+                                    {/if}
+                                </div>
+                            </Card.Header>
+
+                            <Card.Content class="flex flex-col gap-4">
                                 {#if panelState === "loading_generating"}
-                                    <span class="text-muted-foreground text-xs tabular-nums">
-                                        {t("gen.progress.elapsed")}
-                                        {t("gen.progress.seconds", String(genElapsed))}
-                                    </span>
+                                    <GenSteps
+                                        phase={genStats?.phase ?? "generating"}
+                                        hasReviewer={!!config.ai.roles.reviewer}
+                                    />
                                 {/if}
-                            </div>
-                        </Card.Header>
 
-                        <Card.Content class="flex flex-col gap-4">
-                            {#if panelState === "loading_generating"}
-                                <GenSteps
-                                    phase={genStats?.phase ?? "generating"}
-                                    hasReviewer={!!config.ai.roles.reviewer}
+                                <ProgressBar
+                                    value={progressValue}
+                                    label={progressLabel}
+                                    size="md"
+                                    showValue={progressValue !== null}
                                 />
-                            {/if}
 
-                            <ProgressBar
-                                value={progressValue}
-                                label={progressLabel}
-                                size="md"
-                                showValue={progressValue !== null}
-                            />
-
-                            {#if panelState === "loading_generating"}
-                                <!--
+                                {#if panelState === "loading_generating"}
+                                    <!--
                                     实时信息：光看进度条不知道「生成到哪了、有没有丢题」。
                                     批次与收题数是同一组口径，并排放在一行里读起来才连得上。
                                 -->
-                                <!--
+                                    <!--
                                     用容器变体而不是 sm:：面板可用宽度与视口无关。
                                     容器刻度比视口刻度小得多（@3xl = 48rem），这里要的是
                                     「面板本身够宽才排四栏」。
                                 -->
-                                <dl class="grid grid-cols-2 gap-x-4 gap-y-3 @3xl:grid-cols-4">
-                                    <div class="flex flex-col gap-0.5">
-                                        <dt class="text-muted-foreground text-xs">{t("gen.stat.batch")}</dt>
-                                        <dd class="text-sm font-medium tabular-nums">
-                                            {t(
-                                                "gen.stat.batchValue",
-                                                String(genStats?.batch ?? 1),
-                                                String(genStats?.batches ?? plannedBatches)
-                                            )}
-                                        </dd>
-                                    </div>
-                                    <div class="flex flex-col gap-0.5">
-                                        <dt class="text-muted-foreground text-xs">{t("gen.stat.collected")}</dt>
-                                        <dd class="text-sm font-medium tabular-nums">
-                                            {genStats?.collected ?? 0}
-                                            <span class="text-muted-foreground font-normal">
-                                                / {genStats?.target ?? config.general.difficulty.total}
-                                            </span>
-                                        </dd>
-                                    </div>
-                                    <div class="flex flex-col gap-0.5">
-                                        <dt class="text-muted-foreground text-xs">{t("gen.stat.dropped")}</dt>
-                                        <dd
-                                            class={cn(
-                                                "text-sm font-medium tabular-nums",
-                                                (genStats?.dropped ?? 0) > 0 && "text-warning"
-                                            )}
-                                        >
-                                            {genStats?.dropped ?? 0}
-                                        </dd>
-                                    </div>
-                                    <div class="flex flex-col gap-0.5">
-                                        <dt class="text-muted-foreground text-xs">{t("gen.stat.phase")}</dt>
-                                        <dd class="text-sm font-medium">
-                                            {genStats ? phaseLabel(genStats.phase) : t("gen.phase.generating")}
-                                        </dd>
-                                    </div>
-                                </dl>
+                                    <dl class="grid grid-cols-2 gap-x-4 gap-y-3 @3xl:grid-cols-4">
+                                        <div class="flex flex-col gap-0.5">
+                                            <dt class="text-muted-foreground text-xs">{t("gen.stat.batch")}</dt>
+                                            <dd class="text-sm font-medium tabular-nums">
+                                                {t(
+                                                    "gen.stat.batchValue",
+                                                    String(genStats?.batch ?? 1),
+                                                    String(genStats?.batches ?? plannedBatches)
+                                                )}
+                                            </dd>
+                                        </div>
+                                        <div class="flex flex-col gap-0.5">
+                                            <dt class="text-muted-foreground text-xs">{t("gen.stat.collected")}</dt>
+                                            <dd class="text-sm font-medium tabular-nums">
+                                                {genStats?.collected ?? 0}
+                                                <span class="text-muted-foreground font-normal">
+                                                    / {genStats?.target ?? config.general.difficulty.total}
+                                                </span>
+                                            </dd>
+                                        </div>
+                                        <div class="flex flex-col gap-0.5">
+                                            <dt class="text-muted-foreground text-xs">{t("gen.stat.dropped")}</dt>
+                                            <dd
+                                                class={cn(
+                                                    "text-sm font-medium tabular-nums",
+                                                    (genStats?.dropped ?? 0) > 0 && "text-warning"
+                                                )}
+                                            >
+                                                {genStats?.dropped ?? 0}
+                                            </dd>
+                                        </div>
+                                        <div class="flex flex-col gap-0.5">
+                                            <dt class="text-muted-foreground text-xs">{t("gen.stat.phase")}</dt>
+                                            <dd class="text-sm font-medium">
+                                                {genStats ? phaseLabel(genStats.phase) : t("gen.phase.generating")}
+                                            </dd>
+                                        </div>
+                                    </dl>
 
-                                {#if genStats?.note}
-                                    <p class="text-warning text-xs">{genStats.note}</p>
+                                    {#if genStats?.note}
+                                        <p class="text-warning text-xs">{genStats.note}</p>
+                                    {/if}
                                 {/if}
+                            </Card.Content>
+
+                            {#if panelState === "loading_generating"}
+                                <Card.Footer>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onclick={() => {
+                                            abortRun();
+                                            closeTab();
+                                        }}
+                                    >
+                                        {t("quiz.cancelGenerate")}
+                                    </Button>
+                                </Card.Footer>
                             {/if}
-                        </Card.Content>
+                        </Card.Root>
 
                         {#if panelState === "loading_generating"}
-                            <Card.Footer>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onclick={() => {
-                                        abortRun();
-                                        closeTab();
-                                    }}
-                                >
-                                    {t("quiz.cancelGenerate")}
-                                </Button>
-                            </Card.Footer>
+                            <GenPlan
+                                sourceTitle={tabData.sourceTitle}
+                                chars={tabData.content?.length ?? 0}
+                                difficulty={config.general.difficulty}
+                                types={config.general.allowedTypes}
+                                batches={plannedBatches}
+                                modelName={genModelName}
+                                protocol={genProtocol}
+                                structured={config.ai.jsonSchemaEnabled}
+                                reviewer={reviewerName}
+                            />
                         {/if}
-                    </Card.Root>
-
-                    {#if panelState === "loading_generating"}
-                        <GenPlan
-                            sourceTitle={tabData.sourceTitle}
-                            chars={tabData.content?.length ?? 0}
-                            difficulty={config.general.difficulty}
-                            types={config.general.allowedTypes}
-                            batches={plannedBatches}
-                            modelName={genModelName}
-                            protocol={genProtocol}
-                            structured={config.ai.jsonSchemaEnabled}
-                            reviewer={reviewerName}
-                        />
-                    {/if}
+                    </div>
                 </div>
             </div>
         {:else if panelState === "answering"}

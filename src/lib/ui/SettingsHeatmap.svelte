@@ -55,7 +55,7 @@
                 value={config.heatmap.metric}
                 onValueChange={(v) => patchHeatmap({ metric: v as HeatmapConfig["metric"] })}
             >
-                <Select.Trigger id="rg-heatmap-metric" class="w-full sm:w-48">
+                <Select.Trigger id="rg-heatmap-metric" class="w-full @xl:w-48">
                     {config.heatmap.metric === "max"
                         ? t("settings.heatmap.metricMax")
                         : t("settings.heatmap.metricAvg")}

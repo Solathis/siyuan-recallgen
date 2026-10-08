@@ -112,13 +112,14 @@
 
     <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
         <!--
-            表单列限宽。
-            设置项原先一律铺满内容区（宽屏下接近 1100px），于是 Base URL、API Key、
-            端点名这些短字段被拉到一整行，「标签-输入框」的对应关系被距离拉断；
-            这里统一收成可读的栏宽，需要更宽的分区（如数据管理的表格）再单独放宽。
+            表单列限宽但不居中。
+            限宽是因为 Base URL、API Key、端点名这类短字段铺满整行之后，
+            「标签-输入框」的对应关系被距离拉断；但居中会在左右各留一块对称空白，
+            看起来像没排满。改成左对齐并放宽到 64rem，与左侧导航形成
+            「导航 + 内容」的常规两栏观感。
         -->
         <div class="min-h-0 flex-1 overflow-y-auto p-4">
-            <div class="mx-auto flex w-full max-w-3xl flex-col">
+            <div class="flex w-full max-w-5xl flex-col @container">
                 {#if active === "ai"}
                     <SettingsAI config={localConfig} {onTestConnection} onsave={handleSave} />
                 {:else if active === "roles"}

@@ -211,33 +211,41 @@
             />
         </div>
     {:else if page === "settings"}
-        <SettingPanel
-            {config}
-            scores={previewScoreIndex}
-            {service}
-            onSave={saveConfig}
-            onTestConnection={() => service.testConnection()}
-            onClearScores={async () => {
-                await service.clearScores();
-                showMessage("成绩已清空（预览数据，刷新即恢复）");
-            }}
-            onClearProgress={async () => {
-                await service.clearAllProgress();
-                showMessage("进度已清空");
-            }}
-            onClearBank={async () => {
-                await service.clearBank();
-                showMessage("题库已清空");
-            }}
-            onExportBank={() => service.exportBank()}
-            onImportBank={(items) => service.importBank(items)}
-            onImportConfig={(next: RecallGenConfig, result: ImportResult) => {
-                saveConfig(next);
-                showMessage(`配置已导入，${result.warnings.length} 条提示`);
-            }}
-            onExportScores={() => service.exportAllScores()}
-            onImportScores={(items) => service.importScores(items)}
-        />
+        <!--
+            按真实弹窗宽度预览。
+            设置面板真机上跑在思源的 Dialog 里（min(1200px, 94vw)），
+            直接铺满预览视口会高估可用宽度——那种宽度下并排字段看着够用，
+            真机上却会被挤回单列。这里套一层 1200px 的框对齐真实条件。
+        -->
+        <div class="mx-auto h-full w-full max-w-[1200px]">
+            <SettingPanel
+                {config}
+                scores={previewScoreIndex}
+                {service}
+                onSave={saveConfig}
+                onTestConnection={() => service.testConnection()}
+                onClearScores={async () => {
+                    await service.clearScores();
+                    showMessage("成绩已清空（预览数据，刷新即恢复）");
+                }}
+                onClearProgress={async () => {
+                    await service.clearAllProgress();
+                    showMessage("进度已清空");
+                }}
+                onClearBank={async () => {
+                    await service.clearBank();
+                    showMessage("题库已清空");
+                }}
+                onExportBank={() => service.exportBank()}
+                onImportBank={(items) => service.importBank(items)}
+                onImportConfig={(next: RecallGenConfig, result: ImportResult) => {
+                    saveConfig(next);
+                    showMessage(`配置已导入，${result.warnings.length} 条提示`);
+                }}
+                onExportScores={() => service.exportAllScores()}
+                onImportScores={(items) => service.importScores(items)}
+            />
+        </div>
     {/if}
 
     <div class="rgv-toasts">

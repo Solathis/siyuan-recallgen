@@ -57,7 +57,7 @@
                         <span class="text-muted-foreground text-xs">{descOf(role.key)}</span>
                     </div>
                 </div>
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-3 @xl:grid-cols-2">
                     <div class="flex flex-col gap-1.5">
                         <Label for={`rg-role-endpoint-${role.key}`}>{t("settings.roles.endpoint")}</Label>
                         <Select.Root

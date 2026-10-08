@@ -113,7 +113,7 @@
     }
 </script>
 
-<div class="flex flex-col gap-4">
+<div class="@container flex flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="text-sm font-semibold">{t("stats.title")}</h3>
         <Select.Root type="single" value={String(range)} onValueChange={(v) => (range = Number(v) as RangeDays)}>
@@ -129,7 +129,7 @@
     </div>
 
     {#if loading}
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
             {#each [0, 1, 2, 3] as i (i)}
                 <Skeleton class="h-20" />
             {/each}
@@ -153,7 +153,7 @@
         {/if}
 
         <!-- 总览 -->
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @4xl:grid-cols-5">
             {#each [{ label: t("stats.quizCount"), value: String(summary.quizCount), sub: t("stats.questionCount", String(summary.questionCount)) }, { label: t("stats.average"), value: pct(summary.averagePercent), sub: t("stats.best", pct(summary.bestPercent)) }, { label: t("stats.streak"), value: t("stats.days", String(summary.currentStreak)), sub: t("stats.longestStreak", String(summary.longestStreak)) }, { label: t("stats.perQuestion"), value: summary.secondsPerQuestion === null ? "--" : `${summary.secondsPerQuestion.toFixed(0)}s`, sub: t("stats.activeDays", String(summary.activeDays)) }, { label: t("stats.todayProgress"), value: String(todayQuizCount), sub: t("stats.todayDone", String(todayQuestions), "—") }] as item (item.label)}
                 <Card.Root>
                     <Card.Content class="flex flex-col gap-0.5 pt-4">
@@ -186,7 +186,7 @@
             </Card.Content>
         </Card.Root>
 
-        <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div class="grid grid-cols-1 gap-4 @4xl:grid-cols-2">
             <!-- 题型达标率：用 CSS 条形绘制，天然响应式且跟随主题 -->
             <Card.Root>
                 <Card.Header>
