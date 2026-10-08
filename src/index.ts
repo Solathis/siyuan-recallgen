@@ -303,10 +303,12 @@ export default class RecallGenPlugin extends Plugin {
         const self = this;
         const dialog = new Dialog({
             title: this.displayName ?? "RecallGen",
-            // 窄屏（移动端）下 900px 会超出视口，用 min() 收窄；内容区交给面板内部滚动
             content: '<div class="rg-scope flex h-full min-h-[260px] flex-col"></div>',
-            width: "min(900px, 94vw)",
-            height: "min(70vh, 96vh)",
+            // 窄屏（移动端）下会超出视口，用 min() 收窄；内容区交给面板内部滚动。
+            // 放宽到 1200px 是因为设置内容列本身有 max-w-5xl（64rem）加上左侧导航，
+            // 900px 时内容列会被挤到 700 出头，端点与模型那些并排字段又退回单列。
+            width: "min(1200px, 94vw)",
+            height: "min(76vh, 96vh)",
             destroyCallback: () => closeSetting(),
         });
         const host = dialog.element as HTMLElement;

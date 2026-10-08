@@ -202,7 +202,7 @@
                     </Button>
                 </div>
 
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-3 @xl:grid-cols-2">
                     <div class="flex flex-col gap-1.5">
                         <Label for={`rg-provider-${endpoint.id}`}>{t("settings.ai.provider")}</Label>
                         <Select.Root
@@ -293,7 +293,7 @@
                     </div>
                     {#if modelsOf(endpoint.id).length > 0}
                         <div
-                            class="text-muted-foreground hidden grid-cols-[1fr_5rem_6rem_auto] gap-2 text-2xs font-semibold sm:grid"
+                            class="text-muted-foreground hidden grid-cols-[1fr_5rem_6rem_auto] gap-2 text-2xs font-semibold @2xl:grid"
                         >
                             <span>{t("settings.ai.colName")}</span>
                             <span class="text-center">{t("settings.ai.colTemp")}</span>
@@ -302,7 +302,7 @@
                         </div>
                     {/if}
                     {#each modelsOf(endpoint.id) as model (model.id)}
-                        <div class="grid grid-cols-2 items-center gap-2 sm:grid-cols-[1fr_5rem_6rem_auto]">
+                        <div class="grid grid-cols-2 items-center gap-2 @2xl:grid-cols-[1fr_5rem_6rem_auto]">
                             <Input
                                 value={model.name}
                                 aria-label={t("settings.ai.colName")}

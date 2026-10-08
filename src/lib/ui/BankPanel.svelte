@@ -614,7 +614,7 @@
                         {@const spark = sparkline(item)}
                         <Table.Row class="bg-muted/30">
                             <Table.Cell colspan={6}>
-                                <div class="grid gap-4 py-2 md:grid-cols-2">
+                                <div class="grid gap-4 py-2 @4xl:grid-cols-2">
                                     <!-- 复习历史 -->
                                     <div class="flex flex-col gap-2">
                                         <span class="text-xs font-medium">

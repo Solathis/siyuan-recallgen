@@ -42,7 +42,7 @@
     ]);
 </script>
 
-<div class="bg-muted/40 flex flex-col gap-2.5 rounded-md border p-3">
+<div class="@container bg-muted/40 flex flex-col gap-2.5 rounded-md border p-3">
     <div class="flex items-center justify-between gap-2">
         <span class="text-muted-foreground text-2xs font-semibold tracking-wide uppercase">
             {t("gen.plan.title")}
@@ -51,8 +51,8 @@
     </div>
 
     <!-- 来源与规模 -->
-    <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs sm:grid-cols-3">
-        <div class="col-span-2 flex min-w-0 flex-col gap-0.5 sm:col-span-1">
+    <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs @md:grid-cols-3">
+        <div class="col-span-2 flex min-w-0 flex-col gap-0.5 @md:col-span-1">
             <span class="text-muted-foreground">{t("gen.plan.source")}</span>
             <span class="truncate font-medium" title={sourceTitle}>{sourceTitle}</span>
         </div>

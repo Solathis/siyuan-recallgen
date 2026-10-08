@@ -81,9 +81,10 @@
         onDayClick?: (date: string) => void;
     } = $props();
 
-    /** 单元格边长（px）。固定尺寸 + 横向滚动，保证窄屏也能看清而不是被压成一条线 */
-    const CELL = 12;
-
+    /*
+     * 单元格边长不在这里写死：由 .rg-heatmap 里的 --rg-heat-cell 按容器宽度算，
+     * 宽面板刚好铺满、窄面板到下限后交给外层横向滚动。见 app.css。
+     */
     type Cell = { date: string; score: number | null; count: number };
 
     const weekdayLabels = $derived(
@@ -280,7 +281,7 @@
     const sortedRanges = $derived([...(config?.ranges ?? [])].sort((a, b) => a.min - b.min));
 </script>
 
-<div class="flex w-full flex-col gap-2">
+<div class="rg-heatmap flex w-full flex-col gap-2">
     <!-- 详情行始终占位，避免悬停时布局跳动 -->
     <div class="flex items-center gap-2">
         <div class="text-muted-foreground min-h-5 flex-1 text-xs" aria-live="polite">
@@ -317,7 +318,7 @@
         <div class="text-3xs leading-none text-muted-foreground">
             <!-- 结构与右侧月份行逐字相同，高度才能由同一套类保证一致 -->
             <div class="flex gap-1 pb-1 text-3xs leading-none" aria-hidden="true">
-                <span class="shrink-0" style="width: {CELL}px">&nbsp;</span>
+                <span class="shrink-0" style="width: var(--rg-heat-cell)">&nbsp;</span>
             </div>
             <!--
                 行距必须与格子列的 gap-1 同源（0.25rem）。原先写死 margin-bottom: 4px，
@@ -325,7 +326,7 @@
                 七行下来最后一行的「日」会偏出 5px。
             -->
             {#each weekdayLabels as label, i (i)}
-                <div class="mb-1 flex items-center" style="height: {CELL}px">{label}</div>
+                <div class="mb-1 flex items-center" style="height: var(--rg-heat-cell)">{label}</div>
             {/each}
         </div>
 
@@ -340,7 +341,7 @@
                         溢出到右侧空白列是预期的（月份之间隔约 4 列）。
                     -->
                     {#each monthLabels as label, i (i)}
-                        <span class="shrink-0 whitespace-nowrap" style="width: {CELL}px">{label}</span>
+                        <span class="shrink-0 whitespace-nowrap" style="width: var(--rg-heat-cell)">{label}</span>
                     {/each}
                 </div>
                 <div class="flex gap-1">
@@ -358,7 +359,7 @@
                                             "rounded-sm transition-transform hover:scale-125 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
                                             bg === null && "bg-muted"
                                         )}
-                                        style="width: {CELL}px; height: {CELL}px;{safeBg
+                                        style="width: var(--rg-heat-cell); height: var(--rg-heat-cell);{safeBg
                                             ? ` background:${safeBg};`
                                             : ''}"
                                         title={fmtTip(cell)}
@@ -379,7 +380,10 @@
                                         onkeydown={(e) => onCellKeydown(e, colIndex, rowIndex)}
                                     ></button>
                                 {:else}
-                                    <span class="block" style="width: {CELL}px; height: {CELL}px" aria-hidden="true"
+                                    <span
+                                        class="block"
+                                        style="width: var(--rg-heat-cell); height: var(--rg-heat-cell)"
+                                        aria-hidden="true"
                                     ></span>
                                 {/if}
                             {/each}

@@ -1,10 +1,12 @@
 <script lang="ts">
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
-    import ProgressBar from "./ProgressBar.svelte";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { renderMarkdownLatex } from "./latex";
+    import { rise } from "./motion";
+    import ProgressBar from "./ProgressBar.svelte";
+    import StateBlock from "./StateBlock.svelte";
     import type { BankItem } from "@/lib/quiz/bank";
 
     export type FlashGrade = "again" | "hard" | "good" | "easy";
@@ -31,11 +33,21 @@
 
     const current = $derived(items[index] ?? null);
     const isLast = $derived(index >= items.length - 1);
+    const rated = $derived(grades.size);
+    const remaining = $derived(Math.max(0, items.length - rated));
     const gradeSummary = $derived(
         GRADE_ORDER.filter((g) => counts[g] > 0)
             .map((g) => t(`flash.${g}Count`, String(counts[g])))
             .join(" · ")
     );
+
+    /** 每档自评的语义色，按钮与侧栏计数共用一套，避免两处各写一份 */
+    const GRADE_TONE: Record<FlashGrade, string> = {
+        again: "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20",
+        hard: "border-warning/30 bg-warning/10 text-warning hover:bg-warning/20",
+        good: "border-success/30 bg-success/10 text-success hover:bg-success/20",
+        easy: "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20",
+    };
 
     function reveal(): void {
         revealed = true;
@@ -77,96 +89,159 @@
     }
 </script>
 
-<div class="flex h-full flex-col items-center gap-4 px-4 py-6">
-    <div class="flex w-full max-w-lg items-center justify-between gap-2">
-        <div class="min-w-0 flex-1">
-            <!--
-                文案要与卡片标题同口径（第几张 / 共几张）。
-                原先这里传的是 0 基下标，于是在第一张卡上出现
-                进度条写「0 / 10」、卡片里写「1 / 10」的矛盾。
-            -->
-            <ProgressBar
-                value={items.length > 0 ? ((index + (done ? 1 : 0)) / items.length) * 100 : 0}
-                label={t(
-                    "flash.progress",
-                    // 空列表时下标会算出 1（1 / 0），用 min 收口
-                    String(done ? items.length : Math.min(index + 1, items.length)),
-                    String(items.length)
-                )}
-            />
-        </div>
-        {#if !done && index > 0}
-            <Button variant="ghost" size="sm" onclick={finishEarly}>
-                {t("flash.finishEarly")}
-            </Button>
-        {/if}
-    </div>
-
-    {#if done}
-        <Card.Root class="w-full max-w-lg">
-            <Card.Header class="text-center">
-                <Card.Title class="text-lg">{t("flash.done")}</Card.Title>
-                <Card.Description>{t("flash.doneDesc", String(items.length), gradeSummary)}</Card.Description>
-            </Card.Header>
-        </Card.Root>
-    {:else if current}
-        <Card.Root class="flex min-h-[300px] w-full max-w-lg flex-col shadow-sm">
-            <Card.Header class="pb-1">
-                <Card.Description class="text-2xs">
-                    {t("flash.progress", String(index + 1), String(items.length))}
-                    · {t(`type.${current.question.type}_short`)}
-                    · {t(`diff.${current.question.difficulty}`)}
-                </Card.Description>
-            </Card.Header>
-            <Card.Content class="flex flex-1 flex-col justify-center gap-4 pb-4">
-                <div class="rg-markdown text-reading leading-relaxed">
-                    {@html renderMarkdownLatex(current.question.question)}
+<!--
+    自适应布局。
+    原实现把进度条、卡片、自评统计都卡在 max-w-lg（512px）并居中，
+    在思源的宽面板（1000px 以上）里左右各空出三四百像素，卡片本身也只有 300px 高，
+    下方整片空白——整屏看上去像没排完。
+    现在：卡片随容器放宽到 48rem 并吃满可用高度；容器够宽时右侧再挂一栏
+    「本次复习」统计，把自评分布与剩余题量从底部那行小字挪过去，
+    宽面板的横向空间因此有内容可用，而不是留白。
+-->
+<div class="@container flex h-full flex-col gap-4 px-4 py-5">
+    <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 @3xl:flex-row @3xl:items-stretch">
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+            <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                    <!--
+                        文案要与卡片标题同口径（第几张 / 共几张）。
+                        原先这里传的是 0 基下标，于是在第一张卡上出现
+                        进度条写「0 / 10」、卡片里写「1 / 10」的矛盾。
+                    -->
+                    <ProgressBar
+                        value={items.length > 0 ? ((index + (done ? 1 : 0)) / items.length) * 100 : 0}
+                        label={t(
+                            "flash.progress",
+                            // 空列表时下标会算出 1（1 / 0），用 min 收口
+                            String(done ? items.length : Math.min(index + 1, items.length)),
+                            String(items.length)
+                        )}
+                    />
                 </div>
+                {#if !done && index > 0}
+                    <Button variant="ghost" size="sm" onclick={finishEarly}>{t("flash.finishEarly")}</Button>
+                {/if}
+            </div>
 
-                {#if !revealed}
-                    <Button onclick={reveal} class="w-full" size="lg">
-                        {t("flash.showAnswer")}
-                    </Button>
-                    <p class="text-muted-foreground text-center text-2xs">{t("flash.revealHint")}</p>
-                {:else}
-                    <div class="border-border bg-muted/30 mt-1 rounded-md border border-t-2 p-3 pt-3">
-                        <p class="text-muted-foreground mb-1 text-2xs font-semibold">{t("flash.answerLabel")}</p>
-                        <div class="rg-markdown text-sm">
-                            {@html renderMarkdownLatex(answerText(current))}
+            {#if done}
+                <Card.Root class="w-full">
+                    <Card.Header class="text-center">
+                        <Card.Title class="text-lg">{t("flash.done")}</Card.Title>
+                        <Card.Description>{t("flash.doneDesc", String(items.length), gradeSummary)}</Card.Description>
+                    </Card.Header>
+                </Card.Root>
+            {:else if current}
+                <!-- flex-1：卡片吃满剩余高度，短题干也不会在下方留一大片空白 -->
+                <Card.Root class="flex min-h-64 w-full flex-1 flex-col shadow-rg-sm">
+                    <Card.Header class="pb-1">
+                        <Card.Description class="text-2xs">
+                            {t("flash.progress", String(index + 1), String(items.length))}
+                            · {t(`type.${current.question.type}_short`)}
+                            · {t(`diff.${current.question.difficulty}`)}
+                        </Card.Description>
+                    </Card.Header>
+                    <Card.Content class="flex min-h-0 flex-1 flex-col justify-center gap-4 pb-4">
+                        <div class="rg-markdown text-reading mx-auto max-w-prose leading-relaxed">
+                            {@html renderMarkdownLatex(current.question.question)}
                         </div>
-                    </div>
 
-                    <div class="grid grid-cols-4 gap-2">
-                        {#each GRADE_ORDER as g (g)}
-                            <button
-                                type="button"
-                                class={cn(
-                                    "rounded-md border py-2.5 text-xs font-semibold transition-colors",
-                                    g === "again" &&
-                                        "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20",
-                                    g === "hard" && "border-warning/30 bg-warning/10 text-warning hover:bg-warning/20",
-                                    g === "good" && "border-success/30 bg-success/10 text-success hover:bg-success/20",
-                                    g === "easy" && "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
-                                )}
-                                onclick={() => grade(g)}
+                        {#if !revealed}
+                            <div class="mx-auto w-full max-w-prose">
+                                <Button onclick={reveal} class="w-full" size="lg">
+                                    {t("flash.showAnswer")}
+                                </Button>
+                                <p class="text-muted-foreground mt-2 text-center text-2xs">{t("flash.revealHint")}</p>
+                            </div>
+                        {:else}
+                            <div
+                                class="border-border bg-muted/30 mx-auto w-full max-w-prose rounded-md border border-t-2 p-3"
+                                in:rise={{ y: 4, duration: 160 }}
                             >
-                                {t(`flash.${g}`)}
-                            </button>
+                                <p class="text-muted-foreground mb-1 text-2xs font-semibold">
+                                    {t("flash.answerLabel")}
+                                </p>
+                                <div class="rg-markdown text-sm">
+                                    {@html renderMarkdownLatex(answerText(current))}
+                                </div>
+                            </div>
+
+                            <div class="mx-auto grid w-full max-w-prose grid-cols-4 gap-2">
+                                {#each GRADE_ORDER as g (g)}
+                                    <button
+                                        type="button"
+                                        class={cn(
+                                            "rounded-md border py-2.5 text-xs font-semibold transition-colors",
+                                            GRADE_TONE[g]
+                                        )}
+                                        onclick={() => grade(g)}
+                                    >
+                                        {t(`flash.${g}`)}
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
+                    </Card.Content>
+                </Card.Root>
+            {:else}
+                <!-- 空列表原先什么都不渲染：面板整块空白，用户不知道是没题还是坏了 -->
+                <StateBlock kind="empty" icon="🃏" title={t("flash.empty")} />
+            {/if}
+        </div>
+
+        <!-- 侧栏：容器够宽才出现，窄面板下这些统计仍在底部那行显示 -->
+        <aside class="hidden w-52 shrink-0 flex-col gap-3 @3xl:flex">
+            <Card.Root>
+                <Card.Header>
+                    <Card.Title class="text-sm">{t("flash.sessionTitle")}</Card.Title>
+                </Card.Header>
+                <Card.Content class="flex flex-col gap-3">
+                    <dl class="grid grid-cols-2 gap-x-3 gap-y-2">
+                        <div class="flex flex-col gap-0.5">
+                            <dt class="text-muted-foreground text-2xs">{t("flash.ratedLabel")}</dt>
+                            <dd class="text-lg leading-none font-semibold tabular-nums">{rated}</dd>
+                        </div>
+                        <div class="flex flex-col gap-0.5">
+                            <dt class="text-muted-foreground text-2xs">{t("flash.remainingLabel")}</dt>
+                            <dd class="text-lg leading-none font-semibold tabular-nums">{remaining}</dd>
+                        </div>
+                    </dl>
+
+                    <div class="flex flex-col gap-1.5">
+                        {#each GRADE_ORDER as g (g)}
+                            <div class="flex items-center justify-between gap-2 text-xs">
+                                <span class="text-muted-foreground flex items-center gap-1.5">
+                                    <span
+                                        class={cn(
+                                            "size-2 rounded-full",
+                                            {
+                                                again: "bg-destructive",
+                                                hard: "bg-warning",
+                                                good: "bg-success",
+                                                easy: "bg-primary",
+                                            }[g]
+                                        )}
+                                    ></span>
+                                    {t(`flash.${g}`)}
+                                </span>
+                                <span class="tabular-nums">{counts[g]}</span>
+                            </div>
                         {/each}
                     </div>
-                {/if}
-            </Card.Content>
-        </Card.Root>
+                </Card.Content>
+            </Card.Root>
+        </aside>
+    </div>
 
-        <div class="text-muted-foreground flex gap-3 text-xs">
+    <!-- 窄面板下侧栏不显示，统计退到这一行 -->
+    {#if !done && current}
+        <div class="text-muted-foreground flex flex-wrap gap-3 text-xs @3xl:hidden">
+            <span>{t("flash.ratedLabel")} {rated}</span>
+            <span>{t("flash.remainingLabel")} {remaining}</span>
             {#each GRADE_ORDER as g (g)}
                 {#if counts[g] > 0}
                     <span>{t(`flash.${g}Count`, String(counts[g]))}</span>
                 {/if}
             {/each}
         </div>
-    {:else}
-        <!-- 空列表原先什么都不渲染：面板整块空白，用户不知道是没题还是坏了 -->
-        <div class="text-muted-foreground py-16 text-center text-sm">{t("flash.empty")}</div>
     {/if}
 </div>

@@ -13,3 +13,44 @@ beforeEach(() => {
     initI18n(dict);
     setFallback(dict);
 });
+
+/**
+ * jsdom 没有 Web Animations API，而 Svelte 5 的过渡（transition:/in:/out:）
+ * 无论时长是否为 0，都会先建一个「占位动画」并直接调用 element.animate，
+ * 因此在 jsdom 里一挂上带过渡的组件就抛 `element.animate is not a function`。
+ *
+ * 这里补一个最小实现：立刻把 onfinish 走完，让 Svelte 的过渡状态机正常收尾，
+ * 元素落在终态。测试关心的是「元素在不在、文字对不对」，
+ * 动效本身不做断言——这样组件可以放心用动效，而不必为了可测性把它删掉。
+ */
+if (typeof Element !== "undefined" && typeof Element.prototype.animate !== "function") {
+    Element.prototype.animate = function animate(this: Element): Animation {
+        const animation = {
+            onfinish: null as (() => void) | null,
+            oncancel: null as (() => void) | null,
+            playState: "finished" as const,
+            currentTime: 0,
+            startTime: 0,
+            playbackRate: 1,
+            id: "",
+            effect: null,
+            finished: Promise.resolve(),
+            cancel() {},
+            finish() {},
+            play() {},
+            pause() {},
+            reverse() {},
+            addEventListener() {},
+            removeEventListener() {},
+            commitStyles() {},
+            updatePlaybackRate() {},
+            persist() {},
+            get ready() {
+                return Promise.resolve(this);
+            },
+        };
+        // 异步收尾：与真实动画一致地在当前任务之后结束，避免在渲染中途同步触发回调
+        queueMicrotask(() => animation.onfinish?.());
+        return animation as unknown as Animation;
+    } as Element["animate"];
+}
