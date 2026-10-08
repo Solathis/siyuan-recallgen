@@ -106,7 +106,25 @@
             }
         };
         window.addEventListener("message", onMessage);
-        return () => window.removeEventListener("message", onMessage);
+
+        /*
+         * 样式文件变更后强制重载 iframe。
+         *
+         * iframe 里的 HMR 不一定收到 app.css 的样式更新，于是改完样式预览还是旧的——
+         * 这类「假故障」代价很高：会让人去改本来正确的地方。
+         * 只对 css-update 重载（JS 变更由 HMR 自己处理），代价是丢失面板内的临时状态，
+         * 但「看到的必须是最新样式」更重要。
+         */
+        const hot = import.meta.hot;
+        const onAfterUpdate = (payload: { updates?: Array<{ type?: string }> }): void => {
+            if (payload?.updates?.some((update) => update.type === "css-update")) reload();
+        };
+        hot?.on("vite:afterUpdate", onAfterUpdate);
+
+        return () => {
+            window.removeEventListener("message", onMessage);
+            hot?.off("vite:afterUpdate", onAfterUpdate);
+        };
     });
 </script>
 

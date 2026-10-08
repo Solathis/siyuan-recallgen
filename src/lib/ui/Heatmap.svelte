@@ -281,7 +281,7 @@
     const sortedRanges = $derived([...(config?.ranges ?? [])].sort((a, b) => a.min - b.min));
 </script>
 
-<div class="rg-heatmap flex w-full flex-col gap-2">
+<div class="rg-heatmap flex w-full flex-col gap-2" style="--rg-heat-cols: {cols.length}">
     <!-- 详情行始终占位，避免悬停时布局跳动 -->
     <div class="flex items-center gap-2">
         <div class="text-muted-foreground min-h-5 flex-1 text-xs" aria-live="polite">
@@ -315,10 +315,10 @@
             而这一列在它外面，不补占位整列标签会整体上移一行，
             于是「三」实际指向周二那一行（实测偏差 18px = 月份行高度）。
         -->
-        <div class="text-3xs leading-none text-muted-foreground">
+        <div class="text-3xs leading-none text-muted-foreground w-5 shrink-0">
             <!-- 结构与右侧月份行逐字相同，高度才能由同一套类保证一致 -->
             <div class="flex gap-1 pb-1 text-3xs leading-none" aria-hidden="true">
-                <span class="shrink-0" style="width: var(--rg-heat-cell)">&nbsp;</span>
+                <span class="w-full">&nbsp;</span>
             </div>
             <!--
                 行距必须与格子列的 gap-1 同源（0.25rem）。原先写死 margin-bottom: 4px，

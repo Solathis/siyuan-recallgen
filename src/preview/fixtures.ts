@@ -552,8 +552,6 @@ function makeScoreRecords(): ScoreRecord[] {
         const timestamp = now - daysAgo * DAY - Math.floor(rand() * 9) * 3600_000;
         if (timestamp > now) continue;
 
-        // 越近越熟练，但保留波动，让折线不是一条直线
-        const skill = 0.5 + (1 - daysAgo / 118) * 0.4 + (rand() - 0.5) * 0.15;
         const count = 5 + Math.floor(rand() * 6);
         const detail: GradingResult[] = [];
         const questions: Question[] = [];
@@ -571,16 +569,25 @@ function makeScoreRecords(): ScoreRecord[] {
              */
             const questionId = `${source.id}#${i}-${k}`;
             questions.push({ ...source, id: questionId } as Question);
-            // 先决定有没有作答，再决定得分：两者独立，才会出现「答错」而不是清一色「未答」
-            const answered = rand() > 0.18;
+            /*
+             * 先决定有没有作答，再决定得分：两者独立，才会出现「答错」而不是清一色「未答」。
+             *
+             * 分数分布刻意做成「练过一阵之后应该有的样子」——多数落在 70-100、
+             * 少数薄弱区间留一点样本。原先按 skill 折算，绝大多数落在 55 分以下，
+             * 于是统计页的分数分布挤在最左一档、各题型达标率全在 20-40%：
+             * 那是种子数据的形状，看上去却像界面算错了。
+             */
+            const answered = rand() > 0.12;
             const roll = rand();
             const score = !answered
                 ? 0
-                : roll > 0.72
-                  ? 100
-                  : roll > 0.45
-                    ? Math.round(60 * skill + rand() * 30)
-                    : Math.round(40 * skill);
+                : roll > 0.62
+                  ? Math.round(88 + rand() * 12)
+                  : roll > 0.3
+                    ? Math.round(70 + rand() * 18)
+                    : roll > 0.12
+                      ? Math.round(55 + rand() * 15)
+                      : Math.round(20 + rand() * 30);
             const objective = !["subjective", "coding"].includes(source.type);
 
             detail.push({

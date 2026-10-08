@@ -74,12 +74,45 @@
         }
     }
 
+    /* ── 选择题：选项与正确项 ────────────────────────────────────── */
+
+    /**
+     * 选择题的选项列表；非选择题返回 null。
+     *
+     * 之前闪卡只渲染题干、不渲染选项，于是选择题根本没法答：
+     * 卡片上只有「关于 $state，下列说法正确的是？」，四个选项一个都看不到，
+     * 揭晓答案也只给出一个字母「B」——等于把题做废了。
+     */
+    function choiceOptions(q: BankItem["question"]): string[] | null {
+        return q.type === "single_choice" || q.type === "multiple_choice" ? q.options : null;
+    }
+
+    /** 正确选项下标（多选按升序） */
+    function correctIndices(q: BankItem["question"]): number[] {
+        if (q.type === "single_choice") return [q.answer];
+        if (q.type === "multiple_choice") return [...q.answer].sort((a, b) => a - b);
+        return [];
+    }
+
+    function optionLetter(i: number): string {
+        return String.fromCharCode(65 + i);
+    }
+
+    /** 编程题的初始代码模板：贴在题干下方，否则「在此实现」这类题干没上下文 */
+    function starterCode(q: BankItem["question"]): string | null {
+        if (q.type !== "coding") return null;
+        const code = q.starter_code?.trim();
+        return code ? code : null;
+    }
+
     /** 正确答案的展示文本（按题型） */
     function answerText(item: BankItem): string {
         const q = item.question;
         if (q.type === "single_choice" || q.type === "multiple_choice") {
-            const idx = Array.isArray(q.answer) ? q.answer : [q.answer as number];
-            return idx.map((i) => String.fromCharCode(65 + i)).join(", ");
+            // 只给字母没有意义，必须带上选项原文
+            return correctIndices(q)
+                .map((i) => `- ${optionLetter(i)}. ${q.options[i] ?? ""}`)
+                .join("\n");
         }
         if (q.type === "true_false") return q.answer ? t("common.true") : t("common.false");
         if (q.type === "fill_blank")
@@ -144,6 +177,40 @@
                         <div class="rg-markdown text-reading mx-auto max-w-prose leading-relaxed">
                             {@html renderMarkdownLatex(current.question.question)}
                         </div>
+
+                        <!--
+                            选择题必须把选项渲染出来，否则这张卡没法答：
+                            只看题干、四个选项一个都看不到，揭晓时又只给一个字母。
+                            揭晓后正确项加底色，与下方「答案」互为印证。
+                        -->
+                        {#if choiceOptions(current.question)}
+                            <ul class="mx-auto flex w-full max-w-prose flex-col gap-1 text-sm">
+                                {#each choiceOptions(current.question) as option, i (i)}
+                                    {@const isRight = revealed && correctIndices(current.question).includes(i)}
+                                    <li
+                                        class={cn(
+                                            "flex items-start gap-2 rounded-md px-2.5 py-1.5",
+                                            isRight && "bg-success/15 font-semibold"
+                                        )}
+                                    >
+                                        <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs"
+                                            >{optionLetter(i)}</span
+                                        >
+                                        <div class="rg-markdown min-w-0 flex-1">
+                                            {@html renderMarkdownLatex(option)}
+                                        </div>
+                                    </li>
+                                {/each}
+                            </ul>
+                        {/if}
+
+                        <!-- 编程题：初始代码模板必须一起给，否则「在此实现」没有上下文 -->
+                        {#if starterCode(current.question)}
+                            <pre
+                                class="bg-muted mx-auto max-h-40 w-full max-w-prose overflow-auto rounded-md p-3 font-mono text-xs">{starterCode(
+                                    current.question
+                                )}</pre>
+                        {/if}
 
                         {#if !revealed}
                             <div class="mx-auto w-full max-w-prose">

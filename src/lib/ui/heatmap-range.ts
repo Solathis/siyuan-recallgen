@@ -5,7 +5,7 @@ import type { ScoreIndexEntry } from "@/types/quiz";
  * 抽成纯函数模块便于单测：组件内只负责渲染。
  */
 
-/** GitHub 风格最近窗口的周数 */
+/** GitHub 风格最近窗口的周数（约一年）。格子边长由容器宽度反算，见 app.css 的 .rg-heatmap */
 export const HEATMAP_WEEKS = 53;
 
 /** 'recent' 为最近 53 周滚动窗口，数字为某个自然年 */
