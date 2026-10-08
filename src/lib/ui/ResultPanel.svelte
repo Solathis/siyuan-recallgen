@@ -2,7 +2,6 @@
     import { Badge } from "@/lib/components/ui/badge";
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
-    import { Progress } from "@/lib/components/ui/progress";
     import { Textarea } from "@/lib/components/ui/textarea";
     import * as Tabs from "@/lib/components/ui/tabs";
     import { cn } from "@/lib/utils";
@@ -10,6 +9,9 @@
     import type { ChatTurn, QuizService } from "../quiz/service";
     import { formatClock } from "./duration";
     import { renderMarkdownLatex } from "./latex";
+    import { rise } from "./motion";
+    import ScoreRing from "./ScoreRing.svelte";
+    import Segmented from "./Segmented.svelte";
     import { PASS_SCORE } from "@/types/quiz";
     import type { GradingResult, Question } from "@/types/quiz";
 
@@ -56,6 +58,7 @@
     const total = $derived(results.reduce((s, r) => s + r.score, 0));
     const max = $derived(results.reduce((s, r) => s + r.maxScore, 0));
     const pct = $derived(max > 0 ? (total / max) * 100 : 0);
+    const passed = $derived(pct >= PASS_SCORE);
     const correctCount = $derived(results.filter((r) => r.score >= PASS_SCORE).length);
     const partialCount = $derived(results.filter((r) => r.score > 0 && r.score < 100).length);
     const wrongCount = $derived(results.filter((r) => r.score === 0 && !!r.userAnswer).length);
@@ -83,9 +86,6 @@
     let activeTab = $state<"questions" | "analysis">("questions");
     let activeQ = $state(0);
 
-    const activeResult = $derived(results[activeQ]);
-    const activeQuestion = $derived(questions[activeQ]);
-
     /**
      * 题目状态：客观题支持部分得分后，「正确」表示完全正确（100 分），
      * 部分得分单独成一类，避免把 75 分的多选题显示成绿色「正确」。
@@ -96,6 +96,30 @@
         if (r.score > 0) return "partial";
         return "wrong";
     }
+
+    type StatusFilter = "all" | "correct" | "partial" | "wrong" | "unanswered";
+    let filter = $state<StatusFilter>("all");
+
+    /** 保留原始下标：题号要显示整卷里的序号，而不是筛选后的序号 */
+    const indexed = $derived(results.map((result, index) => ({ result, index, status: qStatus(result) })));
+    const visible = $derived(filter === "all" ? indexed : indexed.filter((item) => item.status === filter));
+
+    /*
+     * 原实现这里是「一排状态圆点 + 一排图例文字」，两者都不可点，
+     * 想只看错题得自己数题号。现在图例本身即筛选器，题号条只显示筛出来的题。
+     */
+    const filterItems = $derived([
+        { value: "all", label: t("result.all", String(results.length)) },
+        { value: "correct", label: t("result.correct", String(correctCount)) },
+        { value: "partial", label: t("result.partial", String(partialCount)) },
+        { value: "wrong", label: t("result.wrong", String(wrongCount)) },
+        { value: "unanswered", label: t("result.unanswered", String(unanswered)) },
+    ]);
+
+    /** 当前查看的那道题：被筛掉时回落到第一条可见项 */
+    const activeEntry = $derived(visible.find((item) => item.index === activeQ) ?? visible[0]);
+    const activeResult = $derived(activeEntry?.result);
+    const activeQuestion = $derived(questions[activeEntry?.index ?? -1]);
 
     function correctText(q: Question): string {
         switch (q.type) {
@@ -144,6 +168,13 @@
         return false;
     }
 
+    const statusDot: Record<string, string> = {
+        correct: "bg-success",
+        partial: "bg-warning",
+        wrong: "bg-destructive",
+        unanswered: "bg-muted-foreground/40",
+    };
+
     /* ── AI 答疑 ─────────────────────────────────────────────────── */
 
     let chatHistory = $state<ChatTurn[]>([]);
@@ -189,39 +220,84 @@
     }
 </script>
 
-<div class="flex flex-col gap-4 pb-4">
-    <!-- 汇总 -->
-    <Card.Root>
-        <Card.Content class="grid grid-cols-1 gap-4 pt-4 sm:grid-cols-3">
-            <div class="flex flex-col">
-                <span class={cn("text-2xl font-bold", scoreTone(pct))}>{pct.toFixed(0)}</span>
-                <span class="text-muted-foreground text-xs">{t("result.score")}</span>
-                <span class="text-muted-foreground text-xs">{total.toFixed(0)}/{max}</span>
-            </div>
-            <div class="flex flex-col">
-                <span class={cn("text-2xl font-bold", scoreTone(accuracy))}>{accuracy.toFixed(0)}%</span>
-                <span class="text-muted-foreground text-xs">{t("result.accuracy")}</span>
-                <span class="text-muted-foreground text-xs">
-                    {t("result.qCount", `${correctCount}/${results.length}`)}
-                </span>
-            </div>
-            <div class="flex flex-col">
-                <span class="text-2xl font-bold">{fmtDuration(duration)}</span>
-                <span class="text-muted-foreground text-xs">{t("result.time")}</span>
-                <span class="text-muted-foreground text-xs">
-                    {t("result.wrongCount", String(wrongCount), String(unanswered))}
-                </span>
-            </div>
-        </Card.Content>
-    </Card.Root>
-
+<!--
+    @container：结果页的排版要按「面板可用宽度」决定，而不是视口宽度。
+    思源里面板可以很窄，用 sm:/md: 判断是否并排从根上就是错的。
+-->
+<div class="@container flex flex-col gap-4 pb-4">
     <!--
-        原先「薄弱点分析」与「学习建议」两个标签页渲染的是同一段 analysis 文本，
-        属于重复内容。现合并为单一「解析与建议」标签页。
+        汇总重做。
+        原实现是三块并排的大数字（得分 / 正确率 / 用时），窄屏下叠成三层、
+        每层之间留出一大截空白，主次也分不出来——看不出这次到底过没过。
+        现在左侧是得分环 + 达标徽标（一眼可判），右侧是指标行；窄容器下
+        指标行排成两列，不再出现三块纵向堆叠的大空白。
     -->
+    <div in:rise={{ y: 8 }}>
+        <Card.Root>
+            <Card.Content class="flex flex-col gap-4 pt-4 @2xl:flex-row @2xl:items-center @2xl:gap-6">
+                <div class="flex items-center gap-4">
+                    <ScoreRing value={total} {max} pass={PASS_SCORE} size={124}>
+                        <span
+                            class={cn(
+                                "text-3xl leading-none font-semibold tabular-nums",
+                                passed ? "text-success" : "text-destructive"
+                            )}>{pct.toFixed(0)}</span
+                        >
+                        <span class="text-muted-foreground text-2xs">{t("result.score")}</span>
+                    </ScoreRing>
+
+                    <div class="flex min-w-0 flex-col items-start gap-1.5">
+                        <Badge variant={passed ? "success" : "destructive"}>
+                            {passed ? t("result.passed") : t("result.notPassed")}
+                        </Badge>
+                        <span class="text-muted-foreground text-xs tabular-nums">{total.toFixed(0)}/{max}</span>
+                        {#if sourceDocId && sourceTitle}
+                            <span class="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
+                                <span class="shrink-0">{t("result.sourceNote")}:</span>
+                                <button
+                                    type="button"
+                                    class="text-primary truncate underline-offset-2 hover:underline"
+                                    title={sourceTitle}
+                                    onclick={() => service.openDoc(sourceDocId)}
+                                >
+                                    {sourceTitle}
+                                </button>
+                            </span>
+                        {/if}
+                    </div>
+                </div>
+
+                <dl class="grid grid-cols-2 gap-x-5 gap-y-3 @xl:grid-cols-4 @2xl:ml-auto">
+                    <div class="flex flex-col gap-0.5">
+                        <dt class="text-muted-foreground text-xs">{t("result.accuracy")}</dt>
+                        <dd class={cn("text-lg font-semibold tabular-nums", scoreTone(accuracy))}>
+                            {accuracy.toFixed(0)}%
+                        </dd>
+                        <span class="text-muted-foreground text-2xs">
+                            {t("result.qCount", `${correctCount}/${results.length}`)}
+                        </span>
+                    </div>
+                    <div class="flex flex-col gap-0.5">
+                        <dt class="text-muted-foreground text-xs">{t("result.time")}</dt>
+                        <dd class="text-lg font-semibold tabular-nums">{fmtDuration(duration)}</dd>
+                    </div>
+                    <!-- 错误与未答分开两格：合成一句「0 错 · 1 未答」会让值里再重复一次标签 -->
+                    <div class="flex flex-col gap-0.5">
+                        <dt class="text-muted-foreground text-xs">{t("result.status_wrong")}</dt>
+                        <dd class="text-lg font-semibold tabular-nums">{wrongCount}</dd>
+                    </div>
+                    <div class="flex flex-col gap-0.5">
+                        <dt class="text-muted-foreground text-xs">{t("result.status_unanswered")}</dt>
+                        <dd class="text-lg font-semibold tabular-nums">{unanswered}</dd>
+                    </div>
+                </dl>
+            </Card.Content>
+        </Card.Root>
+    </div>
+
     {#if submitError}
         <div
-            class="border-destructive bg-destructive/10 text-destructive mb-3 rounded-md border px-3 py-2 text-sm"
+            class="border-destructive bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm"
             role="alert"
         >
             <p class="font-semibold">{t("result.submitError")}</p>
@@ -232,19 +308,10 @@
         </div>
     {/if}
 
-    {#if sourceDocId && sourceTitle}
-        <div class="text-muted-foreground mb-2 flex items-center gap-1 text-xs">
-            <span>{t("result.sourceNote")}:</span>
-            <button
-                type="button"
-                class="text-primary underline-offset-2 hover:underline"
-                onclick={() => service.openDoc(sourceDocId)}
-            >
-                {sourceTitle}
-            </button>
-        </div>
-    {/if}
-
+    <!--
+        原先「薄弱点分析」与「学习建议」两个标签页渲染的是同一段 analysis 文本，
+        属于重复内容。现合并为单一「解析与建议」标签页。
+    -->
     <Tabs.Root value={activeTab} onValueChange={(v) => (activeTab = v as typeof activeTab)}>
         <Tabs.List>
             <Tabs.Trigger value="questions">{t("result.tabQuestions")}</Tabs.Trigger>
@@ -252,116 +319,138 @@
         </Tabs.List>
 
         <Tabs.Content value="questions" class="flex flex-col gap-3 pt-3">
-            <!-- 题目状态一览 -->
-            <div class="flex flex-wrap gap-1.5">
-                {#each results as r, i (r.questionId)}
-                    <button
-                        type="button"
-                        class={cn(
-                            "size-8 rounded-full border text-xs font-semibold transition-transform hover:scale-110 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
-                            qStatus(r) === "correct" && "bg-success text-success-foreground border-transparent",
-                            qStatus(r) === "partial" && "bg-warning text-warning-foreground border-transparent",
-                            qStatus(r) === "wrong" && "bg-destructive text-destructive-foreground border-transparent",
-                            qStatus(r) === "unanswered" && "bg-muted text-muted-foreground border-transparent",
-                            i === activeQ && "ring-ring ring-2"
-                        )}
-                        aria-label={t("result.jumpTo", String(i + 1), t(`result.status_${qStatus(r)}`))}
-                        aria-current={i === activeQ}
-                        onclick={() => (activeQ = i)}>{i + 1}</button
-                    >
-                {/each}
-            </div>
+            <!--
+                筛选器：原实现是一排不可点的状态圆点 + 一排不可点的图例，
+                下方还挂着一条只表示「看到第几题」的蓝色进度条（就是那条
+                「没来由的蓝线」）。现在图例本身即筛选，蓝线去掉。
+            -->
+            <Segmented
+                items={filterItems}
+                value={filter}
+                ariaLabel={t("result.filterLabel")}
+                size="sm"
+                onchange={(next) => (filter = next as StatusFilter)}
+            />
 
-            <div class="text-muted-foreground flex flex-wrap gap-4 text-xs">
-                {#each [["all", t("result.all", String(results.length))], ["correct", t("result.correct", String(correctCount))], ["partial", t("result.partial", String(partialCount))], ["wrong", t("result.wrong", String(wrongCount))], ["unanswered", t("result.unanswered", String(unanswered))]] as [key, label] (key)}
-                    <span class="flex items-center gap-1.5">
-                        <span
+            {#if visible.length === 0}
+                <p class="text-muted-foreground py-6 text-center text-xs">{t("result.filterEmpty")}</p>
+            {:else}
+                <!-- 题号条只显示筛出来的题；点一下切换下方详情 -->
+                <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label={t("result.tabQuestions")}>
+                    {#each visible as item (item.result.questionId)}
+                        <button
+                            type="button"
                             class={cn(
-                                "size-2.5 rounded-full",
-                                key === "all" && "bg-muted-foreground",
-                                key === "correct" && "bg-success",
-                                key === "partial" && "bg-warning",
-                                key === "wrong" && "bg-destructive",
-                                key === "unanswered" && "bg-muted"
+                                "relative size-8 rounded-md border text-xs font-semibold transition-transform",
+                                "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none hover:scale-105",
+                                item.index === activeEntry?.index
+                                    ? "border-rg-accent ring-rg-accent-line ring-2"
+                                    : "border-border",
+                                "text-foreground"
                             )}
-                        ></span>{label}
-                    </span>
-                {/each}
-            </div>
-
-            <Progress value={results.length > 0 ? ((activeQ + 1) / results.length) * 100 : 0} />
-
-            {#if activeQuestion && activeResult}
-                <Card.Root>
-                    <Card.Header>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline">{t(`type.${activeQuestion.type}`)}</Badge>
-                            <Badge variant="secondary">{t(`diff.${activeQuestion.difficulty}`)}</Badge>
-                            {#each activeQuestion.tags ?? [] as tag (tag)}
-                                <Badge variant="outline">{tag}</Badge>
-                            {/each}
+                            aria-label={t("result.jumpTo", String(item.index + 1), t(`result.status_${item.status}`))}
+                            aria-current={item.index === activeEntry?.index}
+                            onclick={() => (activeQ = item.index)}
+                        >
+                            {item.index + 1}
                             <span
                                 class={cn(
-                                    "ml-auto text-sm font-bold",
-                                    scoreTone((activeResult.score / (activeResult.maxScore || 1)) * 100)
+                                    "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-background",
+                                    statusDot[item.status]
                                 )}
-                            >
-                                {activeResult.score.toFixed(0)}/{activeResult.maxScore}
-                            </span>
-                        </div>
-                    </Card.Header>
-                    <Card.Content class="flex flex-col gap-3 text-sm">
-                        <div class="rg-markdown">{@html renderMarkdownLatex(activeQuestion.question)}</div>
+                                aria-hidden="true"
+                            ></span>
+                        </button>
+                    {/each}
+                </div>
 
-                        {#if activeQuestion.type === "single_choice" || activeQuestion.type === "multiple_choice"}
-                            <div class="flex flex-col gap-1">
-                                {#each activeQuestion.options as option, j (j)}
-                                    <div
-                                        class={cn(
-                                            "rounded-md px-2.5 py-1.5",
-                                            isCorrectOption(activeQuestion, j) && "bg-success/15 font-semibold"
-                                        )}
-                                    >
-                                        <b>{String.fromCharCode(65 + j)}.</b>
-                                        <span class="rg-markdown inline-block">{@html renderMarkdownLatex(option)}</span
-                                        >
-                                    </div>
+                {#if activeQuestion && activeResult}
+                    <Card.Root>
+                        <Card.Header>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline">{t(`type.${activeQuestion.type}`)}</Badge>
+                                <Badge variant="secondary">{t(`diff.${activeQuestion.difficulty}`)}</Badge>
+                                {#each activeQuestion.tags ?? [] as tag (tag)}
+                                    <Badge variant="outline">{tag}</Badge>
                                 {/each}
+                                <span
+                                    class={cn(
+                                        "ml-auto text-sm font-bold tabular-nums",
+                                        scoreTone((activeResult.score / (activeResult.maxScore || 1)) * 100)
+                                    )}
+                                >
+                                    {activeResult.score.toFixed(0)}/{activeResult.maxScore}
+                                </span>
                             </div>
-                        {/if}
+                        </Card.Header>
+                        <Card.Content class="flex flex-col gap-3 text-sm">
+                            <div class="rg-markdown">{@html renderMarkdownLatex(activeQuestion.question)}</div>
 
-                        <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                            <div>
-                                <span class="text-muted-foreground">{t("result.yourAnswer")}</span>
-                                <div class="rg-markdown">{@html renderMarkdownLatex(userText(activeResult))}</div>
-                            </div>
-                            {#if activeQuestion.type !== "subjective" && activeQuestion.type !== "coding"}
+                            {#if activeQuestion.type === "single_choice" || activeQuestion.type === "multiple_choice"}
+                                <div class="flex flex-col gap-1">
+                                    {#each activeQuestion.options as option, j (j)}
+                                        <!--
+                                            选项行原本把序号写成一个 inline-block 的 span，
+                                            里面的 <p> 是块级元素，窄屏下序号就被挤到单独一行。
+                                            改成 flex：序号固定宽、正文占剩余宽度，任何宽度都不折。
+                                        -->
+                                        <div
+                                            class={cn(
+                                                "flex items-start gap-2 rounded-md px-2.5 py-1.5",
+                                                isCorrectOption(activeQuestion, j) && "bg-success/15"
+                                            )}
+                                        >
+                                            <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs">
+                                                {String.fromCharCode(65 + j)}
+                                            </span>
+                                            <div
+                                                class={cn(
+                                                    "rg-markdown min-w-0 flex-1",
+                                                    isCorrectOption(activeQuestion, j) && "font-semibold"
+                                                )}
+                                            >
+                                                {@html renderMarkdownLatex(option)}
+                                            </div>
+                                        </div>
+                                    {/each}
+                                </div>
+                            {/if}
+
+                            <div class="grid grid-cols-1 gap-2 @xl:grid-cols-2">
                                 <div>
-                                    <span class="text-muted-foreground">{t("result.correctAnswer")}</span>
+                                    <span class="text-muted-foreground text-xs">{t("result.yourAnswer")}</span>
+                                    <div class="rg-markdown">{@html renderMarkdownLatex(userText(activeResult))}</div>
+                                </div>
+                                {#if activeQuestion.type !== "subjective" && activeQuestion.type !== "coding"}
+                                    <div>
+                                        <span class="text-muted-foreground text-xs">{t("result.correctAnswer")}</span>
+                                        <div class="rg-markdown">
+                                            {@html renderMarkdownLatex(correctText(activeQuestion))}
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+
+                            {#if activeQuestion.explanation}
+                                <div class="border-border border-t pt-2">
+                                    <span class="text-muted-foreground text-xs">{t("result.explanation")}</span>
                                     <div class="rg-markdown">
-                                        {@html renderMarkdownLatex(correctText(activeQuestion))}
+                                        {@html renderMarkdownLatex(activeQuestion.explanation)}
                                     </div>
                                 </div>
                             {/if}
-                        </div>
 
-                        {#if activeQuestion.explanation}
-                            <div class="border-border border-t pt-2">
-                                <span class="text-muted-foreground text-xs">{t("result.explanation")}</span>
-                                <div class="rg-markdown">{@html renderMarkdownLatex(activeQuestion.explanation)}</div>
-                            </div>
-                        {/if}
-
-                        {#if activeResult.comment}
-                            <div class="border-border border-t pt-2">
-                                <span class="text-muted-foreground text-xs">{t("result.comment")}</span>
-                                <div class="rg-markdown">{@html renderMarkdownLatex(activeResult.comment)}</div>
-                            </div>
-                        {/if}
-                    </Card.Content>
-                </Card.Root>
-            {:else}
-                <div class="text-muted-foreground py-8 text-center text-sm">{t("result.questionMissing")}</div>
+                            {#if activeResult.comment}
+                                <div class="border-border border-t pt-2">
+                                    <span class="text-muted-foreground text-xs">{t("result.comment")}</span>
+                                    <div class="rg-markdown">{@html renderMarkdownLatex(activeResult.comment)}</div>
+                                </div>
+                            {/if}
+                        </Card.Content>
+                    </Card.Root>
+                {:else}
+                    <p class="text-muted-foreground py-8 text-center text-sm">{t("result.questionMissing")}</p>
+                {/if}
             {/if}
 
             <div class="flex flex-wrap justify-end gap-2">
@@ -412,9 +501,10 @@
                 {#each chatHistory as turn, i (i)}
                     <div
                         class={cn(
-                            "max-w-[90%] rounded-md px-2.5 py-2 text-sm",
+                            "max-w-4/5 rounded-md px-2.5 py-2 text-sm",
                             turn.role === "user" ? "bg-primary/10 self-end" : "bg-muted self-start"
                         )}
+                        in:rise={{ y: 4, duration: 160 }}
                     >
                         <span class="text-muted-foreground text-2xs font-semibold">
                             {turn.role === "user" ? t("common.me") : t("common.ai")}

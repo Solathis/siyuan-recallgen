@@ -33,6 +33,9 @@
 
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
+    import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
+    import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
+    import FlagIcon from "@lucide/svelte/icons/flag";
     import { showMessage } from "siyuan";
     import * as AlertDialog from "@/lib/components/ui/alert-dialog";
     import { Badge } from "@/lib/components/ui/badge";
@@ -47,13 +50,17 @@
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
     import { planBatches } from "../quiz/batching";
     import type { GenPhase, GenStats } from "../quiz/generator";
+    import { genProgress } from "../quiz/gen-progress";
     import { PASS_SCORE } from "@/types/quiz";
     import type { AIProtocol } from "@/types/config";
     import type { GradingResult, PanelState, QuizSession, UserAnswer } from "@/types/quiz";
     import GenPlan from "./GenPlan.svelte";
+    import GenSteps from "./GenSteps.svelte";
     import ProgressBar from "./ProgressBar.svelte";
     import QuestionView from "./QuestionView.svelte";
     import ResultPanel from "./ResultPanel.svelte";
+    import StateBlock from "./StateBlock.svelte";
+    import { rise } from "./motion";
 
     let {
         service,
@@ -559,7 +566,12 @@
                 tabData.content ?? "",
                 (phase, round, detail, stats) => {
                     progressLabel = detail;
-                    progressValue = phase === "generating" ? null : round * 30;
+                    /*
+                     * 进度按「阶段权重 + 阶段内真实推进」算，而不是原实现的 round * 30：
+                     * 后者让生成阶段永远是不确定条，之后每轮跳 30%，与实际工作量无关。
+                     * 拿不到实时数据时 genProgress 返回 null，交回不确定进度条。
+                     */
+                    progressValue = genProgress(phase, round, stats);
                     // 生成器每批都会推送一次快照，界面据此显示「已收集 N 题 / 第 i/n 批」
                     if (stats) genStats = stats;
                 },
@@ -937,7 +949,12 @@
 </script>
 
 <div bind:this={rootEl} class="flex h-full flex-col" style="--rg-panel-width: {config.general.panelWidth}px">
-    <div class="mx-auto flex h-full w-full flex-col px-4" style="max-width: var(--rg-panel-width, 1100px)">
+    <!--
+        @container 让内部可以用容器变体（@3xl: 等）而不是视口断点。
+        插件面板的可用宽度与视口无关：思源的 tab 可以很窄，设置弹窗永远比视口窄，
+        用 sm:/md: 判断「该收成几栏」从根上就是错的。
+    -->
+    <div class="@container mx-auto flex h-full w-full flex-col px-4" style="max-width: var(--rg-panel-width, 1100px)">
         {#if panelState === "configuring"}
             <div class="flex min-h-0 flex-1 justify-center overflow-y-auto px-2 py-8">
                 <Card.Root class="w-full max-w-xl">
@@ -1009,89 +1026,136 @@
                 </Card.Root>
             </div>
         {:else if panelState === "loading_generating" || panelState === "loading_grading"}
-            <div class="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-10">
-                <div class="flex flex-col gap-3 rounded-lg border p-4">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h3 class="text-sm font-semibold">
-                            {panelState === "loading_generating" ? t("gen.progress.title") : progressLabel}
-                        </h3>
-                        {#if panelState === "loading_generating"}
-                            <span class="text-muted-foreground text-xs">
-                                {t("gen.progress.elapsed")}
-                                {t("gen.progress.seconds", String(genElapsed))}
-                            </span>
-                        {/if}
-                    </div>
+            <div class="flex min-h-0 flex-1 justify-center overflow-y-auto px-2 py-6">
+                <!--
+                    只做进场（in:），不做退场。
+                    这里是一整屏状态容器：用 transition: 会在切到结果页时给旧内容播一段
+                    淡出，于是「生成中」与「结果页」会有 200ms 同时挂在 DOM 里、上下叠着；
+                    更糟的是面板不在前台时（思源里切到别的 tab）WAAPI 动画会被浏览器暂停，
+                    退场永远播不完，旧界面就一直在那不退。进场动效没有这个问题。
+                -->
+                <div class="flex w-full max-w-2xl flex-col gap-4" in:rise={{ y: 8 }}>
+                    <!--
+                        进度卡：原实现是一张 max-w-2xl 的小卡悬在整屏中间，
+                        进度条和四格统计各占一行却互不对齐，看着像没做完的临时页面。
+                        现在收成一张有明确层级的卡：标题行（阶段 + 用时）、步骤条、
+                        进度条、统计行，全部左对齐同一列。
+                    -->
+                    <Card.Root>
+                        <Card.Header>
+                            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                                <Card.Title>
+                                    {panelState === "loading_generating" ? t("gen.progress.title") : progressLabel}
+                                </Card.Title>
+                                {#if panelState === "loading_generating"}
+                                    <span class="text-muted-foreground text-xs tabular-nums">
+                                        {t("gen.progress.elapsed")}
+                                        {t("gen.progress.seconds", String(genElapsed))}
+                                    </span>
+                                {/if}
+                            </div>
+                        </Card.Header>
 
-                    <ProgressBar value={progressValue} label={progressLabel} />
+                        <Card.Content class="flex flex-col gap-4">
+                            {#if panelState === "loading_generating"}
+                                <GenSteps
+                                    phase={genStats?.phase ?? "generating"}
+                                    hasReviewer={!!config.ai.roles.reviewer}
+                                />
+                            {/if}
+
+                            <ProgressBar
+                                value={progressValue}
+                                label={progressLabel}
+                                size="md"
+                                showValue={progressValue !== null}
+                            />
+
+                            {#if panelState === "loading_generating"}
+                                <!--
+                                    实时信息：光看进度条不知道「生成到哪了、有没有丢题」。
+                                    批次与收题数是同一组口径，并排放在一行里读起来才连得上。
+                                -->
+                                <!--
+                                    用容器变体而不是 sm:：面板可用宽度与视口无关。
+                                    容器刻度比视口刻度小得多（@3xl = 48rem），这里要的是
+                                    「面板本身够宽才排四栏」。
+                                -->
+                                <dl class="grid grid-cols-2 gap-x-4 gap-y-3 @3xl:grid-cols-4">
+                                    <div class="flex flex-col gap-0.5">
+                                        <dt class="text-muted-foreground text-xs">{t("gen.stat.batch")}</dt>
+                                        <dd class="text-sm font-medium tabular-nums">
+                                            {t(
+                                                "gen.stat.batchValue",
+                                                String(genStats?.batch ?? 1),
+                                                String(genStats?.batches ?? plannedBatches)
+                                            )}
+                                        </dd>
+                                    </div>
+                                    <div class="flex flex-col gap-0.5">
+                                        <dt class="text-muted-foreground text-xs">{t("gen.stat.collected")}</dt>
+                                        <dd class="text-sm font-medium tabular-nums">
+                                            {genStats?.collected ?? 0}
+                                            <span class="text-muted-foreground font-normal">
+                                                / {genStats?.target ?? config.general.difficulty.total}
+                                            </span>
+                                        </dd>
+                                    </div>
+                                    <div class="flex flex-col gap-0.5">
+                                        <dt class="text-muted-foreground text-xs">{t("gen.stat.dropped")}</dt>
+                                        <dd
+                                            class={cn(
+                                                "text-sm font-medium tabular-nums",
+                                                (genStats?.dropped ?? 0) > 0 && "text-warning"
+                                            )}
+                                        >
+                                            {genStats?.dropped ?? 0}
+                                        </dd>
+                                    </div>
+                                    <div class="flex flex-col gap-0.5">
+                                        <dt class="text-muted-foreground text-xs">{t("gen.stat.phase")}</dt>
+                                        <dd class="text-sm font-medium">
+                                            {genStats ? phaseLabel(genStats.phase) : t("gen.phase.generating")}
+                                        </dd>
+                                    </div>
+                                </dl>
+
+                                {#if genStats?.note}
+                                    <p class="text-warning text-xs">{genStats.note}</p>
+                                {/if}
+                            {/if}
+                        </Card.Content>
+
+                        {#if panelState === "loading_generating"}
+                            <Card.Footer>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onclick={() => {
+                                        abortRun();
+                                        closeTab();
+                                    }}
+                                >
+                                    {t("quiz.cancelGenerate")}
+                                </Button>
+                            </Card.Footer>
+                        {/if}
+                    </Card.Root>
 
                     {#if panelState === "loading_generating"}
-                        <!-- 实时信息：光看进度条不知道「生成到哪了、有没有丢题」 -->
-                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
-                            <div class="flex flex-col gap-0.5">
-                                <span class="text-muted-foreground">{t("gen.stat.phase")}</span>
-                                <span class="font-medium">
-                                    {genStats ? phaseLabel(genStats.phase) : t("gen.phase.generating")}
-                                </span>
-                            </div>
-                            <div class="flex flex-col gap-0.5">
-                                <span class="text-muted-foreground">{t("gen.stat.batch")}</span>
-                                <span class="font-medium">
-                                    {t(
-                                        "gen.stat.batchValue",
-                                        String(genStats?.batch ?? 1),
-                                        String(genStats?.batches ?? plannedBatches)
-                                    )}
-                                </span>
-                            </div>
-                            <div class="flex flex-col gap-0.5">
-                                <span class="text-muted-foreground">{t("gen.stat.collected")}</span>
-                                <span class="font-medium">
-                                    {genStats?.collected ?? 0}
-                                    <span class="text-muted-foreground font-normal">
-                                        / {genStats?.target ?? config.general.difficulty.total}
-                                    </span>
-                                </span>
-                            </div>
-                            <div class="flex flex-col gap-0.5">
-                                <span class="text-muted-foreground">{t("gen.stat.dropped")}</span>
-                                <span class="font-medium">{genStats?.dropped ?? 0}</span>
-                            </div>
-                        </div>
-
-                        {#if genStats?.note}
-                            <p class="text-warning text-xs">{genStats.note}</p>
-                        {/if}
-                        <p class="text-muted-foreground text-2xs">{t("gen.progress.phases", "3")}</p>
-
-                        <div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onclick={() => {
-                                    abortRun();
-                                    closeTab();
-                                }}
-                            >
-                                {t("quiz.cancelGenerate")}
-                            </Button>
-                        </div>
+                        <GenPlan
+                            sourceTitle={tabData.sourceTitle}
+                            chars={tabData.content?.length ?? 0}
+                            difficulty={config.general.difficulty}
+                            types={config.general.allowedTypes}
+                            batches={plannedBatches}
+                            modelName={genModelName}
+                            protocol={genProtocol}
+                            structured={config.ai.jsonSchemaEnabled}
+                            reviewer={reviewerName}
+                        />
                     {/if}
                 </div>
-
-                {#if panelState === "loading_generating"}
-                    <GenPlan
-                        sourceTitle={tabData.sourceTitle}
-                        chars={tabData.content?.length ?? 0}
-                        difficulty={config.general.difficulty}
-                        types={config.general.allowedTypes}
-                        batches={plannedBatches}
-                        modelName={genModelName}
-                        protocol={genProtocol}
-                        structured={config.ai.jsonSchemaEnabled}
-                        reviewer={reviewerName}
-                    />
-                {/if}
             </div>
         {:else if panelState === "answering"}
             {#if error && questions.length === 0}
@@ -1123,73 +1187,99 @@
                 </div>
             {:else if questions.length === 0}
                 <!-- 补齐空态：恢复到一个空会话时原实现会整屏空白 -->
-                <div class="text-muted-foreground py-20 text-center text-sm">{t("quiz.emptySession")}</div>
+                <StateBlock
+                    kind="empty"
+                    icon="📄"
+                    title={t("quiz.emptySession")}
+                    description={t("quiz.emptySessionHint")}
+                />
             {:else}
-                <header class="border-border flex shrink-0 flex-wrap items-center justify-between gap-2 border-b py-2">
-                    <!-- 已答数量下面的进度条与底部交卷栏都在显示，这里不再重复一遍 -->
-                    <div class="flex flex-wrap items-center gap-2">
-                        {#if unansweredIndices.length > 0}
+                <!--
+                    顶栏重排。
+                    原实现把「下一道未答题 / 已标记 / 下一道标记题 / 倒计时」与
+                    「← 1/8 → / 重新生成」塞进同一个 flex-wrap 行，两侧各自折行后
+                    高矮不齐、间距也不一致；进度条又被 ProgressBar 内部写死的
+                    max-w-md 截到 448px 宽，右侧半屏空白。
+                    现在拆成「工具行 + 进度条」两行：工具行里题序导航独立成组、
+                    状态徽标居中、次要操作靠右，控件高度统一 h-7；进度条独占一行铺满。
+                -->
+                <header class="border-border flex shrink-0 flex-col gap-2 border-b py-2">
+                    <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                        <div class="border-border flex items-center gap-0.5 rounded-md border p-0.5">
                             <Button
-                                variant="outline"
-                                size="sm"
-                                onclick={goToNextUnanswered}
-                                title={t("quiz.nextUnansweredHint")}
-                                aria-label={t("quiz.nextUnanswered")}
+                                variant="ghost"
+                                size="icon-sm"
+                                disabled={activeIndex <= 0}
+                                onclick={() => goToQuestion(activeIndex - 1)}
+                                aria-label={t("quiz.prevQuestion")}
+                                title={t("quiz.prevQuestion")}
                             >
-                                {t("quiz.nextUnanswered")} →
+                                <ChevronLeftIcon />
                             </Button>
-                        {/if}
-                        {#if flaggedCount > 0}
-                            <Badge variant="outline">{t("quiz.flaggedCount", String(flaggedCount))}</Badge>
+                            <span
+                                class="text-muted-foreground min-w-11 text-center text-xs tabular-nums"
+                                aria-live="polite"
+                            >
+                                {activeIndex + 1}/{questions.length}
+                            </span>
                             <Button
-                                variant="outline"
-                                size="sm"
-                                onclick={goToNextFlagged}
-                                title={t("quiz.nextFlaggedHint")}
-                                aria-label={t("quiz.nextFlagged")}
+                                variant="ghost"
+                                size="icon-sm"
+                                disabled={activeIndex >= questions.length - 1}
+                                onclick={() => goToQuestion(activeIndex + 1)}
+                                aria-label={t("quiz.nextQuestion")}
+                                title={t("quiz.nextQuestion")}
                             >
-                                {t("quiz.nextFlagged")} →
+                                <ChevronRightIcon />
                             </Button>
-                        {/if}
+                        </div>
+
                         {#if countdownEnabled}
-                            <Badge variant={countdownLeft <= 60 ? "destructive" : "warning"}>
+                            <Badge
+                                variant={countdownLeft <= 60 ? "destructive" : "warning"}
+                                class="h-7 px-2 tabular-nums"
+                            >
                                 {countdownText}
                             </Badge>
                         {/if}
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={activeIndex <= 0}
-                            onclick={() => goToQuestion(activeIndex - 1)}
-                            aria-label={t("quiz.prevQuestion")}
-                        >
-                            ←
-                        </Button>
-                        <span class="text-muted-foreground text-xs" aria-live="polite">
-                            {activeIndex + 1}/{questions.length}
-                        </span>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={activeIndex >= questions.length - 1}
-                            onclick={() => goToQuestion(activeIndex + 1)}
-                            aria-label={t("quiz.nextQuestion")}
-                        >
-                            →
-                        </Button>
-                        <Button variant="outline" size="sm" onclick={askRegenerate}>{t("quiz.regenerate")}</Button>
-                    </div>
-                </header>
 
-                <div class="px-1 py-2">
-                    <ProgressBar value={progressPct} label={t("quiz.progress", answeredText)} />
-                </div>
+                        {#if flaggedCount > 0}
+                            <Badge variant="outline" class="h-7 px-2">
+                                {t("quiz.flaggedCount", String(flaggedCount))}
+                            </Badge>
+                        {/if}
+
+                        <div class="ml-auto flex flex-wrap items-center gap-1.5">
+                            {#if unansweredIndices.length > 0}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onclick={goToNextUnanswered}
+                                    title={t("quiz.nextUnansweredHint")}
+                                >
+                                    {t("quiz.nextUnanswered")}
+                                </Button>
+                            {/if}
+                            {#if flaggedCount > 0}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onclick={goToNextFlagged}
+                                    title={t("quiz.nextFlaggedHint")}
+                                >
+                                    {t("quiz.nextFlagged")}
+                                </Button>
+                            {/if}
+                            <Button variant="ghost" size="sm" onclick={askRegenerate}>{t("quiz.regenerate")}</Button>
+                        </div>
+                    </div>
+
+                    <ProgressBar value={progressPct} label={t("quiz.progress", answeredText)} showValue />
+                </header>
 
                 <!-- 题号导航：长试卷时不必靠滚动找题；已答/未答一眼可见 -->
                 <div
-                    class="flex flex-wrap items-center gap-1.5 px-1 pb-2"
+                    class="flex flex-wrap items-center gap-1.5 py-2"
                     role="group"
                     aria-label={t("quiz.navLabel")}
                     title={t("quiz.shortcutHint")}
@@ -1235,20 +1325,22 @@
                                     {#if session?.answers[q.id]}
                                         <Badge variant="success">{t("quiz.answeredTag")}</Badge>
                                     {/if}
-                                    <!-- 标记：长试卷里先把不确定的题标出来，稍后回看 -->
-                                    <button
-                                        type="button"
-                                        class={cn(
-                                            "ml-auto rounded-md border px-2 py-0.5 text-xs transition-colors",
-                                            session?.flagged?.[q.id]
-                                                ? "border-warning bg-warning/10 text-warning"
-                                                : "border-border text-muted-foreground hover:bg-accent"
-                                        )}
+                                    <!--
+                                        标记：原先是一个文字按钮加 ml-auto，
+                                        面板一宽就被推到最右侧、离题干隔了半屏；
+                                        换成图标按钮后既省空间，位置也稳定。
+                                    -->
+                                    <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        class={cn("ml-auto", session?.flagged?.[q.id] && "text-warning bg-warning/10")}
                                         aria-pressed={!!session?.flagged?.[q.id]}
+                                        aria-label={session?.flagged?.[q.id] ? t("quiz.unflag") : t("quiz.flag")}
+                                        title={session?.flagged?.[q.id] ? t("quiz.unflag") : t("quiz.flag")}
                                         onclick={() => toggleFlag(q.id)}
                                     >
-                                        {session?.flagged?.[q.id] ? t("quiz.unflag") : t("quiz.flag")}
-                                    </button>
+                                        <FlagIcon />
+                                    </Button>
                                 </div>
                                 <QuestionView
                                     question={q}

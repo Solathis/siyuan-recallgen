@@ -250,8 +250,10 @@
 
                 <div class="flex flex-col gap-1.5">
                     <Label for={`rg-baseurl-${endpoint.id}`}>{t("settings.ai.baseUrl")}</Label>
+                    <!-- 限宽 + 等宽字体：URL 是技术字符串，铺满整行既难核对也不好看 -->
                     <Input
                         id={`rg-baseurl-${endpoint.id}`}
+                        class="max-w-md font-mono text-xs"
                         value={endpoint.baseUrl}
                         placeholder="https://api.openai.com/v1"
                         oninput={(e) => patchEndpoint(endpoint.id, { baseUrl: e.currentTarget.value })}
@@ -260,10 +262,10 @@
 
                 <div class="flex flex-col gap-1.5">
                     <Label for={`rg-apikey-${endpoint.id}`}>{t("settings.ai.apiKey")}</Label>
-                    <div class="flex gap-2">
+                    <div class="flex max-w-md gap-2">
                         <Input
                             id={`rg-apikey-${endpoint.id}`}
-                            class="flex-1"
+                            class="flex-1 font-mono text-xs"
                             type={showKeys[endpoint.id] ? "text" : "password"}
                             value={endpoint.apiKey}
                             placeholder="sk-..."

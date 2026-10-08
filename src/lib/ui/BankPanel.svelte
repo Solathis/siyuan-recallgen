@@ -262,94 +262,109 @@
     }
 </script>
 
-<div class="flex flex-col gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{t("bank.totalCount", String(counts.total))}</Badge>
-            <Badge variant={counts.due > 0 ? "warning" : "outline"}>{t("bank.dueCount", String(counts.due))}</Badge>
-            <Badge variant="outline">{t("bank.weakCount", String(counts.weak))}</Badge>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-            <Input
-                class="h-8 w-40"
-                placeholder={t("bank.searchPlaceholder")}
-                aria-label={t("bank.searchPlaceholder")}
-                bind:value={query}
-            />
-            <Select.Root type="single" value={filter} onValueChange={(v) => (filter = v as typeof filter)}>
-                <Select.Trigger class="h-8 w-28" aria-label={t("bank.filterLabel")}>
-                    {filter === "all"
-                        ? t("bank.filterAll")
-                        : filter === "due"
-                          ? t("bank.filterDue")
-                          : t("bank.filterWeak")}
-                </Select.Trigger>
-                <Select.Content>
-                    <Select.Item value="all">{t("bank.filterAll")}</Select.Item>
-                    <Select.Item value="due">{t("bank.filterDue")}</Select.Item>
-                    <Select.Item value="weak">{t("bank.filterWeak")}</Select.Item>
-                </Select.Content>
-            </Select.Root>
-            {#if typeOptions.length > 1}
-                <Select.Root type="single" value={typeFilter} onValueChange={(v) => (typeFilter = v)}>
-                    <Select.Trigger class="h-8 w-28" aria-label={t("bank.filterType")}>
-                        {typeFilter === "all" ? t("bank.filterAllTypes") : typeLabel(typeFilter)}
+<div class="@container flex flex-col gap-4">
+    <Card.Root>
+        <Card.Content class="flex flex-col gap-3 pt-4">
+            <!--
+                工具栏拆成两行。
+                原实现把「三个概览徽标 + 搜索框 + 四个下拉 + 两个按钮」全塞进一个
+                flex-wrap 行里，宽屏上勉强一排、窄一点就折成两三层且各层长度不一；
+                现在第一行是概览与次要操作，第二行专放筛选，折行后始终是整齐的两段。
+            -->
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">{t("bank.totalCount", String(counts.total))}</Badge>
+                    <Badge variant={counts.due > 0 ? "warning" : "outline"}
+                        >{t("bank.dueCount", String(counts.due))}</Badge
+                    >
+                    <Badge variant="outline">{t("bank.weakCount", String(counts.weak))}</Badge>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={loading || items.length === 0}
+                        onclick={() =>
+                            downloadText(
+                                `recallgen-anki-${exportStamp()}.txt`,
+                                buildAnkiExport(items),
+                                "text/tab-separated-values"
+                            )}
+                    >
+                        {t("bank.ankiExport")}
+                    </Button>
+                    <Button variant="ghost" size="sm" onclick={() => void load()} disabled={loading}>
+                        {t("common.refresh")}
+                    </Button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <Input
+                    class="h-8 w-full @xl:w-56"
+                    placeholder={t("bank.searchPlaceholder")}
+                    aria-label={t("bank.searchPlaceholder")}
+                    bind:value={query}
+                />
+                <Select.Root type="single" value={filter} onValueChange={(v) => (filter = v as typeof filter)}>
+                    <Select.Trigger class="h-8 w-28" aria-label={t("bank.filterLabel")}>
+                        {filter === "all"
+                            ? t("bank.filterAll")
+                            : filter === "due"
+                              ? t("bank.filterDue")
+                              : t("bank.filterWeak")}
                     </Select.Trigger>
                     <Select.Content>
-                        <Select.Item value="all">{t("bank.filterAllTypes")}</Select.Item>
-                        {#each typeOptions as type (type)}
-                            <Select.Item value={type}>{typeLabel(type)}</Select.Item>
+                        <Select.Item value="all">{t("bank.filterAll")}</Select.Item>
+                        <Select.Item value="due">{t("bank.filterDue")}</Select.Item>
+                        <Select.Item value="weak">{t("bank.filterWeak")}</Select.Item>
+                    </Select.Content>
+                </Select.Root>
+                {#if typeOptions.length > 1}
+                    <Select.Root type="single" value={typeFilter} onValueChange={(v) => (typeFilter = v)}>
+                        <Select.Trigger class="h-8 w-28" aria-label={t("bank.filterType")}>
+                            {typeFilter === "all" ? t("bank.filterAllTypes") : typeLabel(typeFilter)}
+                        </Select.Trigger>
+                        <Select.Content>
+                            <Select.Item value="all">{t("bank.filterAllTypes")}</Select.Item>
+                            {#each typeOptions as type (type)}
+                                <Select.Item value={type}>{typeLabel(type)}</Select.Item>
+                            {/each}
+                        </Select.Content>
+                    </Select.Root>
+                {/if}
+                <Select.Root type="single" value={difficultyFilter} onValueChange={(v) => (difficultyFilter = v)}>
+                    <Select.Trigger class="h-8 w-24" aria-label={t("bank.filterDifficulty")}>
+                        {difficultyFilter === "all"
+                            ? t("bank.filterAllDifficulties")
+                            : t(`diff.${difficultyFilter as Difficulty}`)}
+                    </Select.Trigger>
+                    <Select.Content>
+                        <Select.Item value="all">{t("bank.filterAllDifficulties")}</Select.Item>
+                        {#each ["easy", "medium", "hard"] as const as level (level)}
+                            <Select.Item value={level}>{t(`diff.${level}`)}</Select.Item>
                         {/each}
                     </Select.Content>
                 </Select.Root>
-            {/if}
-            <Select.Root type="single" value={difficultyFilter} onValueChange={(v) => (difficultyFilter = v)}>
-                <Select.Trigger class="h-8 w-24" aria-label={t("bank.filterDifficulty")}>
-                    {difficultyFilter === "all"
-                        ? t("bank.filterAllDifficulties")
-                        : t(`diff.${difficultyFilter as Difficulty}`)}
-                </Select.Trigger>
-                <Select.Content>
-                    <Select.Item value="all">{t("bank.filterAllDifficulties")}</Select.Item>
-                    {#each ["easy", "medium", "hard"] as const as level (level)}
-                        <Select.Item value={level}>{t(`diff.${level}`)}</Select.Item>
-                    {/each}
-                </Select.Content>
-            </Select.Root>
-            {#if tagOptions.length > 0}
-                <Select.Root type="single" value={tagFilter} onValueChange={(v) => (tagFilter = v)}>
-                    <Select.Trigger class="h-8 w-32" aria-label={t("bank.filterTag")}>
-                        {tagFilter === "all" ? t("bank.filterAllTags") : tagFilter}
-                    </Select.Trigger>
-                    <Select.Content>
-                        <Select.Item value="all">{t("bank.filterAllTags")}</Select.Item>
-                        {#each tagOptions as option (option.tag)}
-                            <Select.Item value={option.tag}>
-                                {option.tag}
-                                <span class="text-muted-foreground">· {option.count}</span>
-                            </Select.Item>
-                        {/each}
-                    </Select.Content>
-                </Select.Root>
-            {/if}
-            <Button
-                variant="outline"
-                size="sm"
-                disabled={loading || items.length === 0}
-                onclick={() =>
-                    downloadText(
-                        `recallgen-anki-${exportStamp()}.txt`,
-                        buildAnkiExport(items),
-                        "text/tab-separated-values"
-                    )}
-            >
-                {t("bank.ankiExport")}
-            </Button>
-            <Button variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
-                {t("common.refresh")}
-            </Button>
-        </div>
-    </div>
+                {#if tagOptions.length > 0}
+                    <Select.Root type="single" value={tagFilter} onValueChange={(v) => (tagFilter = v)}>
+                        <Select.Trigger class="h-8 w-32" aria-label={t("bank.filterTag")}>
+                            {tagFilter === "all" ? t("bank.filterAllTags") : tagFilter}
+                        </Select.Trigger>
+                        <Select.Content>
+                            <Select.Item value="all">{t("bank.filterAllTags")}</Select.Item>
+                            {#each tagOptions as option (option.tag)}
+                                <Select.Item value={option.tag}>
+                                    {option.tag}
+                                    <span class="text-muted-foreground">· {option.count}</span>
+                                </Select.Item>
+                            {/each}
+                        </Select.Content>
+                    </Select.Root>
+                {/if}
+            </div>
+        </Card.Content>
+    </Card.Root>
 
     <!--
         到期题只在顶部有一个数字，却要先选某个标签/题型/难度才出现复习入口，
@@ -501,11 +516,11 @@
             <Table.Header>
                 <Table.Row>
                     <Table.Head>{t("bank.colQuestion")}</Table.Head>
-                    <Table.Head class="w-20">{t("bank.colType")}</Table.Head>
-                    <Table.Head class="w-28">{t("bank.colMastery")}</Table.Head>
-                    <Table.Head class="w-32">{t("bank.colHistory")}</Table.Head>
-                    <Table.Head class="w-28">{t("bank.colDue")}</Table.Head>
-                    <Table.Head class="w-16"></Table.Head>
+                    <Table.Head class="w-16">{t("bank.colType")}</Table.Head>
+                    <Table.Head class="w-32 text-right">{t("bank.colMastery")}</Table.Head>
+                    <Table.Head class="w-20 text-right">{t("bank.colHistory")}</Table.Head>
+                    <Table.Head class="w-20 text-right">{t("bank.colDue")}</Table.Head>
+                    <Table.Head class="w-10"></Table.Head>
                 </Table.Row>
             </Table.Header>
             <Table.Body>
@@ -532,20 +547,21 @@
                             <Badge variant="outline">{typeLabel(item.question.type)}</Badge>
                         </Table.Cell>
                         <Table.Cell>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center justify-end gap-2">
                                 <span class="bg-muted h-2 w-16 overflow-hidden rounded-full">
                                     <span
                                         class={cn("block h-full rounded-full", masteryTone(mastery))}
                                         style="width: {Math.max(2, Math.min(100, mastery))}%"
                                     ></span>
                                 </span>
-                                <span class="text-muted-foreground text-2xs">{mastery}</span>
+                                <span class="text-muted-foreground w-6 text-right text-2xs tabular-nums">{mastery}</span
+                                >
                             </div>
                         </Table.Cell>
-                        <Table.Cell class="text-muted-foreground text-2xs">
+                        <Table.Cell class="text-muted-foreground text-right text-2xs tabular-nums">
                             {t("bank.historyValue", String(item.timesPassed), String(item.timesSeen))}
                         </Table.Cell>
-                        <Table.Cell class="text-2xs">
+                        <Table.Cell class="text-right text-2xs">
                             {#if dueState(item.card, clock.now) === "overdue"}
                                 <span class="text-warning font-medium">{fmtDue(item.card, clock.now)}</span>
                             {:else}

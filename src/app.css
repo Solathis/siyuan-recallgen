@@ -98,6 +98,53 @@
      * 因此本项目一律不使用 bare rounded/rounded-t，只用下面这几档。
      */
     --radius: var(--b3-border-radius, 6px);
+
+    /*
+     * ── RecallGen 自有强调色 ──────────────────────────────────────────
+     *
+     * 语义色一律映射到思源的 --b3-*（明暗自动跟随），但整块界面因此完全没有
+     * 自己的辨识度：进度、达标状态、分数环、图表重点全都只能用思源那套蓝灰。
+     *
+     * 这里补一层强调色。刻意选紫色系，与思源默认主题色（蓝）拉开距离：
+     * 同一屏里主色与强调色相邻时，紫色不会像另一种蓝那样令人以为是同一层级。
+     *
+     * 定位是「配角」而不是替换主色——按钮、开关、焦点环仍然用 --primary
+     * （思源主题色），强调色只用在进度、分数、阶段指示这些「表达状态」的地方，
+     * 这样用户换思源主题时，插件既跟着变又不会跟自己的强调色打架。
+     */
+    --rg-accent: #6d5ce7;
+    --rg-accent-foreground: #ffffff;
+    /* 浅底：用于选中态背景、标签底色。color-mix 让它在明暗主题下都自带透明度 */
+    --rg-accent-soft: color-mix(in srgb, var(--rg-accent) 14%, transparent);
+    --rg-accent-line: color-mix(in srgb, var(--rg-accent) 45%, transparent);
+
+    /*
+     * 层次阴影。
+     * 不用写死的黑色：思源的明暗主题下纯黑阴影观感差别很大，
+     * 用「文字色的低透明度」铺出来，浅色主题是灰影、深色主题是暗影。
+     */
+    --rg-shadow-sm: 0 1px 2px color-mix(in srgb, var(--b3-theme-on-background) 8%, transparent);
+    --rg-shadow-md: 0 2px 8px color-mix(in srgb, var(--b3-theme-on-background) 12%, transparent);
+    --rg-shadow-lg: 0 8px 24px color-mix(in srgb, var(--b3-theme-on-background) 16%, transparent);
+
+    /* 动效刻度：三档时长 + 一条统一缓动，避免各处随手写 0.15s/200ms 混用 */
+    --rg-dur-1: 120ms;
+    --rg-dur-2: 200ms;
+    --rg-dur-3: 320ms;
+    --rg-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/*
+ * 强调色是唯一需要区分明暗的一组。
+ *
+ * app.css 其余部分之所以不需要 dark 规则，是因为它们全是 var(--b3-*)，而思源自己
+ * 会按主题换值。强调色是插件自己定的固定值，深色主题下必须提亮，否则紫在深底上发闷。
+ */
+.theme-dark {
+    --rg-accent: #9a8cff;
+    --rg-accent-foreground: #1a1630;
+    --rg-accent-soft: color-mix(in srgb, var(--rg-accent) 18%, transparent);
+    --rg-accent-line: color-mix(in srgb, var(--rg-accent) 50%, transparent);
 }
 
 /*
@@ -129,6 +176,17 @@
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
+
+    /* 自有强调色：注册后 bg-rg-accent / text-rg-accent / border-rg-accent-line 等才可用 */
+    --color-rg-accent: var(--rg-accent);
+    --color-rg-accent-foreground: var(--rg-accent-foreground);
+    --color-rg-accent-soft: var(--rg-accent-soft);
+    --color-rg-accent-line: var(--rg-accent-line);
+
+    /* 层次：注册成 shadow-rg-sm/md/lg，避免各处直接用 Tailwind 写死的阴影值 */
+    --shadow-rg-sm: var(--rg-shadow-sm);
+    --shadow-rg-md: var(--rg-shadow-md);
+    --shadow-rg-lg: var(--rg-shadow-lg);
 
     /* 小元素（标签、热力图格子、色块）：用思源自带的小圆角 */
     /*
@@ -210,6 +268,18 @@
 
     .rg-scope button:disabled {
         cursor: not-allowed;
+    }
+
+    /*
+     * 定义列表（统计行、指标行）必须清掉浏览器默认缩进。
+     * dd 默认带 margin-inline-start: 40px，不重置的话「标签 + 值」会错开整整
+     * 40px，看起来像换了一列（出题进度卡的四格统计就是这么歪的）。
+     * 只重置 dl/dt/dd：标题与列表的默认样式是思源笔记内容排版依赖的，不能动。
+     */
+    .rg-scope dl,
+    .rg-scope dt,
+    .rg-scope dd {
+        margin: 0;
     }
 
     /* 思源自身的 markdown 内容样式依赖 h1-h6 / ul / ol 的浏览器默认，
@@ -323,11 +393,85 @@
     animation: rg-indeterminate 1.2s ease-in-out infinite;
 }
 
-/* 尊重系统的「减少动态效果」设置：把动画彻底停掉，而不是放慢（放慢仍会动） */
+/*
+ * 通用进入动效：淡入 + 轻微上移。
+ *
+ * 用 CSS 而不是 Svelte 的 transition，是为了让列表能按序错开：
+ * 模板给出 --rg-i（第几项），延迟就按它累加；Svelte 的 transition 想错开
+ * 得给每项单独算 delay，反而更啰嗦。
+ */
+@keyframes rg-rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+.rg-rise {
+    animation: rg-rise var(--rg-dur-3) var(--rg-ease-out) both;
+    animation-delay: calc(var(--rg-i, 0) * 40ms);
+}
+
+/* 状态翻转时的一次轻弹：只用在得分、开关这类「刚变了」的元素上 */
+@keyframes rg-pop {
+    0% {
+        transform: scale(0.92);
+    }
+    60% {
+        transform: scale(1.03);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+.rg-pop {
+    animation: rg-pop var(--rg-dur-2) var(--rg-ease-out);
+}
+
+/*
+ * 可横向滚动的窄条（分段选择器、标签行）隐藏滚动条。
+ * 这类控件在窄屏上靠横滑放下，但桌面浏览器的滚动条会占掉好几像素、
+ * 在 1 行高的控件上显得像多了一条边框；触摸板与触摸屏都能直接滑，
+ * 键盘用户用方向键/Tab 也能到达，隐藏它不影响可操作性。
+ */
+.rg-hscroll {
+    scrollbar-width: none;
+}
+.rg-hscroll::-webkit-scrollbar {
+    display: none;
+}
+
+/*
+ * 尊重系统的「减少动态效果」设置。
+ *
+ * 此前只有不确定进度条处理了这条，其余 transition 与 transform 照动不误：
+ * 缩放微交互、滚动进入的位移对前庭敏感人群是实打实的不适来源。
+ * 这里一次性压平——动画与过渡时长归零、迭代一次，并让入场动效直接落在终态，
+ * 避免留下「停在半路」的中间态（透明或偏移一半）。
+ * 心跳式的无尽动画（不确定进度条）单独给静态样式，否则进度条看起来是空的。
+ */
 @media (prefers-reduced-motion: reduce) {
+    .rg-scope *,
+    .rg-scope *::before,
+    .rg-scope *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .rg-rise,
+    .rg-pop {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+
     .rg-indeterminate-bar {
         animation: none;
-        /* 停掉动画后给一条静态提示，否则进度条看起来是空的 */
         transform: none;
         opacity: 0.6;
     }
