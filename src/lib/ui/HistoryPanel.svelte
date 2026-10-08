@@ -19,6 +19,7 @@
     import { EXPORT_EXTENSION, EXPORT_MIME, buildExport, type ExportFormat } from "../quiz/export";
     import { PAGE_SIZE, limitGroups, nextLimit } from "../quiz/paging";
     import { PASS_SCORE, scorePercent } from "../quiz/stats";
+    import StateBlock from "./StateBlock.svelte";
     import type { QuizService } from "../quiz/service";
     import type { QuestionType, ScoreIndexEntry, Difficulty } from "@/types/quiz";
 
@@ -117,6 +118,25 @@
 
     /** 截断后的分组与剩余条数 */
     const limited = $derived(limitGroups(grouped, visible));
+
+    /**
+     * 概览数字。
+     *
+     * 原页面只有一串分组卡片，用户想知道「这段时间练得怎么样」得自己一张张看分数；
+     * 数据本来就在手上，先用一排数字说清总量、平均水平与达标次数更直接。
+     * 口径跟随当前筛选：筛了「60 分以下」时这排数字也应当只反映筛出来的那批。
+     */
+    const summary = $derived.by(() => {
+        if (filtered.length === 0) return null;
+        const percents = filtered.map((entry) => scorePercent(entry));
+        const sum = percents.reduce((acc, p) => acc + p, 0);
+        return {
+            count: percents.length,
+            avg: sum / percents.length,
+            best: Math.max(...percents),
+            passed: percents.filter((p) => p >= PASS_SCORE).length,
+        };
+    });
 
     /** 搜索或筛选变化时回到第一批，避免沿用上一次的展开量 */
     $effect(() => {
@@ -318,25 +338,65 @@
                 </Card.Content>
             </Card.Root>
         {:else if records.length === 0}
-            <div class="text-muted-foreground py-12 text-center text-sm">{t("history.empty")}</div>
+            <StateBlock kind="empty" icon="🗂" title={t("history.empty")} />
         {:else if filtered.length === 0}
-            <div class="text-muted-foreground py-12 text-center text-sm">{t("history.noMatch")}</div>
+            <StateBlock kind="empty" icon="🔍" title={t("history.noMatch")} />
         {:else}
+            <!-- 概览：先用一排数字说清「这段时间练得怎么样」，不必一张张卡片去数 -->
+            {#if summary}
+                <dl class="border-border grid grid-cols-2 gap-x-5 gap-y-3 rounded-lg border px-4 py-3 @xl:grid-cols-4">
+                    <div class="flex flex-col gap-0.5">
+                        <dt class="text-muted-foreground text-xs">{t("history.summaryCount")}</dt>
+                        <dd class="text-lg leading-none font-semibold tabular-nums">{summary.count}</dd>
+                    </div>
+                    <div class="flex flex-col gap-0.5">
+                        <dt class="text-muted-foreground text-xs">{t("history.summaryAvg")}</dt>
+                        <dd class="text-lg leading-none font-semibold tabular-nums">
+                            {summary.avg.toFixed(1)}
+                        </dd>
+                    </div>
+                    <div class="flex flex-col gap-0.5">
+                        <dt class="text-muted-foreground text-xs">{t("history.summaryBest")}</dt>
+                        <dd class="text-lg leading-none font-semibold tabular-nums">{summary.best.toFixed(0)}</dd>
+                    </div>
+                    <div class="flex flex-col gap-0.5">
+                        <dt class="text-muted-foreground text-xs">{t("history.summaryPassed")}</dt>
+                        <dd class="text-lg leading-none font-semibold tabular-nums">{summary.passed}</dd>
+                    </div>
+                </dl>
+            {/if}
+
             {#each limited.groups as group (group.key)}
                 <section class="flex flex-col gap-2">
-                    <h3 class="border-border text-sm font-semibold border-b pb-1">
-                        {group.key}
-                        <span class="text-muted-foreground font-normal">({group.items.length})</span>
+                    <h3 class="text-muted-foreground flex items-center gap-2 text-xs font-semibold tracking-wide">
+                        <span class="text-foreground">{group.key}</span>
+                        <span class="bg-muted rounded-full px-1.5 py-0.5 text-2xs tabular-nums"
+                            >{group.items.length}</span
+                        >
+                        <span class="bg-border h-px flex-1"></span>
                     </h3>
 
                     {#if viewMode === "thumbnail"}
-                        <!-- 卡片略放宽一点、加分与进度条之间的层次；180px 时一行数字就占满，标题被压成两行 -->
-                        <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+                        <div class="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-3">
                             {#each group.items as r (r.id)}
                                 {@const p = scorePercent(r)}
-                                <Card.Root class="group relative overflow-hidden transition-shadow hover:shadow-rg-md">
-                                    <Card.Content class="flex flex-col gap-2 pt-4">
-                                        <div class="flex items-baseline gap-2">
+                                <!--
+                                    整张卡片即入口。
+                                    原实现把「查看」做成卡片里一个整行按钮，删除又并排放在它右边：
+                                    一张 200px 宽的卡里最显眼的东西是两个操作按钮，信息反而被压成配角。
+                                    现在卡片本身可点开回看，删除退到右上角的小图标（触屏没有 hover，
+                                    所以不做「悬停才出现」）。
+                                -->
+                                <Card.Root
+                                    class="group relative overflow-hidden transition-shadow focus-within:shadow-rg-md hover:shadow-rg-md"
+                                >
+                                    <button
+                                        type="button"
+                                        class="flex w-full flex-col gap-2 p-4 text-left"
+                                        aria-label={`${t("history.review")}：${r.title}`}
+                                        onclick={() => onOpenReview(r)}
+                                    >
+                                        <div class="flex items-baseline gap-2 pr-6">
                                             <span
                                                 class={cn(
                                                     "text-2xl leading-none font-bold tabular-nums",
@@ -344,17 +404,19 @@
                                                 )}>{p.toFixed(0)}</span
                                             >
                                             <span class="text-muted-foreground text-xs">{t("history.pts")}</span>
+                                            <span class="text-muted-foreground ml-auto text-2xs tabular-nums">
+                                                {p >= PASS_SCORE ? t("result.passed") : t("result.notPassed")}
+                                            </span>
                                         </div>
                                         <div class="min-w-0">
                                             <div class="line-clamp-2 text-sm font-medium" title={r.title}>
                                                 {r.title}
                                             </div>
-                                            <div class="text-muted-foreground text-xs">
+                                            <div class="text-muted-foreground mt-0.5 text-xs">
                                                 {t("result.qCount", String(r.questionCount))} · {timeLabel(r)}
                                             </div>
                                         </div>
-                                        <!-- 1px 的发丝线在卡片里几乎看不见，读不出「这次是达标还是没达标」 -->
-                                        <div class="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+                                        <div class="bg-muted mt-0.5 h-1.5 w-full overflow-hidden rounded-full">
                                             <div
                                                 class={cn(
                                                     "h-full rounded-full transition-[width] duration-300 ease-out",
@@ -363,53 +425,49 @@
                                                 style="width: {Math.min(100, Math.max(0, p))}%"
                                             ></div>
                                         </div>
-                                        <div class="flex gap-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                class="flex-1"
-                                                onclick={() => onOpenReview(r)}>{t("history.review")}</Button
-                                            >
-                                            <AlertDialog.Root>
-                                                <AlertDialog.Trigger>
-                                                    {#snippet child({ props })}
-                                                        <!--
-                                                            aria-label / title 必须写在开始标签里：
-                                                            放在标签之后会被当成文本渲染出来，
-                                                            页面上会直接出现「aria-label=删除 title=删除」。
-                                                        -->
-                                                        <Button
-                                                            {...props}
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            disabled={deleting === r.id}
-                                                            aria-label={t("common.delete")}
-                                                            title={t("common.delete")}
-                                                        >
-                                                            ✕
-                                                        </Button>
-                                                    {/snippet}
-                                                </AlertDialog.Trigger>
-                                                <AlertDialog.Content>
-                                                    <AlertDialog.Header>
-                                                        <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
-                                                        <AlertDialog.Description>
-                                                            {t("history.deleteConfirm", r.title)}
-                                                        </AlertDialog.Description>
-                                                    </AlertDialog.Header>
-                                                    <AlertDialog.Footer>
-                                                        <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
-                                                        <AlertDialog.Action
-                                                            variant="destructive"
-                                                            onclick={() => void remove(r)}
-                                                        >
-                                                            {t("common.delete")}
-                                                        </AlertDialog.Action>
-                                                    </AlertDialog.Footer>
-                                                </AlertDialog.Content>
-                                            </AlertDialog.Root>
-                                        </div>
-                                    </Card.Content>
+                                    </button>
+
+                                    <div class="absolute top-1.5 right-1.5 z-10">
+                                        <AlertDialog.Root>
+                                            <AlertDialog.Trigger>
+                                                {#snippet child({ props })}
+                                                    <!--
+                                                        aria-label / title 必须写在开始标签里：
+                                                        放在标签之后会被当成文本渲染出来，
+                                                        页面上会直接出现「aria-label=删除 title=删除」。
+                                                    -->
+                                                    <Button
+                                                        {...props}
+                                                        variant="ghost"
+                                                        size="icon-xs"
+                                                        class="opacity-70 hover:opacity-100"
+                                                        disabled={deleting === r.id}
+                                                        aria-label={t("common.delete")}
+                                                        title={t("common.delete")}
+                                                    >
+                                                        ✕
+                                                    </Button>
+                                                {/snippet}
+                                            </AlertDialog.Trigger>
+                                            <AlertDialog.Content>
+                                                <AlertDialog.Header>
+                                                    <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
+                                                    <AlertDialog.Description>
+                                                        {t("history.deleteConfirm", r.title)}
+                                                    </AlertDialog.Description>
+                                                </AlertDialog.Header>
+                                                <AlertDialog.Footer>
+                                                    <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                                                    <AlertDialog.Action
+                                                        variant="destructive"
+                                                        onclick={() => void remove(r)}
+                                                    >
+                                                        {t("common.delete")}
+                                                    </AlertDialog.Action>
+                                                </AlertDialog.Footer>
+                                            </AlertDialog.Content>
+                                        </AlertDialog.Root>
+                                    </div>
                                 </Card.Root>
                             {/each}
                         </div>
