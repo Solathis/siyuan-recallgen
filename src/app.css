@@ -462,18 +462,6 @@
 }
 
 /*
- * 可滚动容器里的「安全居中」。
- *
- * 整屏状态块（出题配置、生成中）内容通常比可视区矮，直接顶对齐会在下方留一大片空白；
- * 但用普通的 justify-content: center 居中又有个陷阱——内容一旦比容器高，
- * 顶部会被裁掉且滚不上去。safe center 在放不下时自动退回 start，两种情况都对。
- */
-.rg-safe-center {
-    align-items: center;
-    justify-content: safe center;
-}
-
-/*
  * 尊重系统的「减少动态效果」设置。
  *
  * 此前只有不确定进度条处理了这条，其余 transition 与 transform 照动不误：
