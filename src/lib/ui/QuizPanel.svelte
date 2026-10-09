@@ -1488,6 +1488,7 @@
                         <Button
                             variant="outline"
                             size="icon-sm"
+                            data-tap="icon"
                             class={cn(
                                 "text-xs font-semibold",
                                 session?.flagged?.[q.id] && "border-warning",
@@ -1552,6 +1553,7 @@
                                     <Button
                                         variant="ghost"
                                         size="icon-sm"
+                                        data-tap="icon"
                                         class={cn("ml-auto", session?.flagged?.[q.id] && "text-warning bg-warning/10")}
                                         aria-pressed={!!session?.flagged?.[q.id]}
                                         aria-label={session?.flagged?.[q.id] ? t("quiz.unflag") : t("quiz.flag")}
@@ -1578,8 +1580,9 @@
                     结果它停在进度条下方（滚不动也就吸不了底），
                     交卷按钮在页面顶部出现两次，长试卷滚到底也看不到交卷栏。
                 -->
+                <!-- rg-safe-bottom：贴底栏，iOS 底部小横条会盖住按钮，用安全区抬起来 -->
                 <div
-                    class="border-border bg-background/95 flex shrink-0 items-center justify-between gap-2 border-t px-1 py-2"
+                    class="border-border bg-background/95 rg-safe-bottom flex shrink-0 items-center justify-between gap-2 border-t px-1 pt-2"
                 >
                     <div class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
                         <span>{t("quiz.answered", String(answeredCount), String(questions.length))}</span>
@@ -1594,6 +1597,7 @@
                             <Button
                                 variant="outline"
                                 size="sm"
+                                data-tap
                                 disabled={activeIndex <= 0}
                                 onclick={() => goToQuestion(activeIndex - 1)}
                             >
@@ -1602,6 +1606,7 @@
                             <Button
                                 variant="outline"
                                 size="sm"
+                                data-tap
                                 disabled={activeIndex >= questions.length - 1}
                                 onclick={() => goToQuestion(activeIndex + 1)}
                             >

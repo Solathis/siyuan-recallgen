@@ -486,3 +486,62 @@
         opacity: 0.6;
     }
 }
+
+/*
+ * ── 触摸设备的命中区 ────────────────────────────────────────────────
+ *
+ * 按钮在桌面上的尺寸是给鼠标的：size="sm" 是 28px、icon-sm 是 28px、
+ * icon-xs 是 24px。手指点这些尺寸会频繁点空，因此触摸设备上把带 data-tap 的
+ * 元素抬到 44px（Apple HIG 的最小推荐值；Material 是 48dp）。
+ *
+ * data-tap        行式交互（选项行、自评按钮）：只抬高度
+ * data-tap=icon   图标按钮：宽高都要抬，否则只是变高不变宽
+ *
+ * 阈值放变量里，是为了让「媒体查询」与「预览台的强制开关」共用同一份数值：
+ * 媒体特性没法从 JS 打开，预览台只能在 html 上加 .rg-touch，
+ * 两处各写一遍 44px 迟早会漂移，所以这里只有一条声明。
+ */
+.rg-scope {
+    --rg-tap-size: 0px;
+}
+
+@media (pointer: coarse) {
+    .rg-scope {
+        --rg-tap-size: 44px;
+    }
+}
+
+/* 预览台「强制移动端」开关加的类，等价于 pointer: coarse */
+.rg-touch .rg-scope {
+    --rg-tap-size: 44px;
+}
+
+.rg-scope [data-tap] {
+    min-height: var(--rg-tap-size);
+}
+
+.rg-scope [data-tap="icon"] {
+    min-width: var(--rg-tap-size);
+}
+
+/*
+ * 反复出现的基础控件按 data-slot 统一抬高度，不必逐个模板标注：
+ * 标签页（题目列表/解析、记录/统计/题库）、下拉触发器（题库与历史的筛选）。
+ * 它们是各屏的主操作且一行里就有好几个，32px 在手指下太密；
+ * 复选框/单选框不在此列——那是控件本体，抬成 44px 会让方框本身变大，
+ * 而它们的命中区本来就是外面那一整行。
+ */
+.rg-scope [data-slot="tabs-trigger"],
+.rg-scope [data-slot="select-trigger"],
+.rg-scope [data-slot="toggle-group-item"] {
+    min-height: var(--rg-tap-size);
+}
+
+/*
+ * 贴底的操作栏（答题页交卷栏）。
+ * iOS 的底部小横条会压住紧贴底边的按钮，用安全区把它抬起来；
+ * 非 iOS / 无安全区时 env() 取 0，等价于原来的 py-2。
+ */
+.rg-safe-bottom {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+}

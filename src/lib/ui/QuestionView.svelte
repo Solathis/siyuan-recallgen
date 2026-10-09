@@ -285,7 +285,9 @@
             aria-labelledby={`${question.id}-stem`}
         >
             {#each optionHtml as optionMarkup, i (i)}
+                <!-- data-tap：触摸设备上整行抬到 44px，手指点的就是整行 -->
                 <div
+                    data-tap
                     class={cn(
                         "hover:bg-accent flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
                         singleValue === i && "border-primary bg-primary/10"
@@ -315,6 +317,7 @@
         <div class="flex flex-col gap-1.5" role="group" aria-labelledby={`${question.id}-stem`}>
             {#each optionHtml as optionMarkup, i (i)}
                 <div
+                    data-tap
                     class={cn(
                         "hover:bg-accent flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
                         multiValue.includes(i) && "border-primary bg-primary/10"
@@ -361,6 +364,7 @@
         >
             {#each [{ label: t("common.true"), value: true }, { label: t("common.false"), value: false }] as opt (opt.label)}
                 <div
+                    data-tap
                     class={cn(
                         "hover:bg-accent flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
                         boolValue === opt.value && "border-primary bg-primary/10"

@@ -149,9 +149,16 @@
         location.href = url.toString();
     }
 
-    /** 触摸路径的强制开关：真机上由指针类型决定，预览里手动切 */
+    /**
+     * 触摸路径的强制开关：真机上由指针类型决定，预览里手动切。
+     *
+     * 走 JS 的那部分（useTouchLayout）读共享状态；纯 CSS 的那部分
+     * （@media (pointer: coarse) 里的命中区）媒体特性没法从 JS 打开，
+     * 因此在 html 上补一个 .rg-touch，app.css 里两条选择器指向同一份数值。
+     */
     $effect(() => {
         setForcedMobile(view.forceMobile ? true : null);
+        document.documentElement.classList.toggle("rg-touch", view.forceMobile);
     });
 
     /** 主题类挂在 iframe 自己的 html 上，与画廊互不影响 */
