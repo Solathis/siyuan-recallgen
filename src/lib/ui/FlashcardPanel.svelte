@@ -1,12 +1,11 @@
 <script lang="ts">
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
+    import * as Empty from "@/lib/components/ui/empty";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { renderMarkdownLatex } from "./latex";
-    import { rise } from "./motion";
     import ProgressBar from "./ProgressBar.svelte";
-    import StateBlock from "./StateBlock.svelte";
     import type { BankItem } from "@/lib/quiz/bank";
 
     export type FlashGrade = "again" | "hard" | "good" | "easy";
@@ -221,8 +220,7 @@
                             </div>
                         {:else}
                             <div
-                                class="border-border bg-muted/30 mx-auto w-full max-w-prose rounded-md border border-t-2 p-3"
-                                in:rise={{ y: 4, duration: 160 }}
+                                class="border-border bg-muted/30 animate-in fade-in-0 mx-auto w-full max-w-prose rounded-md border border-t-2 p-3"
                             >
                                 <p class="text-muted-foreground mb-1 text-2xs font-semibold">
                                     {t("flash.answerLabel")}
@@ -248,7 +246,12 @@
                 </Card.Root>
             {:else}
                 <!-- 空列表原先什么都不渲染：面板整块空白，用户不知道是没题还是坏了 -->
-                <StateBlock kind="empty" icon="🃏" title={t("flash.empty")} />
+                <Empty.Root class="min-h-40">
+                    <Empty.Header>
+                        <Empty.Media variant="icon">🃏</Empty.Media>
+                        <Empty.Title>{t("flash.empty")}</Empty.Title>
+                    </Empty.Header>
+                </Empty.Root>
             {/if}
         </div>
 

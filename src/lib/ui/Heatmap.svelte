@@ -59,6 +59,7 @@
 <script lang="ts">
     import { cn } from "@/lib/utils";
     import * as Select from "@/lib/components/ui/select";
+    import { Button } from "@/lib/components/ui/button";
     import { HEATMAP_WEEKS, rangeYears, startOfDay, windowBounds, type HeatmapRange } from "./heatmap-range";
     import { t } from "../i18n";
     import { createClock } from "./clock.svelte";
@@ -352,17 +353,16 @@
                                     {@const bg = colorFor(cell.score)}
                                     {@const safeBg = isSafeCssColor(bg) ? bg : null}
                                     <!--
-                                        热力图格子保留原生 button：一屏上百个格子，
-                                        套 Button 会把边框、内边距、层级都带进来，
-                                        而这里要的是恰好 12-24px 的纯色方块；
-                                        可访问性由 aria-label + roving tabindex 保证。
+                                        格子做成 Button variant="ghost" 并覆盖成纯色方块：
+                                        高度、内边距、边框全部由 class 与内联尺寸压掉，
+                                        可访问性交给 Button 与 aria-label / roving tabindex。
                                     -->
-                                    <button
-                                        type="button"
+                                    <Button
+                                        variant="ghost"
                                         data-cell-index={cellIndex(colIndex, rowIndex)}
                                         tabindex={cellIndex(colIndex, rowIndex) === focusIndex ? 0 : -1}
                                         class={cn(
-                                            "rounded-sm transition-transform hover:scale-125 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
+                                            "hover:bg-transparent size-auto rounded-sm border-0 p-0 transition-transform hover:scale-125",
                                             bg === null && "bg-muted"
                                         )}
                                         style="width: var(--rg-heat-cell); height: var(--rg-heat-cell);{safeBg
@@ -384,7 +384,7 @@
                                             if (onDayClick && cell.date && cell.count > 0) onDayClick(cell.date);
                                         }}
                                         onkeydown={(e) => onCellKeydown(e, colIndex, rowIndex)}
-                                    ></button>
+                                    ></Button>
                                 {:else}
                                     <span
                                         class="block"
