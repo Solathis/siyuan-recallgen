@@ -75,6 +75,7 @@
     import { formatClock } from "./duration";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
+    import { hasAnswer } from "@/types/quiz";
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
     import { planBatches } from "../quiz/batching";
     import { sumTimings } from "../quiz/timings";
@@ -237,7 +238,15 @@
     const plannedBatches = $derived(Math.max(1, planBatches(config.general.difficulty).length));
 
     const questions = $derived(session?.questions ?? []);
-    const answeredCount = $derived(questions.filter((q) => !!session?.answers[q.id]).length);
+    /*
+     * 已答判定一律走 hasAnswer，而不是「answers 里有没有这个键」：
+     * 用户打完字又清空时会留下一个空值条目，判分器正是用 hasAnswer 把它
+     * 当成未作答处理的（grader.ts），统计页的「未答」也用它。
+     * 这里若按「有键就算已答」，同一道题会在答题页显示「已答」、
+     * 在结果页显示「未答」、没什么地方能对上。
+     */
+    const isAnswered = (questionId: string) => hasAnswer(session?.answers[questionId]);
+    const answeredCount = $derived(questions.filter((q) => isAnswered(q.id)).length);
     /** 出题计划只在生成阶段展示；判分阶段没有它，布局也要跟着退回单列 */
     const showGenPlan = $derived(panelState === "loading_generating");
 
@@ -309,9 +318,7 @@
     });
 
     /** 未作答的题目下标列表（按题序） */
-    const unansweredIndices = $derived(
-        questions.map((q, i) => (session?.answers[q.id] ? -1 : i)).filter((i) => i >= 0)
-    );
+    const unansweredIndices = $derived(questions.map((q, i) => (isAnswered(q.id) ? -1 : i)).filter((i) => i >= 0));
 
     /** 跳到下一道未作答的题目 */
     function goToNextUnanswered(): void {
@@ -920,7 +927,7 @@
 
     function askSubmit() {
         const unanswered = questions.length - answeredCount;
-        const flaggedUnanswered = questions.filter((q) => session?.flagged?.[q.id] && !session?.answers[q.id]).length;
+        const flaggedUnanswered = questions.filter((q) => session?.flagged?.[q.id] && !isAnswered(q.id)).length;
         let description: string;
         if (unanswered > 0 && flaggedUnanswered > 0) {
             description = t("quiz.confirmSubmitUnansweredFlagged", String(unanswered), String(flaggedUnanswered));
@@ -1503,7 +1510,7 @@
                             class={cn(
                                 "text-xs font-semibold",
                                 session?.flagged?.[q.id] && "border-warning",
-                                session?.answers[q.id]
+                                isAnswered(q.id)
                                     ? "border-primary bg-primary/10 text-primary"
                                     : "text-muted-foreground",
                                 i === activeIndex && "ring-ring ring-2"
@@ -1511,7 +1518,7 @@
                             aria-label={t(
                                 "result.jumpTo",
                                 String(i + 1),
-                                session?.answers[q.id] ? t("quiz.answeredTag") : t("result.status_unanswered")
+                                isAnswered(q.id) ? t("quiz.answeredTag") : t("result.status_unanswered")
                             )}
                             aria-current={i === activeIndex}
                             onclick={() => goToQuestion(i)}
@@ -1553,7 +1560,7 @@
                                         {t(`diff.${q.difficulty}`)}
                                     </Badge>
                                     <Badge variant="outline">{t(`type.${q.type}_short`)}</Badge>
-                                    {#if session?.answers[q.id]}
+                                    {#if isAnswered(q.id)}
                                         <Badge variant="success">{t("quiz.answeredTag")}</Badge>
                                     {/if}
                                     <!--

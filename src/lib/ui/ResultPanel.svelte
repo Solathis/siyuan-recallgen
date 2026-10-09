@@ -15,7 +15,7 @@
     import type { ChatTurn, QuizService } from "../quiz/service";
     import { formatClock } from "./duration";
     import { renderMarkdownLatex } from "./latex";
-    import { PASS_SCORE } from "@/types/quiz";
+    import { hasAnswer, PASS_SCORE } from "@/types/quiz";
     import type { GradingResult, Question } from "@/types/quiz";
 
     let {
@@ -68,7 +68,13 @@
      * 部分得分单独成一类，避免把 75 分的多选题显示成绿色「正确」。
      */
     function qStatus(r: GradingResult): "correct" | "partial" | "wrong" | "unanswered" {
-        if (!r.userAnswer) return "unanswered";
+        /*
+         * 用 hasAnswer 而不是「有没有值」：空字符串 / 空数组是「打了字又清空」，
+         * 判分器（grader.ts）与统计页的「未答」都把它当未作答；
+         * 这里若按「有值就算作答」，同一道题会落进「错误」，
+         * 与统计页的「未答」对不上（而且那道题根本没被答过）。
+         */
+        if (!hasAnswer(r.userAnswer)) return "unanswered";
         if (r.score >= 100) return "correct";
         if (r.score > 0) return "partial";
         return "wrong";
@@ -185,7 +191,7 @@
 
     function userText(r: GradingResult): string {
         const ua = r.userAnswer;
-        if (!ua) return t("common.unanswered");
+        if (!hasAnswer(ua)) return t("common.unanswered");
         switch (ua.type) {
             case "single_choice":
                 return String.fromCharCode(65 + ua.value);

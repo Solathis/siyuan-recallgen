@@ -317,6 +317,17 @@ describe("未作答的主观/编程题", () => {
         expect(hasAnswer({ type: "coding", value: "return 1" })).toBe(true);
     });
 
+    it("hasAnswer 对数组看内容：填空题全部清空后算未作答", () => {
+        // 填空的空是按题目的空数生成的，清空后数组长度不变（仍是一堆空串），
+        // 只判长度会让「全部清空」继续算已作答，答题页显示已答、
+        // 结果页与统计页却给出别的说法
+        expect(hasAnswer({ type: "fill_blank", value: ["", "  "] })).toBe(false);
+        expect(hasAnswer({ type: "fill_blank", value: ["", "答了"] })).toBe(true);
+        // 多选的选项下标 0 是合法值，不能被当成「空」
+        expect(hasAnswer({ type: "multiple_choice", value: [0] })).toBe(true);
+        expect(hasAnswer({ type: "multiple_choice", value: [] })).toBe(false);
+    });
+
     it("gradeAll 对未作答题目完全不调用 AI（配置里没有可用模型也能跑完）", async () => {
         const config = getDefaultConfig();
         // 故意清空端点与模型：只要仍然去调 AI，resolveAI 就会抛错

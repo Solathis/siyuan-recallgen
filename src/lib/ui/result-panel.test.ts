@@ -60,11 +60,15 @@ afterEach(() => {
 });
 
 async function mountPanel() {
+    return mountWith(results, questions);
+}
+
+async function mountWith(given: GradingResult[], givenQuestions: Question[]) {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const app = mount(ResultPanel, {
         target: host,
-        props: { service: fakeService(), results, questions, duration: 300 },
+        props: { service: fakeService(), results: given, questions: givenQuestions, duration: 300 },
     });
     await new Promise((r) => setTimeout(r, 0));
     flushSync();
@@ -98,6 +102,26 @@ describe("成绩与分析面板", () => {
         expect(labels.join(" ")).toContain("部分得分(1)");
         expect(labels.join(" ")).toContain("错误(1)");
         expect(labels.join(" ")).toContain("未答(1)");
+    });
+
+    it("打了字又清空的答案算「未答」，与判分器和统计页同口径", { timeout: MOUNT_TIMEOUT }, async () => {
+        // 主观题清空后仍会留下一个 { type: "subjective", value: "" } 条目。
+        // 判分器（grader.ts 用 hasAnswer）与统计页的「未答」都把它当未作答，
+        // 结果页若按「有值就算作答」会把它算成「错误」——同一道题三种说法。
+        const cleared = [
+            graded(questions[0], { userAnswer: { type: "subjective", value: "" }, score: 0 }),
+            graded(questions[1], { userAnswer: { type: "fill_blank", value: [] }, score: 0 }),
+        ] as GradingResult[];
+        const filler: Question[] = [
+            { ...questions[0], type: "subjective", reference_answer: "要点" } as Question,
+            { ...questions[1], type: "fill_blank", answer: [["a"]] } as Question,
+        ];
+        const host = await mountWith(cleared, filler);
+
+        const labels = chips(host).join(" ");
+        expect(labels, "两道都该算未答").toContain("未答(2)");
+        expect(labels, "不该算错误").toContain("错误(0)");
+        expect((host.textContent ?? "").replace(/\s+/g, " "), "答案区应显示未答").toContain("你的答案： 未答");
     });
 
     it("顶部指标是达标率而不是正确率", { timeout: MOUNT_TIMEOUT }, async () => {
