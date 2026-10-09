@@ -77,6 +77,7 @@
     import { t } from "../i18n";
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
     import { planBatches } from "../quiz/batching";
+    import { sumTimings } from "../quiz/timings";
     import type { GenPhase, GenStats } from "../quiz/generator";
     import { genProgress } from "../quiz/gen-progress";
     import { PASS_SCORE } from "@/types/quiz";
@@ -763,8 +764,17 @@
          * 用时必须在判分之前结算。
          * 原先在 await service.grade(...) 之后才计算，于是判分耗时（主观题要调 AI，
          * 可能好几秒）被算进了「用时」——结果页与导出的耗时都偏大。
+         *
+         * 取逐题实测之和，而不是「现在 − 会话创建时间」：后者会把中途离开、
+         * 关掉标签页过夜的时间都算进来（恢复旧会话时会显示「用时 3:00:44」，
+         * 每题平均耗时 22:35 这种与本次作答无关的数字），而统计页的
+         * 「每题平均耗时」用的正是逐题实测——两个页面对同一次练习给出两个答案。
+         * 实测每段有 5 分钟上限，正常作答时与墙钟几乎一致，
+         * 只有「中途离开」这一种情况会明显不同，而那时正是我们希望不算进去的。
+         * 完全取不到实测值（异常会话）时退回墙钟，免得显示成「--」。
          */
-        duration = Math.round((Date.now() - session.createdAt) / 1000);
+        const measured = sumTimings(session.timings);
+        duration = measured > 0 ? measured : Math.round((Date.now() - session.createdAt) / 1000);
         panelState = "loading_grading";
         progressValue = 0;
         progressLabel = t("quiz.grading");
