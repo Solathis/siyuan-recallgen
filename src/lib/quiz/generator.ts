@@ -1,4 +1,4 @@
-import PromiseLimitPool from "@/libs/promise-pool";
+import pLimit from "p-limit";
 import { t } from "@/lib/i18n";
 import { dedupeQuestions, planBatches, renumberQuestions, scaleDistribution } from "./batching";
 import { callLLM, isAbortError, resolveAI, AIError, type ChatMessage, type ResolvedAIConfig } from "../ai/client";
@@ -288,36 +288,40 @@ export async function generateQuestions(
             });
         }
 
-        const pool = new PromiseLimitPool<void>(Math.min(total, MAX_CONCURRENT_BATCHES));
+        // total ≥ 1（上面已提前返回），因此并发上限恒为正数——pLimit(0) 会抛错
+        const limit = pLimit(Math.min(total, MAX_CONCURRENT_BATCHES));
+        const tasks: Promise<unknown>[] = [];
         for (let i = 0; i < total; i++) {
-            pool.add(async () => {
-                try {
-                    // 取消后不再发新请求（在途的无法撤回）
-                    throwIfAborted(signal);
-                    const outcome = await requestBatch(ctx, group[i]);
-                    if (outcome.problem) {
-                        problems.push({ index: i, problem: outcome.problem });
-                        return;
-                    }
-                    slots[i] = outcome.questions;
-                    skipped += outcome.dropped;
-                    finished++;
-                    report(
-                        parallel
-                            ? t("gen.parallelProgress", String(finished), String(total), String(collected.length))
-                            : batchLabel(0, 1, group[0].total, toppingUp),
-                        {
-                            phase: "generating",
-                            batch: Math.min(finished + 1, total),
-                            batches: total,
+            tasks.push(
+                limit(async () => {
+                    try {
+                        // 取消后不再发新请求（在途的无法撤回）
+                        throwIfAborted(signal);
+                        const outcome = await requestBatch(ctx, group[i]);
+                        if (outcome.problem) {
+                            problems.push({ index: i, problem: outcome.problem });
+                            return;
                         }
-                    );
-                } catch (e) {
-                    errors.push(e);
-                }
-            });
+                        slots[i] = outcome.questions;
+                        skipped += outcome.dropped;
+                        finished++;
+                        report(
+                            parallel
+                                ? t("gen.parallelProgress", String(finished), String(total), String(collected.length))
+                                : batchLabel(0, 1, group[0].total, toppingUp),
+                            {
+                                phase: "generating",
+                                batch: Math.min(finished + 1, total),
+                                batches: total,
+                            }
+                        );
+                    } catch (e) {
+                        errors.push(e);
+                    }
+                })
+            );
         }
-        await pool.awaitAll();
+        await Promise.all(tasks);
 
         // 取消优先透传：用户点了取消，其余批次的失败都不重要
         const aborted = errors.find((e) => isAbortError(e));
