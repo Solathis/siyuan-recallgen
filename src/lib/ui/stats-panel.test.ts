@@ -74,8 +74,9 @@ describe("统计面板", () => {
 
     it("难度环形图图例显示样本题数，而不是「占三者之和的比例」", { timeout: MOUNT_TIMEOUT }, () => {
         const host = mountPanel();
-        const legend = [...host.querySelectorAll("li")]
-            .map((li) => li.textContent?.replace(/\s+/g, " ").trim() ?? "")
+        // 图例改用 shadcn 的 Item 排版（原先手写 ul/li），逐行取它的文本
+        const legend = [...host.querySelectorAll('[data-slot="item"]')]
+            .map((row) => row.textContent?.replace(/\s+/g, " ").trim() ?? "")
             .filter((text) => text.includes("%"));
         expect(legend.length, "应有难度图例").toBeGreaterThan(0);
         for (const line of legend) {

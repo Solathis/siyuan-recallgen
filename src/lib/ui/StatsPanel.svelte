@@ -2,6 +2,7 @@
     import * as Card from "@/lib/components/ui/card";
     import * as Select from "@/lib/components/ui/select";
     import { Button } from "@/lib/components/ui/button";
+    import { Progress } from "@/lib/components/ui/progress";
     import { Skeleton } from "@/lib/components/ui/skeleton";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
@@ -106,11 +107,16 @@
     }
 
     /** 达标率对应的语义色，所有图表与列表共用同一口径 */
+    /**
+     * 分值条的色调：Progress 的填充是内部 data-slot="progress-indicator"，
+     * 用任意值变体覆盖它的 bg-primary。改组件本体没用——那是 CLI 生成的，
+     * 下次 add --overwrite 会覆盖掉。
+     */
     function toneClass(accuracy: number): string {
-        if (accuracy >= 80) return "bg-success";
-        if (accuracy >= 60) return "bg-primary";
-        if (accuracy >= 30) return "bg-warning";
-        return "bg-destructive";
+        if (accuracy >= 80) return "[&>[data-slot=progress-indicator]]:bg-success";
+        if (accuracy >= 60) return "[&>[data-slot=progress-indicator]]:bg-primary";
+        if (accuracy >= 30) return "[&>[data-slot=progress-indicator]]:bg-warning";
+        return "[&>[data-slot=progress-indicator]]:bg-destructive";
     }
 </script>
 
@@ -198,13 +204,12 @@
                     {#each byType as group (group.key)}
                         <div class="flex items-center gap-2">
                             <span class="w-14 shrink-0 text-xs">{typeLabel(group.key)}</span>
-                            <!-- 条形本身是装饰：达标率与样本量已作为文本渲染，读屏无需重复播报 -->
-                            <span class="bg-muted h-2.5 flex-1 overflow-hidden rounded-full" aria-hidden="true">
-                                <span
-                                    class={cn("block h-full rounded-full", toneClass(group.accuracy))}
-                                    style="width: {Math.max(2, Math.min(100, group.accuracy))}%"
-                                ></span>
-                            </span>
+                            <!-- 值已作为文本渲染，读屏不必重复播报，故对辅助技术隐藏 -->
+                            <Progress
+                                value={group.accuracy}
+                                class={cn("h-2.5 flex-1", toneClass(group.accuracy))}
+                                aria-hidden="true"
+                            />
                             <span class="text-muted-foreground w-20 shrink-0 text-right text-xs">
                                 {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
                             </span>
@@ -220,20 +225,29 @@
                     <Card.Description>{t("stats.distributionDesc")}</Card.Description>
                 </Card.Header>
                 <Card.Content>
-                    <div class="flex h-40 items-end justify-between gap-2">
+                    <!--
+                        直方图改成行式进度条：纵条得用图元一个个摆，而这里要看的是
+                        「各区间的次数占比」，行式条与题型达标率同一种读法，也只用 Progress 一个组件。
+                    -->
+                    <div class="flex flex-col gap-2">
                         {#each distribution as bucket, i (bucket.key)}
-                            <div class="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                                <span class="text-muted-foreground text-2xs">{bucket.count}</span>
-                                <div
+                            <div class="flex items-center gap-2">
+                                <span class="text-muted-foreground w-14 shrink-0 text-xs tabular-nums"
+                                    >{bucket.key}</span
+                                >
+                                <Progress
+                                    value={distributionMax > 0 ? (bucket.count / distributionMax) * 100 : 0}
                                     class={cn(
-                                        "w-full rounded-t",
-                                        i === 0 ? "bg-destructive" : i < 3 ? "bg-warning" : "bg-success"
+                                        "h-2.5 flex-1",
+                                        i === 0
+                                            ? "[&>[data-slot=progress-indicator]]:bg-destructive"
+                                            : i < 3
+                                              ? "[&>[data-slot=progress-indicator]]:bg-warning"
+                                              : "[&>[data-slot=progress-indicator]]:bg-success"
                                     )}
-                                    style="height: {Math.max(2, (bucket.count / distributionMax) * 100)}%"
-                                    title="{bucket.key}: {bucket.count}"
                                     aria-hidden="true"
-                                ></div>
-                                <span class="text-muted-foreground text-3xs">{bucket.key}</span>
+                                />
+                                <span class="w-8 shrink-0 text-right text-xs tabular-nums">{bucket.count}</span>
                             </div>
                         {/each}
                     </div>
@@ -273,12 +287,11 @@
                                                 title={section.wrap ? group.key : undefined}
                                                 >{section.label(group.key)}</span
                                             >
-                                            <span class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
-                                                <span
-                                                    class={cn("block h-full rounded-full", toneClass(group.accuracy))}
-                                                    style="width: {Math.max(2, Math.min(100, group.accuracy))}%"
-                                                ></span>
-                                            </span>
+                                            <Progress
+                                                value={group.accuracy}
+                                                class={cn("h-2 flex-1", toneClass(group.accuracy))}
+                                                aria-hidden="true"
+                                            />
                                             <span class="text-muted-foreground w-20 shrink-0 text-right text-xs">
                                                 {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
                                             </span>

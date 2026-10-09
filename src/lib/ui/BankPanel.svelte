@@ -8,12 +8,14 @@
     import * as Card from "@/lib/components/ui/card";
     import { Input } from "@/lib/components/ui/input";
     import * as Select from "@/lib/components/ui/select";
+    import { Progress } from "@/lib/components/ui/progress";
     import { Skeleton } from "@/lib/components/ui/skeleton";
     import * as Table from "@/lib/components/ui/table";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
+    import { Area, Chart, Layer, Spline } from "layerchart";
+    import { ChartContainer } from "@/lib/components/ui/chart";
     import { createClock } from "./clock.svelte";
-    import { lineGeometry } from "../quiz/chart-geometry";
     import {
         MAX_BANK_HISTORY,
         RECENT_AVG_WINDOW,
@@ -235,18 +237,12 @@
     const historyOf = (item: BankItem) => item.history ?? [];
     const historyNewestFirst = (item: BankItem) => [...historyOf(item)].reverse();
 
-    const SPARK_W = 180;
-    const SPARK_H = 36;
-
-    /** 历史趋势迷你折线（固定 0-100 量程，避免几次波动被放大成剧烈起伏） */
-    function sparkline(item: BankItem) {
-        return lineGeometry(
-            historyOf(item).map((a) => a.percent),
-            SPARK_W,
-            SPARK_H,
-            { top: 4, right: 2, bottom: 4, left: 2 }
-        );
+    /** 迷你折线的数据：按时间升序的得分率（横轴用序号即可，不需要真实时间比例尺） */
+    function sparkPoints(item: BankItem) {
+        return historyOf(item).map((attempt, index) => ({ index, percent: attempt.percent }));
     }
+
+    const sparkConfig = { percent: { label: t("bank.detailHistoryChart"), color: "var(--chart-1)" } };
 
     function phaseLabel(card: BankItem["card"]): string {
         return t(`bank.phase_${cardPhase(card)}`);
@@ -256,11 +252,12 @@
         return t(`type.${type}_short`);
     }
 
+    /** 掌握度条的色调：覆盖 Progress 内部指示条的底色 */
     function masteryTone(mastery: number): string {
-        if (mastery >= 80) return "bg-success";
-        if (mastery >= 60) return "bg-primary";
-        if (mastery >= 30) return "bg-warning";
-        return "bg-destructive";
+        if (mastery >= 80) return "[&>[data-slot=progress-indicator]]:bg-success";
+        if (mastery >= 60) return "[&>[data-slot=progress-indicator]]:bg-primary";
+        if (mastery >= 30) return "[&>[data-slot=progress-indicator]]:bg-warning";
+        return "[&>[data-slot=progress-indicator]]:bg-destructive";
     }
 </script>
 
@@ -560,12 +557,7 @@
                         </Table.Cell>
                         <Table.Cell>
                             <div class="flex items-center justify-end gap-2">
-                                <span class="bg-muted h-2 w-16 overflow-hidden rounded-full">
-                                    <span
-                                        class={cn("block h-full rounded-full", masteryTone(mastery))}
-                                        style="width: {Math.max(2, Math.min(100, mastery))}%"
-                                    ></span>
-                                </span>
+                                <Progress value={mastery} class={cn("h-2 w-16", masteryTone(mastery))} />
                                 <span class="text-muted-foreground w-6 text-right text-2xs tabular-nums">{mastery}</span
                                 >
                             </div>
@@ -623,7 +615,6 @@
                     {#if expanded === item.id}
                         {@const history = historyOf(item)}
                         {@const recent = recentAverage(item)}
-                        {@const spark = sparkline(item)}
                         <Table.Row class="bg-muted/30">
                             <Table.Cell colspan={6}>
                                 <div class="grid gap-4 py-2 @4xl:grid-cols-2">
@@ -650,20 +641,26 @@
                                                     : t("bank.detailHistoryEmpty")}
                                             </p>
                                         {:else}
-                                            <svg
-                                                viewBox="0 0 {SPARK_W} {SPARK_H}"
+                                            <div
                                                 class="h-9 w-full max-w-44"
                                                 role="img"
                                                 aria-label={t("bank.detailHistoryChart")}
                                             >
-                                                <path d={spark.area} class="fill-primary/15"></path>
-                                                <path
-                                                    d={spark.line}
-                                                    class="stroke-primary"
-                                                    fill="none"
-                                                    stroke-width="1.5"
-                                                ></path>
-                                            </svg>
+                                                <ChartContainer config={sparkConfig} class="aspect-auto h-full w-full">
+                                                    <Chart
+                                                        data={sparkPoints(item)}
+                                                        x="index"
+                                                        y="percent"
+                                                        yDomain={[0, 100]}
+                                                        padding={{ top: 4, right: 2, bottom: 4, left: 2 }}
+                                                    >
+                                                        <Layer>
+                                                            <Area class="fill-primary/15" />
+                                                            <Spline class="stroke-primary" strokeWidth={1.5} />
+                                                        </Layer>
+                                                    </Chart>
+                                                </ChartContainer>
+                                            </div>
                                             <div class="flex flex-wrap gap-1">
                                                 {#each historyNewestFirst(item) as attempt, index (attempt.at)}
                                                     <span

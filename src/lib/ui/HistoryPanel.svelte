@@ -6,6 +6,7 @@
     import * as Card from "@/lib/components/ui/card";
     import * as DropdownMenu from "@/lib/components/ui/dropdown-menu";
     import { Input } from "@/lib/components/ui/input";
+    import { Progress } from "@/lib/components/ui/progress";
     import * as Select from "@/lib/components/ui/select";
     import { Skeleton } from "@/lib/components/ui/skeleton";
     import BankPanel from "./BankPanel.svelte";
@@ -427,15 +428,16 @@
                                                 {t("result.qCount", String(r.questionCount))} · {timeLabel(r)}
                                             </div>
                                         </div>
-                                        <div class="bg-muted mt-0.5 h-1.5 w-full overflow-hidden rounded-full">
-                                            <div
-                                                class={cn(
-                                                    "h-full rounded-full transition-[width] duration-300 ease-out",
-                                                    p >= PASS_SCORE ? "bg-success" : "bg-destructive"
-                                                )}
-                                                style="width: {Math.min(100, Math.max(0, p))}%"
-                                            ></div>
-                                        </div>
+                                        <Progress
+                                            value={p}
+                                            class={cn(
+                                                "mt-0.5 h-1.5",
+                                                p >= PASS_SCORE
+                                                    ? "[&>[data-slot=progress-indicator]]:bg-success"
+                                                    : "[&>[data-slot=progress-indicator]]:bg-destructive"
+                                            )}
+                                            aria-hidden="true"
+                                        />
                                     </Button>
 
                                     <div class="absolute top-1.5 right-1.5 z-10">
