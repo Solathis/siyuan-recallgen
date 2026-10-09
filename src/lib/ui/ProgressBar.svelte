@@ -1,15 +1,18 @@
 <script lang="ts">
+    import { Progress } from "@/lib/components/ui/progress";
     import { cn } from "@/lib/utils";
 
     /**
-     * 进度条。
+     * 进度条（shadcn Progress 的薄封装）。
      *
-     * 两个历史问题都在这里收口：
-     * 1. 外层写死 `max-w-md`——放进整宽的答题面板后，进度条只铺到 448px，
-     *    右边一大片空白，「作答进度」看着像没画完。现在一律铺满可用宽度，
-     *    要限制宽度由调用方在外面套容器。
-     * 2. 填充色固定用思源主题色，几十屏看下来没有一处「属于本插件」的视觉线索；
+     * 两件事在这里收口：
+     * 1. 外层原先是写死的 max-w-md——放进整宽的答题面板后进度条只铺到 448px，
+     *    右侧半屏空白，看着像没画完。现在一律铺满，要限制宽度由调用方在外面套容器。
+     * 2. 填充色原先固定用思源主题色，几十屏看下来没有一处「属于本插件」的视觉线索；
      *    现在默认走自有强调色（紫），需要与思源按钮同色时传 tone="primary"。
+     *
+     * 确定值走 shadcn 的 Progress；只有「总量未知」那一种情形是自绘的——
+     * Progress 的指示条由 value 定位，表达不了「一直在跑但不知道到哪」。
      */
     let {
         value = null,
@@ -31,7 +34,12 @@
     const indeterminate = $derived(value === null);
     const pct = $derived(indeterminate ? 0 : Math.max(0, Math.min(100, value as number)));
     const track = $derived(size === "xs" ? "h-1" : size === "sm" ? "h-1.5" : "h-2");
-    const fillTone = $derived(tone === "accent" ? "bg-rg-accent" : "bg-primary");
+    /*
+     * 指示条的颜色靠覆盖 Progress 内部 data-slot="progress-indicator" 的 bg-primary 实现。
+     * 用任意值变体而不是改 shadcn 组件本体：组件是 CLI 生成的、将来还会再生成，
+     * 改动会被覆盖掉。
+     */
+    const toneClass = $derived(tone === "accent" ? "[&>[data-slot=progress-indicator]]:bg-rg-accent" : undefined);
     const hasHead = $derived(!!label || (showValue && !indeterminate));
 </script>
 
@@ -47,21 +55,20 @@
         </div>
     {/if}
 
-    <div
-        class={cn("bg-muted relative w-full overflow-hidden rounded-full", track)}
-        role="progressbar"
-        aria-label={label || undefined}
-        aria-valuemin={indeterminate ? undefined : 0}
-        aria-valuemax={indeterminate ? undefined : 100}
-        aria-valuenow={indeterminate ? undefined : Math.round(pct)}
-    >
-        {#if indeterminate}
-            <div class={cn("rg-indeterminate-bar absolute h-full w-1/3 rounded-full", fillTone)}></div>
-        {:else}
+    {#if indeterminate}
+        <div
+            class={cn("bg-muted relative w-full overflow-hidden rounded-full", track)}
+            role="progressbar"
+            aria-label={label || undefined}
+        >
             <div
-                class={cn("h-full rounded-full transition-[width] duration-300 ease-out", fillTone)}
-                style="width: {pct}%"
+                class={cn(
+                    "rg-indeterminate-bar absolute h-full w-1/3 rounded-full",
+                    tone === "accent" ? "bg-rg-accent" : "bg-primary"
+                )}
             ></div>
-        {/if}
-    </div>
+        </div>
+    {:else}
+        <Progress {value} class={cn(track, toneClass)} aria-label={label || undefined} />
+    {/if}
 </div>

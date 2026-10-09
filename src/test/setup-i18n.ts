@@ -54,3 +54,20 @@ if (typeof Element !== "undefined" && typeof Element.prototype.animate !== "func
         return animation as unknown as Animation;
     } as Element["animate"];
 }
+
+/**
+ * jsdom 也没有 ResizeObserver，而 bits-ui 的 Slider 在 $effect 里就要用它
+ * （按容器宽度计算滑块位置）。缺了它整个组件在挂载时抛错，
+ * 连带把同一个文件里其它用例都打挂——现象是「设置页的五个用例全红」，
+ * 看起来像设置页坏了，实际只是测试环境缺一个 API。
+ *
+ * 这里补一个空实现：位置计算在 jsdom 里本来也没有意义，
+ * 但组件能正常挂载、事件回调能跑，断言就能照常写。
+ */
+if (typeof globalThis.ResizeObserver === "undefined") {
+    globalThis.ResizeObserver = class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+    } as unknown as typeof ResizeObserver;
+}

@@ -49,6 +49,10 @@
     aria-label={ariaLabel}
 >
     {#each items as item (item.value)}
+        <!--
+            分段选择器本身是自建原语：shadcn 这套里没有对应组件
+            （Tabs 是「切换互斥面板」的语义，用来做筛选/筛选器会承诺一个并不存在的 tabpanel 关系）。
+        -->
         <button
             type="button"
             class={cn(

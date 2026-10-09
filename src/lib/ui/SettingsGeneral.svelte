@@ -7,6 +7,7 @@
     import * as Card from "@/lib/components/ui/card";
     import { Checkbox } from "@/lib/components/ui/checkbox";
     import { Input } from "@/lib/components/ui/input";
+    import { Slider } from "@/lib/components/ui/slider";
     import { Label } from "@/lib/components/ui/label";
     import * as Select from "@/lib/components/ui/select";
     import { Switch } from "@/lib/components/ui/switch";
@@ -113,14 +114,14 @@
             <span class="text-sm font-medium">{t("settings.general.allowedTypes")}</span>
             <div class="flex flex-wrap gap-x-5 gap-y-2">
                 {#each TYPE_OPTIONS as type (type)}
-                    <label class="flex items-center gap-2 text-sm">
+                    <Label class="flex items-center gap-2 text-sm">
                         <Checkbox
                             checked={config.general.allowedTypes.includes(type)}
                             onCheckedChange={() => toggleType(type)}
                             aria-label={t(`type.${type}`)}
                         />
                         <span>{t(`type.${type}`)}</span>
-                    </label>
+                    </Label>
                 {/each}
             </div>
         </div>
@@ -158,15 +159,15 @@
                     >{t("settings.general.extraScope", String(config.general.extraScopePct))}</Label
                 >
             </div>
-            <input
+            <Slider
                 id="rg-extra-scope"
-                class="accent-primary w-full"
-                type="range"
-                min="0"
-                max="50"
-                step="5"
+                type="single"
+                min={0}
+                max={50}
+                step={5}
                 value={config.general.extraScopePct}
-                onchange={(e) => patchGeneral({ extraScopePct: Number(e.currentTarget.value) })}
+                onValueChange={(v) => patchGeneral({ extraScopePct: v })}
+                aria-label={t("settings.general.extraScope")}
             />
             <p class="text-muted-foreground text-xs">{t("settings.general.extraScopeDesc")}</p>
         </div>
@@ -174,29 +175,29 @@
         <!-- 面板宽度 -->
         <div class="flex flex-col gap-2">
             <Label for="rg-panel-width">{t("settings.general.panelWidth", String(config.general.panelWidth))}</Label>
-            <input
+            <Slider
                 id="rg-panel-width"
-                class="accent-primary w-full"
-                type="range"
-                min="600"
-                max="1600"
-                step="50"
+                type="single"
+                min={600}
+                max={1600}
+                step={50}
                 value={config.general.panelWidth}
-                onchange={(e) => patchGeneral({ panelWidth: Number(e.currentTarget.value) })}
+                onValueChange={(v) => patchGeneral({ panelWidth: v })}
+                aria-label={t("settings.general.panelWidth")}
             />
             <p class="text-muted-foreground text-xs">{t("settings.general.panelWidthDesc")}</p>
         </div>
 
         <!-- 倒计时 -->
         <div class="flex flex-col gap-2">
-            <label class="flex items-center gap-2 text-sm">
+            <Label class="flex items-center gap-2 text-sm">
                 <Switch
                     checked={config.general.countdownEnabled}
                     onCheckedChange={(checked) => patchGeneral({ countdownEnabled: checked })}
                     aria-label={t("settings.general.countdown")}
                 />
                 <span>{t("settings.general.countdown")}</span>
-            </label>
+            </Label>
             {#if config.general.countdownEnabled}
                 <div class="flex flex-col gap-1.5">
                     <Label for="rg-countdown">{t("settings.general.countdownMinutes")}</Label>

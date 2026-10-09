@@ -234,16 +234,13 @@
 
                             <div class="mx-auto grid w-full max-w-prose grid-cols-4 gap-2">
                                 {#each GRADE_ORDER as g (g)}
-                                    <button
-                                        type="button"
-                                        class={cn(
-                                            "rounded-md border py-2.5 text-xs font-semibold transition-colors",
-                                            GRADE_TONE[g]
-                                        )}
+                                    <Button
+                                        variant="outline"
+                                        class={cn("h-auto py-2.5 text-xs font-semibold", GRADE_TONE[g])}
                                         onclick={() => grade(g)}
                                     >
                                         {t(`flash.${g}`)}
-                                    </button>
+                                    </Button>
                                 {/each}
                             </div>
                         {/if}

@@ -2,6 +2,8 @@
     import { showMessage } from "siyuan";
     import * as AlertDialog from "@/lib/components/ui/alert-dialog";
     import { Button } from "@/lib/components/ui/button";
+    import { Checkbox } from "@/lib/components/ui/checkbox";
+    import { Label } from "@/lib/components/ui/label";
     import * as Card from "@/lib/components/ui/card";
     import { t } from "../i18n";
     import { downloadText, exportStamp } from "./download";
@@ -288,6 +290,7 @@
                 <Button variant="outline" onclick={() => backupInput?.click()} disabled={backupBusy}>
                     {t("settings.data.backupImport")}
                 </Button>
+                <!-- 隐藏在按钮背后的文件选择器：没有可见外观，保留原生 input 即可 -->
                 <input
                     bind:this={backupInput}
                     type="file"
@@ -303,15 +306,14 @@
             <div class="flex flex-col">
                 <span class="text-sm font-medium">{t("settings.data.config")}</span>
                 <span class="text-muted-foreground text-xs">{t("settings.data.configDesc")}</span>
-                <label class="mt-1 flex items-center gap-2 text-xs">
-                    <input
-                        type="checkbox"
-                        class="accent-primary size-3.5"
+                <Label class="mt-1 flex items-center gap-2 text-xs font-normal">
+                    <Checkbox
+                        class="size-3.5"
                         checked={includeSecrets}
-                        onchange={(e) => (includeSecrets = e.currentTarget.checked)}
+                        onCheckedChange={(checked) => (includeSecrets = checked === true)}
                     />
                     {t("settings.data.configIncludeSecrets")}
-                </label>
+                </Label>
             </div>
             <div class="flex gap-2">
                 <Button variant="outline" onclick={exportConfig} disabled={!config}>

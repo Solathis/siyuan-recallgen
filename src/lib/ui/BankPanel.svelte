@@ -3,6 +3,8 @@
     import * as AlertDialog from "@/lib/components/ui/alert-dialog";
     import { Badge } from "@/lib/components/ui/badge";
     import { Button } from "@/lib/components/ui/button";
+    import { Checkbox } from "@/lib/components/ui/checkbox";
+    import { Label } from "@/lib/components/ui/label";
     import * as Card from "@/lib/components/ui/card";
     import { Input } from "@/lib/components/ui/input";
     import * as Select from "@/lib/components/ui/select";
@@ -382,51 +384,59 @@
     <!-- 标签管理：展开后可重命名或删除知识点标签 -->
     {#if tagOptions.length > 0}
         <div class="flex flex-col gap-1">
-            <button
-                type="button"
-                class="text-muted-foreground flex items-center gap-1 text-xs hover:text-foreground"
+            <Button
+                variant="ghost"
+                size="sm"
+                class="text-muted-foreground h-6 self-start px-1"
+                aria-expanded={showTagManage}
                 onclick={() => (showTagManage = !showTagManage)}
             >
                 {showTagManage ? "▾" : "▸"}
                 {t("bank.tagManage")} ({tagOptions.length})
-            </button>
+            </Button>
             {#if showTagManage}
-                <div class="flex flex-col gap-1 pl-3">
+                <!-- 限宽：行内有一个 flex-1 占位把操作按钮推到右边，不限宽就会隔出半屏空白 -->
+                <div class="flex max-w-md flex-col gap-1 pl-3">
                     {#each tagOptions as option (option.tag)}
                         <div class="flex items-center gap-1.5 text-xs">
                             {#if renamingTag === option.tag}
-                                <input
-                                    class="border-input bg-background w-28 rounded-md border px-1.5 py-0.5 text-xs"
+                                <Input
+                                    class="h-6 w-28 px-1.5 text-xs"
                                     bind:value={renameValue}
+                                    aria-label={t("bank.tagRenamePrompt")}
                                     placeholder={t("bank.tagRenamePrompt")}
                                     onkeydown={(e) => e.key === "Enter" && void doRenameTag()}
                                 />
                                 <!-- 图标按钮要给可访问名称：✓ / ✕ 读屏只会念成符号 -->
-                                <button
-                                    type="button"
+                                <Button
+                                    variant="ghost"
+                                    size="icon-xs"
                                     class="text-primary"
                                     aria-label={t("common.confirm")}
                                     title={t("common.confirm")}
                                     onclick={() => void doRenameTag()}
                                 >
                                     ✓
-                                </button>
-                                <button
-                                    type="button"
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-xs"
                                     class="text-muted-foreground"
                                     aria-label={t("common.cancel")}
                                     title={t("common.cancel")}
                                     onclick={() => (renamingTag = null)}
                                 >
                                     ✕
-                                </button>
+                                </Button>
                             {:else}
                                 <span class="min-w-0 truncate">{option.tag}</span>
                                 <span class="text-muted-foreground">({option.count})</span>
                                 <span class="flex-1"></span>
-                                <button
-                                    type="button"
-                                    class="text-primary shrink-0 opacity-60 hover:opacity-100"
+                                <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    class="text-primary shrink-0"
+                                    aria-label={t("bank.tagRename")}
                                     title={t("bank.tagRename")}
                                     onclick={() => {
                                         renamingTag = option.tag;
@@ -434,10 +444,12 @@
                                     }}
                                 >
                                     ✎
-                                </button>
-                                <button
-                                    type="button"
-                                    class="text-destructive shrink-0 opacity-60 hover:opacity-100"
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    class="text-destructive shrink-0"
+                                    aria-label={t("bank.tagDelete")}
                                     title={t("bank.tagDelete")}
                                     onclick={() =>
                                         confirm(
@@ -447,7 +459,7 @@
                                         )}
                                 >
                                     ✕
-                                </button>
+                                </Button>
                             {/if}
                         </div>
                     {/each}
@@ -484,13 +496,13 @@
             >
                 {cram ? t("bank.cramBadge") + " · " : ""}{t("bank.reviewScope")}
             </Button>
-            <label
-                class="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs"
+            <Label
+                class="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs font-normal"
                 title={t("bank.cramModeHint")}
             >
-                <input type="checkbox" class="accent-primary size-3.5" bind:checked={cram} />
+                <Checkbox class="size-3.5" checked={cram} onCheckedChange={(v) => (cram = v === true)} />
                 {t("bank.cramMode")}
-            </label>
+            </Label>
         </div>
     {/if}
 
@@ -528,6 +540,7 @@
                     {@const mastery = masteryScore(item)}
                     <Table.Row>
                         <Table.Cell>
+                            <!-- 整行展开的命中区域，保留原生 button（块级内容，Button 的排版会冲突） -->
                             <button
                                 type="button"
                                 class="flex w-full flex-col gap-0.5 text-left"
@@ -707,13 +720,13 @@
                                                     {t("bank.detailTags")}
                                                 </span>
                                                 {#each item.question.tags ?? [] as tag (tag)}
-                                                    <button
-                                                        type="button"
-                                                        class="border-border hover:bg-muted rounded-sm border px-1.5 py-0.5 text-2xs"
+                                                    <Button
+                                                        variant="outline"
+                                                        size="xs"
                                                         onclick={() => (tagFilter = tag)}
                                                     >
                                                         {tag}
-                                                    </button>
+                                                    </Button>
                                                 {/each}
                                             </div>
                                         {/if}

@@ -254,14 +254,15 @@
                         {#if sourceDocId && sourceTitle}
                             <span class="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
                                 <span class="shrink-0">{t("result.sourceNote")}:</span>
-                                <button
-                                    type="button"
-                                    class="text-primary truncate underline-offset-2 hover:underline"
+                                <Button
+                                    variant="link"
+                                    size="xs"
+                                    class="h-auto max-w-40 truncate px-0"
                                     title={sourceTitle}
                                     onclick={() => service.openDoc(sourceDocId)}
                                 >
                                     {sourceTitle}
-                                </button>
+                                </Button>
                             </span>
                         {/if}
                     </div>
@@ -338,15 +339,14 @@
                 <!-- 题号条只显示筛出来的题；点一下切换下方详情 -->
                 <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label={t("result.tabQuestions")}>
                     {#each visible as item (item.result.questionId)}
-                        <button
-                            type="button"
+                        <Button
+                            variant="outline"
+                            size="icon"
                             class={cn(
-                                "relative size-8 rounded-md border text-xs font-semibold transition-transform",
-                                "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none hover:scale-105",
+                                "relative text-xs font-semibold transition-transform hover:scale-105",
                                 item.index === activeEntry?.index
                                     ? "border-rg-accent ring-rg-accent-line ring-2"
-                                    : "border-border",
-                                "text-foreground"
+                                    : "border-border"
                             )}
                             aria-label={t("result.jumpTo", String(item.index + 1), t(`result.status_${item.status}`))}
                             aria-current={item.index === activeEntry?.index}
@@ -360,7 +360,7 @@
                                 )}
                                 aria-hidden="true"
                             ></span>
-                        </button>
+                        </Button>
                     {/each}
                 </div>
 

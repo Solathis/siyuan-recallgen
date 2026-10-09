@@ -1,6 +1,7 @@
 <script lang="ts">
     import * as Card from "@/lib/components/ui/card";
     import * as Select from "@/lib/components/ui/select";
+    import { Button } from "@/lib/components/ui/button";
     import { Skeleton } from "@/lib/components/ui/skeleton";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
@@ -281,14 +282,15 @@
                                             <span class="text-muted-foreground w-20 shrink-0 text-right text-xs">
                                                 {pct(group.accuracy)} · {t("stats.samples", String(group.count))}
                                             </span>
-                                            <button
-                                                type="button"
-                                                class="text-primary shrink-0 text-2xs underline-offset-2 hover:underline"
+                                            <Button
+                                                variant="link"
+                                                size="xs"
+                                                class="h-auto shrink-0 px-0 text-2xs"
                                                 title={section.hint(group.key)}
                                                 onclick={() => section.action(group.key)}
                                             >
                                                 {t("stats.review")}
-                                            </button>
+                                            </Button>
                                         </div>
                                     {/each}
                                 </div>
