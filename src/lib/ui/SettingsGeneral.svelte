@@ -11,6 +11,7 @@
     import { Label } from "@/lib/components/ui/label";
     import * as Select from "@/lib/components/ui/select";
     import { Switch } from "@/lib/components/ui/switch";
+    import { Field, FieldDescription, FieldLabel, FieldLegend } from "@/lib/components/ui/field";
     import { t } from "../i18n";
     import type { QuizService } from "../quiz/service";
     import type { MultipleChoicePolicy, RecallGenConfig, StorageLocation } from "@/types/config";
@@ -111,7 +112,7 @@
     <Card.Content class="flex flex-col gap-5">
         <!-- 题型 -->
         <div class="flex flex-col gap-2">
-            <span class="text-sm font-medium">{t("settings.general.allowedTypes")}</span>
+            <FieldLegend variant="label">{t("settings.general.allowedTypes")}</FieldLegend>
             <div class="flex flex-wrap gap-x-5 gap-y-2">
                 {#each TYPE_OPTIONS as type (type)}
                     <Label class="flex items-center gap-2 text-sm">
@@ -128,11 +129,11 @@
 
         <!-- 难度分布 -->
         <div class="flex flex-col gap-2">
-            <span class="text-sm font-medium">{t("settings.general.difficulty")}</span>
+            <FieldLegend variant="label">{t("settings.general.difficulty")}</FieldLegend>
             <div class="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
                 {#each [["total", t("settings.general.totalCount")], ["easy", t("diff.easy")], ["medium", t("diff.medium")], ["hard", t("diff.hard")]] as [key, label] (key)}
-                    <div class="flex flex-col gap-1.5">
-                        <Label for={`rg-diff-${key}`}>{label}</Label>
+                    <Field>
+                        <FieldLabel for={`rg-diff-${key}`}>{label}</FieldLabel>
                         <Input
                             id={`rg-diff-${key}`}
                             type="number"
@@ -141,7 +142,7 @@
                             value={config.general.difficulty[key as "total"]}
                             onchange={(e) => patchDifficulty({ [key]: Number(e.currentTarget.value) })}
                         />
-                    </div>
+                    </Field>
                 {/each}
             </div>
             {#if !diffOk}
@@ -199,8 +200,8 @@
                 <span>{t("settings.general.countdown")}</span>
             </Label>
             {#if config.general.countdownEnabled}
-                <div class="flex flex-col gap-1.5">
-                    <Label for="rg-countdown">{t("settings.general.countdownMinutes")}</Label>
+                <Field>
+                    <FieldLabel for="rg-countdown">{t("settings.general.countdownMinutes")}</FieldLabel>
                     <Input
                         id="rg-countdown"
                         type="number"
@@ -210,14 +211,14 @@
                         onchange={(e) =>
                             patchGeneral({ countdownMinutes: Math.max(1, Number(e.currentTarget.value) || 1) })}
                     />
-                    <p class="text-muted-foreground text-xs">{t("settings.general.countdownHint")}</p>
-                </div>
+                    <FieldDescription>{t("settings.general.countdownHint")}</FieldDescription>
+                </Field>
             {/if}
         </div>
 
         <!-- 单次复习题量上限 -->
-        <div class="flex flex-col gap-1.5">
-            <Label for="rg-review-limit">{t("settings.general.reviewLimit")}</Label>
+        <Field>
+            <FieldLabel for="rg-review-limit">{t("settings.general.reviewLimit")}</FieldLabel>
             <Input
                 id="rg-review-limit"
                 type="number"
@@ -230,12 +231,12 @@
                         reviewLimit: Math.min(200, Math.max(0, Math.round(Number(e.currentTarget.value) || 0))),
                     })}
             />
-            <p class="text-muted-foreground text-xs">{t("settings.general.reviewLimitHint")}</p>
-        </div>
+            <FieldDescription>{t("settings.general.reviewLimitHint")}</FieldDescription>
+        </Field>
 
         <!-- 每日学习目标 -->
-        <div class="flex flex-col gap-1.5">
-            <Label for="rg-daily-goal">{t("settings.general.dailyGoal")}</Label>
+        <Field>
+            <FieldLabel for="rg-daily-goal">{t("settings.general.dailyGoal")}</FieldLabel>
             <Input
                 id="rg-daily-goal"
                 type="number"
@@ -248,8 +249,8 @@
                         dailyGoal: Math.min(500, Math.max(0, Math.round(Number(e.currentTarget.value) || 0))),
                     })}
             />
-            <p class="text-muted-foreground text-xs">{t("settings.general.dailyGoalHint")}</p>
-        </div>
+            <FieldDescription>{t("settings.general.dailyGoalHint")}</FieldDescription>
+        </Field>
 
         <!-- 存储位置 -->
         <div class="flex flex-col gap-2">
@@ -270,8 +271,8 @@
                 </Select.Content>
             </Select.Root>
             {#if config.general.storageLocation === "notebook"}
-                <div class="flex flex-col gap-1.5">
-                    <Label for="rg-notebook">{t("settings.general.notebook")}</Label>
+                <Field>
+                    <FieldLabel for="rg-notebook">{t("settings.general.notebook")}</FieldLabel>
                     <!-- 原先要求用户手填笔记本 ID，现改为下拉选择 -->
                     {#if notebooks.length > 0}
                         <Select.Root
@@ -295,22 +296,22 @@
                             value={config.general.notebookId}
                             oninput={(e) => patchGeneral({ notebookId: e.currentTarget.value })}
                         />
-                        <p class="text-muted-foreground text-xs">
+                        <FieldDescription>
                             {notebooksLoaded
                                 ? t("settings.general.noNotebook")
                                 : t("settings.general.loadingNotebooks")}
-                        </p>
+                        </FieldDescription>
                     {/if}
-                </div>
+                </Field>
             {/if}
         </div>
 
         <!-- 试卷预设 -->
         <div class="flex flex-col gap-2">
-            <span class="text-sm font-medium">{t("settings.general.presets")}</span>
+            <FieldLegend variant="label">{t("settings.general.presets")}</FieldLegend>
             <p class="text-muted-foreground text-xs">{t("settings.general.presetsDesc")}</p>
             {#if (config.general.presets ?? []).length > 0}
-                <div class="flex flex-col gap-1.5">
+                <Field>
                     {#each config.general.presets as preset (preset.id)}
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="text-xs">
@@ -348,7 +349,7 @@
                             </div>
                         </div>
                     {/each}
-                </div>
+                </Field>
             {/if}
             <div class="flex flex-wrap items-center gap-2">
                 <Input

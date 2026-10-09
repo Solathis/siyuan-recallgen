@@ -2,8 +2,8 @@
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import { Input } from "@/lib/components/ui/input";
-    import { Label } from "@/lib/components/ui/label";
     import * as Select from "@/lib/components/ui/select";
+    import { Field, FieldLabel, FieldLegend } from "@/lib/components/ui/field";
     import { t } from "../i18n";
     import type { RecallGenConfig } from "@/types/config";
     import type { HeatmapConfig, ScoreIndexEntry, ScoreRange } from "@/types/quiz";
@@ -48,8 +48,8 @@
     <Card.Content class="flex flex-col gap-4">
         <Heatmap records={scores} config={config.heatmap} lang={config.general.language} showRangePicker={false} />
 
-        <div class="flex flex-col gap-1.5">
-            <Label for="rg-heatmap-metric">{t("settings.heatmap.metric")}</Label>
+        <Field>
+            <FieldLabel for="rg-heatmap-metric">{t("settings.heatmap.metric")}</FieldLabel>
             <Select.Root
                 type="single"
                 value={config.heatmap.metric}
@@ -65,10 +65,10 @@
                     <Select.Item value="avg">{t("settings.heatmap.metricAvg")}</Select.Item>
                 </Select.Content>
             </Select.Root>
-        </div>
+        </Field>
 
         <div class="flex flex-col gap-2">
-            <span class="text-sm font-medium">{t("settings.heatmap.colorRanges")}</span>
+            <FieldLegend variant="label">{t("settings.heatmap.colorRanges")}</FieldLegend>
             <p class="text-muted-foreground text-xs">{t("settings.heatmap.colorRangesHint")}</p>
             {#each config.heatmap.ranges as range, i (i)}
                 <div class="flex flex-wrap items-center gap-2">
