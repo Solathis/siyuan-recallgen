@@ -6,6 +6,7 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { renderMarkdownLatex } from "./latex";
+    import { isElementVisible } from "./visibility";
     import ProgressBar from "./ProgressBar.svelte";
     import type { BankItem } from "@/lib/quiz/bank";
 
@@ -56,22 +57,9 @@
         revealed = true;
     }
 
-    /**
-     * 面板是否真的在前台。
-     *
-     * 按键监听挂在 window 上，而思源会把非活动的 tab 留在 DOM 里，
-     * 不加判断就会「在别的 tab 里按空格，这边的卡片跟着翻」。
-     *
-     * 用祖先的 display/visibility 判断而不是 getClientRects：后者依赖布局引擎，
-     * jsdom 下恒为空列表，等于让整条按键路径无法写用例。
-     */
+    /** 面板是否真的在前台（见 visibility.ts：隐藏的 tab 里不能抢按键） */
     function isPanelVisible(): boolean {
-        if (!rootEl?.isConnected) return false;
-        for (let node: HTMLElement | null = rootEl; node; node = node.parentElement) {
-            const style = getComputedStyle(node);
-            if (style.display === "none" || style.visibility === "hidden") return false;
-        }
-        return true;
+        return isElementVisible(rootEl);
     }
 
     /*
