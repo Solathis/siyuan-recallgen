@@ -135,6 +135,7 @@
     "quiz.confirmSubmitFlagged": "{0} flagged question(s) not reviewed. Submit anyway?",
     "quiz.confirmSubmitUnansweredFlagged": "{0} unanswered ({1} flagged). Submit anyway?",
     "quiz.navLabel": "Question navigation",
+    "quiz.questionsArea": "Questions",
     "quiz.prevQuestion": "Previous question",
     "quiz.nextQuestion": "Next question",
     "quiz.shortcutHint": "Shortcuts: ← → to change question, Ctrl/Cmd + Enter to submit",

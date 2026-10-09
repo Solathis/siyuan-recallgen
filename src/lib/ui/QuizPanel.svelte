@@ -16,6 +16,24 @@
     }
 
     /**
+     * 手势方向判定：横向位移足够大、且明显压过纵向，才算切题。
+     *
+     * 抽成纯函数是为了能被用例覆盖——纵向滚动的位移常常也有几十像素，
+     * 「多少才算切题」这个阈值是这里唯一容易写错的地方。
+     * 返回 1 表示下一题、-1 上一题、0 表示不切题。
+     */
+    export function swipeDirection(
+        start: { x: number; y: number },
+        end: { x: number; y: number },
+        minDx = 60
+    ): -1 | 0 | 1 {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        if (Math.abs(dx) < minDx || Math.abs(dx) < Math.abs(dy) * 1.5) return 0;
+        return dx < 0 ? 1 : -1;
+    }
+
+    /**
      * 解析 `<input type="time">` 的值。
      *
      * 用户清空输入时 value 是空串，parseInt 得到 NaN，而 `NaN ?? 0` 仍是 NaN
@@ -901,13 +919,82 @@
     /** 滚动容器与当前定位到的题号（用于题号导航条与上一题/下一题） */
     let listEl = $state<HTMLDivElement | null>(null);
     let activeIndex = $state(0);
+    /** 容器实际可用宽度（bind:clientWidth）；布局判定不看视口 */
+    let panelWidth = $state(0);
+
+    /**
+     * 窄容器：只渲染当前这一题，配上一题/下一题与左右滑动。
+     *
+     * 用容器宽度而不是视口宽度判定——思源里同一个面板可以拉得很窄，
+     * 也可能塞在很宽的窗口里。阈值取 640px：再窄时「长列表 + 题号条」
+     * 一屏放不下两题，滚动找题比翻页更累。
+     */
+    const NARROW_PANEL = 640;
+    const narrow = $derived(panelWidth > 0 && panelWidth < NARROW_PANEL);
+
+    /** 实际渲染的题目：窄容器只有当前一题，宽容器是全部 */
+    const renderedQuestions = $derived(
+        narrow
+            ? questions
+                  .slice(activeIndex, activeIndex + 1)
+                  .map((question, offset) => ({ question, index: activeIndex + offset }))
+            : questions.map((question, index) => ({ question, index }))
+    );
 
     function goToQuestion(index: number) {
         const clamped = Math.max(0, Math.min(questions.length - 1, index));
         activeIndex = clamped;
         flushTiming(questions[clamped]?.id ?? null);
+        // 窄容器里只挂着一题，没有可以滚过去的卡片，回到列表顶部即可
+        if (narrow) {
+            listEl?.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
         const nodes = listEl?.querySelectorAll<HTMLElement>("[data-question-index]");
         nodes?.[clamped]?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+
+    /* ── 左右滑动切题（仅窄容器） ─────────────────────────────── */
+
+    let swipeStart: { x: number; y: number } | null = null;
+    /** 横向位移超过这个距离才算切题，避免轻微抖动就翻页 */
+    const SWIPE_MIN_DX = 60;
+
+    /**
+     * 手势是不是该让给别人。
+     *
+     * 代码编辑器、公式块、输入框，以及任何「横向可滚动」的祖先，
+     * 左右滑都是在滚它们，不能被当成切题——否则代码长行根本没法横向拖动。
+     */
+    function swipeReserved(target: EventTarget | null): boolean {
+        const element = target as HTMLElement | null;
+        if (!element?.closest) return false;
+        if (element.closest('.cm-editor, .katex-display, textarea, input, select, [role="dialog"]')) return true;
+        for (let node: HTMLElement | null = element; node && node !== rootEl; node = node.parentElement) {
+            if (node.scrollWidth <= node.clientWidth + 1) continue;
+            const overflowX = getComputedStyle(node).overflowX;
+            if (overflowX === "auto" || overflowX === "scroll") return true;
+        }
+        return false;
+    }
+
+    function onTouchStart(event: TouchEvent) {
+        if (!narrow || event.touches.length !== 1) {
+            swipeStart = null;
+            return;
+        }
+        swipeStart = swipeReserved(event.target) ? null : { x: event.touches[0].clientX, y: event.touches[0].clientY };
+    }
+
+    function onTouchEnd(event: TouchEvent) {
+        const start = swipeStart;
+        swipeStart = null;
+        if (!start || !narrow) return;
+        const touch = event.changedTouches[0];
+        if (!touch) return;
+        const direction = swipeDirection(start, { x: touch.clientX, y: touch.clientY }, SWIPE_MIN_DX);
+        if (direction === 0) return;
+        goToQuestion(activeIndex + direction);
     }
 
     /** 焦点在输入控件里时不劫持按键，否则会打断输入 */
@@ -963,7 +1050,11 @@
         插件面板的可用宽度与视口无关：思源的 tab 可以很窄，设置弹窗永远比视口窄，
         用 sm:/md: 判断「该收成几栏」从根上就是错的。
     -->
-    <div class="@container mx-auto flex h-full w-full flex-col px-4" style="max-width: var(--rg-panel-width, 1100px)">
+    <div
+        class="@container mx-auto flex h-full w-full flex-col px-4"
+        style="max-width: var(--rg-panel-width, 1100px)"
+        bind:clientWidth={panelWidth}
+    >
         <!--
             失败页：出题/判分/恢复三条路径的报错长得一模一样，抽成一个 snippet。
             原先两处各手写一遍「红标题 + pre + 灰提示 + 重试」，改一处就得记得改另一处；
@@ -1390,13 +1481,24 @@
                     {/each}
                 </div>
 
-                <div class="min-h-0 flex-1 overflow-y-auto" bind:this={listEl}>
+                <!--
+                    窄容器下左右滑切题。手势只在题目区域生效，且起手位置落在
+                    代码编辑器 / 公式 / 横向可滚动容器里时整个手势让给它们（见 swipeReserved）。
+                -->
+                <div
+                    class="min-h-0 flex-1 overflow-y-auto"
+                    bind:this={listEl}
+                    role="group"
+                    aria-label={t("quiz.questionsArea")}
+                    ontouchstart={onTouchStart}
+                    ontouchend={onTouchEnd}
+                >
                     <div class="flex flex-col gap-4 py-2">
-                        {#each questions as q, i (q.id)}
+                        {#each renderedQuestions as { question: q, index: i } (q.id)}
                             <!-- 交错入场：每张卡晚 30ms，最多累加到第 10 张，长试卷不至于等太久 -->
                             <div
                                 class="flex flex-col gap-2 animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
-                                style="animation-delay: {Math.min(i, 10) * 30}ms"
+                                style="animation-delay: {narrow ? 0 : Math.min(i, 10) * 30}ms"
                                 data-question-index={i}
                             >
                                 <div class="flex flex-wrap items-center gap-2">
@@ -1458,7 +1560,28 @@
                         {/if}
                         <span>{t("quiz.elapsed", formatClock(answerElapsed))}</span>
                     </div>
-                    <Button variant="destructive" size="sm" onclick={askSubmit}>{t("quiz.submit")}</Button>
+                    <div class="flex items-center gap-1.5">
+                        {#if narrow}
+                            <!-- 窄容器下拇指在屏幕下方，翻页放在底栏比回到顶部的题号条近 -->
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={activeIndex <= 0}
+                                onclick={() => goToQuestion(activeIndex - 1)}
+                            >
+                                {t("quiz.prevQuestion")}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={activeIndex >= questions.length - 1}
+                                onclick={() => goToQuestion(activeIndex + 1)}
+                            >
+                                {t("quiz.nextQuestion")}
+                            </Button>
+                        {/if}
+                        <Button variant="destructive" size="sm" onclick={askSubmit}>{t("quiz.submit")}</Button>
+                    </div>
                 </div>
             {/if}
         {:else if panelState === "result"}

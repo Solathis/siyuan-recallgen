@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Question, UserAnswer } from "@/types/quiz";
 import { editorTarget } from "./QuestionView.svelte";
-import { parseTimeInput, retryAction } from "./QuizPanel.svelte";
+import { parseTimeInput, retryAction, swipeDirection } from "./QuizPanel.svelte";
 
 const coding = (starter?: string): Question =>
     ({
@@ -84,5 +84,34 @@ describe("parseTimeInput", () => {
     it("越界的时分被收敛为 0（不会生成非法日期）", () => {
         expect(parseTimeInput("99:99")).toEqual({ hour: 0, minute: 0 });
         expect(parseTimeInput("24:00")).toEqual({ hour: 0, minute: 0 });
+    });
+});
+
+describe("swipeDirection（窄容器左右滑切题）", () => {
+    const at = (x: number, y = 0) => ({ x, y });
+
+    it("向左滑是下一题、向右滑是上一题", () => {
+        expect(swipeDirection(at(300, 400), at(180, 400))).toBe(1);
+        expect(swipeDirection(at(180, 400), at(300, 400))).toBe(-1);
+    });
+
+    it("位移不够时不动", () => {
+        expect(swipeDirection(at(300, 400), at(280, 400))).toBe(0);
+    });
+
+    it("斜着滑（纵向占主导）不动：竖向滚动不能被误判成翻页", () => {
+        // 横向 80px、纵向 200px：这是滚动，不是切题
+        expect(swipeDirection(at(300, 200), at(220, 400))).toBe(0);
+    });
+
+    it("横向位移明显压过纵向时才切题", () => {
+        // 横向 150、纵向 60 → 切题
+        expect(swipeDirection(at(300, 200), at(150, 260))).toBe(1);
+        // 横向 150、纵向 120 → 不切题（差得不够明显）
+        expect(swipeDirection(at(300, 200), at(150, 320))).toBe(0);
+    });
+
+    it("阈值可调：大幅度拖动在任何阈值下都切题", () => {
+        expect(swipeDirection(at(400, 0), at(100, 0), 250)).toBe(1);
     });
 });

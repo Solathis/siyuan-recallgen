@@ -135,6 +135,7 @@
     "quiz.confirmSubmitFlagged": "还有 {0} 道已标记的题目未回看，确定交卷？",
     "quiz.confirmSubmitUnansweredFlagged": "还有 {0} 道未作答（其中 {1} 道已标记），确定交卷？",
     "quiz.navLabel": "题号导航",
+    "quiz.questionsArea": "题目",
     "quiz.prevQuestion": "上一题",
     "quiz.nextQuestion": "下一题",
     "quiz.shortcutHint": "快捷键：← → 切换题目，Ctrl/Cmd + Enter 交卷",
