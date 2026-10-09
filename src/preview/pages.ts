@@ -7,6 +7,7 @@
  */
 
 export type PageKey =
+    | "quiz-compose"
     | "quiz-date-config"
     | "quiz-generating"
     | "quiz-generating-slow"
@@ -37,6 +38,7 @@ export const PAGE_GROUPS: PageGroup[] = [
     {
         group: "出题",
         pages: [
+            { key: "quiz-compose", label: "粘贴材料出题", hint: "材料输入、来源标题、字数上限与截断提示" },
             { key: "quiz-date-config", label: "日期范围配置", hint: "按日期出题时的配置卡与出题计划" },
             { key: "quiz-generating", label: "生成中", hint: "进度条、阶段、批次与已收集题数" },
             { key: "quiz-generating-slow", label: "生成中（慢）", hint: "把耗时拉长，便于观察进度与动效" },

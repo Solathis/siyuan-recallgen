@@ -66,6 +66,7 @@
     import * as Empty from "@/lib/components/ui/empty";
     import { Separator } from "@/lib/components/ui/separator";
     import * as Collapsible from "@/lib/components/ui/collapsible";
+    import ComposeView from "./ComposeView.svelte";
     import { GEN_STEPS, stepStates } from "../quiz/gen-progress";
     import { describeError, type ErrorDescription } from "../ai/errors";
     import { isAbortError } from "../ai/client";
@@ -376,7 +377,15 @@
             if (existing && existing.questions.length > 0) {
                 adoptSession(existing);
             } else {
-                panelState = "configuring";
+                panelState = backToInput();
+            }
+        } else if (tabData.mode === "manual") {
+            // 思源恢复 tab 时若已有进度，直接接着答，不重开输入界面
+            const existing = await service.findProgressBySourceDocId(tabData.sourceDocId);
+            if (existing && existing.questions.length > 0) {
+                adoptSession(existing);
+            } else {
+                panelState = "composing";
             }
         } else if (tabData.mode === "reviewDue") {
             await startDueReview();
@@ -560,7 +569,7 @@
             // 取消（无论来自关闭 tab 还是新一轮开始）都不该弹出错误
             if (cancelled || isAbortError(e)) return;
             error = describeError(e);
-            panelState = "configuring";
+            panelState = backToInput();
         } finally {
             stopGenTimer();
         }
@@ -575,6 +584,16 @@
         if (loaded.capped) showMessage(t("date.capped", String(200)), 8000);
         if (loaded.skipped > 0) showMessage(t("date.skippedByLength", String(loaded.skipped)), 8000);
         if (loaded.failed > 0) showMessage(t("date.exportFailed", String(loaded.failed)), 8000);
+    }
+
+    /**
+     * 生成前后的「上一屏」。
+     *
+     * 出题失败或取消时不能一律回到 configuring：粘贴材料出题没有日期范围可调，
+     * 把用户丢到那张卡上既改不了材料也没法重试，只能关掉标签页重来。
+     */
+    function backToInput(): PanelState {
+        return tabData.mode === "manual" ? "composing" : "configuring";
     }
 
     async function startGenerate() {
@@ -1109,7 +1128,16 @@
             </div>
         {/snippet}
 
-        {#if panelState === "configuring"}
+        {#if panelState === "composing"}
+            <ComposeView
+                ongenerate={(content, sourceTitle) => {
+                    tabData.content = content;
+                    tabData.sourceTitle = sourceTitle;
+                    void startGenerate();
+                }}
+                oncancel={closeTab}
+            />
+        {:else if panelState === "configuring"}
             <!--
                 配置页自适应。
                 原实现是一张 max-w-xl（576px）的卡居中，宽面板下左右各空出四百像素；

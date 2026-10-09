@@ -96,6 +96,13 @@
         sourceTitle: PREVIEW_DOC_TITLE,
     };
 
+    /** 粘贴材料出题：内容为空，由用户在输入界面里填 */
+    const composeTab: QuizTabData = {
+        mode: "manual",
+        sourceDocId: `manual-preview-${Date.now()}`,
+        sourceTitle: previewNotebooks[0].name,
+    };
+
     const dateTab: QuizTabData = {
         mode: "dateGenerate",
         sourceDocId: PREVIEW_DOC_ID,
@@ -165,7 +172,9 @@
 </script>
 
 <div class="rgv-embed">
-    {#if page === "quiz-date-config"}
+    {#if page === "quiz-compose"}
+        <div class="rg-scope h-full"><QuizPanel {service} tabData={composeTab} /></div>
+    {:else if page === "quiz-date-config"}
         <div class="rg-scope h-full"><QuizPanel {service} tabData={dateTab} /></div>
     {:else if page === "quiz-generating" || page === "quiz-generating-slow" || page === "quiz-generating-fail" || page === "quiz-generating-empty"}
         <div class="rg-scope h-full"><QuizPanel {service} tabData={generatingTab} /></div>
