@@ -235,6 +235,7 @@
     "heatmap.scoreTip": "{0} · {1} 分（{2} 次）",
     "stats.heatmap": "学习轨迹",
     "stats.title": "学习统计",
+    "stats.pageDesc": "答题量、达标率与薄弱环节的总览",
     "stats.range": "统计范围",
     "stats.rangeDays": "近 {0} 天",
     "stats.rangeAll": "全部时间",

@@ -235,6 +235,7 @@
     "heatmap.scoreTip": "{0} · {1} pts ({2} times)",
     "stats.heatmap": "Study activity",
     "stats.title": "Study statistics",
+    "stats.pageDesc": "Overview of volume, pass rate and weak spots",
     "stats.range": "Range",
     "stats.rangeDays": "Last {0} days",
     "stats.rangeAll": "All time",

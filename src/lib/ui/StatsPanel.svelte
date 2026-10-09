@@ -2,6 +2,7 @@
     import * as Card from "@/lib/components/ui/card";
     import * as Select from "@/lib/components/ui/select";
     import { Button } from "@/lib/components/ui/button";
+    import * as Empty from "@/lib/components/ui/empty";
     import { Progress } from "@/lib/components/ui/progress";
     import { Skeleton } from "@/lib/components/ui/skeleton";
     import { cn } from "@/lib/utils";
@@ -121,10 +122,13 @@
 </script>
 
 <div class="@container flex flex-col gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-sm font-semibold">{t("stats.title")}</h3>
+    <header class="flex flex-wrap items-end justify-between gap-3">
+        <div class="flex flex-col gap-1">
+            <h2 class="text-lg font-semibold">{t("stats.title")}</h2>
+            <p class="text-muted-foreground text-sm">{t("stats.pageDesc")}</p>
+        </div>
         <Select.Root type="single" value={String(range)} onValueChange={(v) => (range = Number(v) as RangeDays)}>
-            <Select.Trigger class="h-8 w-32" aria-label={t("stats.range")}>
+            <Select.Trigger class="w-32" aria-label={t("stats.range")}>
                 {rangeLabel(range)}
             </Select.Trigger>
             <Select.Content>
@@ -133,7 +137,7 @@
                 {/each}
             </Select.Content>
         </Select.Root>
-    </div>
+    </header>
 
     {#if loading}
         <div class="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
@@ -142,13 +146,23 @@
             {/each}
         </div>
     {:else if records.length === 0}
-        <div class="text-muted-foreground py-12 text-center text-sm">{t("stats.empty")}</div>
+        <Empty.Root class="border-border min-h-40 rounded-lg border">
+            <Empty.Header>
+                <Empty.Media variant="icon">📊</Empty.Media>
+                <Empty.Title>{t("stats.empty")}</Empty.Title>
+            </Empty.Header>
+        </Empty.Root>
     {:else if inRange.length === 0}
-        <div class="text-muted-foreground py-12 text-center text-sm">{t("stats.emptyRange", rangeLabel(range))}</div>
+        <Empty.Root class="border-border min-h-40 rounded-lg border">
+            <Empty.Header>
+                <Empty.Media variant="icon">🗓</Empty.Media>
+                <Empty.Title>{t("stats.emptyRange", rangeLabel(range))}</Empty.Title>
+            </Empty.Header>
+        </Empty.Root>
     {:else}
         <!-- 学习轨迹：热力图属于进度视图，放在统计页比放在设置里更符合直觉 -->
         {#if heatmapConfig}
-            <Card.Root>
+            <Card.Root class="''' + SECT + '''">
                 <Card.Header>
                     <Card.Title class="text-sm">{t("stats.heatmap")}</Card.Title>
                     <Card.Description>{t("stats.heatmapDesc")}</Card.Description>
@@ -160,23 +174,23 @@
         {/if}
 
         <!-- 总览 -->
-        <div class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @4xl:grid-cols-5">
+        <dl class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @4xl:grid-cols-5">
             {#each [{ label: t("stats.quizCount"), value: String(summary.quizCount), sub: t("stats.questionCount", String(summary.questionCount)) }, { label: t("stats.average"), value: pct(summary.averagePercent), sub: t("stats.best", pct(summary.bestPercent)) }, { label: t("stats.streak"), value: t("stats.days", String(summary.currentStreak)), sub: t("stats.longestStreak", String(summary.longestStreak)) }, { label: t("stats.perQuestion"), value: summary.secondsPerQuestion === null ? "--" : `${summary.secondsPerQuestion.toFixed(0)}s`, sub: t("stats.activeDays", String(summary.activeDays)) }, { label: t("stats.todayProgress"), value: String(todayQuizCount), sub: t("stats.todayDone", String(todayQuestions), "—") }] as item, i (item.label)}
                 <Card.Root
                     class="animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
                     style="animation-delay: {i * 30}ms"
                 >
                     <Card.Content class="flex flex-col gap-0.5 pt-4">
-                        <span class="text-xl font-bold">{item.value}</span>
-                        <span class="text-muted-foreground text-xs">{item.label}</span>
-                        <span class="text-muted-foreground text-2xs">{item.sub}</span>
+                        <dd class="text-xl leading-none font-bold tabular-nums">{item.value}</dd>
+                        <dt class="text-muted-foreground text-xs">{item.label}</dt>
+                        <dd class="text-muted-foreground text-2xs">{item.sub}</dd>
                     </Card.Content>
                 </Card.Root>
             {/each}
-        </div>
+        </dl>
 
         <!-- 分数趋势 -->
-        <Card.Root>
+        <Card.Root class="''' + SECT + '''" style="animation-delay: 60ms">
             <Card.Header>
                 <Card.Title class="text-sm">{t("stats.trend")}</Card.Title>
                 <Card.Description>{t("stats.trendDesc")}</Card.Description>
@@ -198,7 +212,10 @@
 
         <div class="grid grid-cols-1 gap-4 @4xl:grid-cols-2">
             <!-- 题型达标率：用 CSS 条形绘制，天然响应式且跟随主题 -->
-            <Card.Root>
+            <Card.Root
+                class="animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+                style="animation-delay: 0ms"
+            >
                 <Card.Header>
                     <Card.Title class="text-sm">{t("stats.byType")}</Card.Title>
                     <Card.Description>{t("stats.byTypeDesc")}</Card.Description>
@@ -222,7 +239,10 @@
             </Card.Root>
 
             <!-- 分数分布 -->
-            <Card.Root>
+            <Card.Root
+                class="animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+                style="animation-delay: 40ms"
+            >
                 <Card.Header>
                     <Card.Title class="text-sm">{t("stats.distribution")}</Card.Title>
                     <Card.Description>{t("stats.distributionDesc")}</Card.Description>
@@ -258,7 +278,10 @@
             </Card.Root>
 
             <!-- 难度达标率 -->
-            <Card.Root>
+            <Card.Root
+                class="animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+                style="animation-delay: 80ms"
+            >
                 <Card.Header>
                     <Card.Title class="text-sm">{t("stats.byDifficulty")}</Card.Title>
                     <Card.Description>{t("stats.byDifficultyDesc")}</Card.Description>
@@ -269,7 +292,10 @@
             </Card.Root>
 
             <!-- 薄弱环节 -->
-            <Card.Root>
+            <Card.Root
+                class="animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+                style="animation-delay: 120ms"
+            >
                 <Card.Header>
                     <Card.Title class="text-sm">{t("stats.weak")}</Card.Title>
                     <Card.Description>{t("stats.weakDesc")}</Card.Description>
