@@ -18,7 +18,10 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import { Button } from "@/lib/components/ui/button";
+    import { Checkbox } from "@/lib/components/ui/checkbox";
     import { Input } from "@/lib/components/ui/input";
+    import { Label } from "@/lib/components/ui/label";
+    import * as RadioGroup from "@/lib/components/ui/radio-group";
     import { Textarea } from "@/lib/components/ui/textarea";
     import * as Tabs from "@/lib/components/ui/tabs";
     import { cn } from "@/lib/utils";
@@ -234,47 +237,75 @@
 </script>
 
 <div class="bg-card text-card-foreground rounded-lg border p-4">
-    <p class="rg-markdown mb-3 text-reading leading-relaxed">{@html questionHtml}</p>
+    <p id={`${question.id}-stem`} class="rg-markdown mb-3 text-reading leading-relaxed">{@html questionHtml}</p>
 
     {#if question.type === "single_choice"}
-        <div class="flex flex-col gap-1.5">
+        <!--
+            选项用 shadcn 的 RadioGroup：原先手写的 input[type=radio] 只是「长得像单选」，
+            组内方向键切换、读出「第 3 项，共 4 项」这些都由原语负责。
+            控件与选项文字必须分开（radio 里放不下块级 markdown），用 for/aria-labelledby 关联。
+        -->
+        <RadioGroup.Root
+            class="gap-1.5"
+            value={singleValue === null ? "" : String(singleValue)}
+            onValueChange={(v) => setSingle(Number(v))}
+            aria-labelledby={`${question.id}-stem`}
+        >
             {#each optionHtml as optionMarkup, i (i)}
-                <label
+                <div
                     class={cn(
-                        "hover:bg-accent flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
+                        "hover:bg-accent flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
                         singleValue === i && "border-primary bg-primary/10"
                     )}
                 >
-                    <input
-                        type="radio"
-                        class="accent-primary size-4 shrink-0"
-                        name={question.id}
-                        checked={singleValue === i}
-                        onchange={() => setSingle(i)}
+                    <RadioGroup.Item
+                        id={`${question.id}-opt-${i}`}
+                        value={String(i)}
+                        class="shrink-0"
+                        aria-labelledby={`${question.id}-opt-${i}-letter ${question.id}-opt-${i}-text`}
                     />
-                    <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs">{optionLetter(i)}</span>
-                    <span class="rg-markdown min-w-0">{@html optionMarkup}</span>
-                </label>
+                    <Label
+                        for={`${question.id}-opt-${i}`}
+                        class="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 font-normal"
+                    >
+                        <span
+                            id={`${question.id}-opt-${i}-letter`}
+                            class="text-muted-foreground w-3 shrink-0 font-mono text-xs">{optionLetter(i)}</span
+                        >
+                        <span id={`${question.id}-opt-${i}-text`} class="rg-markdown min-w-0">{@html optionMarkup}</span
+                        >
+                    </Label>
+                </div>
             {/each}
-        </div>
+        </RadioGroup.Root>
     {:else if question.type === "multiple_choice"}
-        <div class="flex flex-col gap-1.5">
+        <div class="flex flex-col gap-1.5" role="group" aria-labelledby={`${question.id}-stem`}>
             {#each optionHtml as optionMarkup, i (i)}
-                <label
+                <div
                     class={cn(
-                        "hover:bg-accent flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
+                        "hover:bg-accent flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
                         multiValue.includes(i) && "border-primary bg-primary/10"
                     )}
                 >
-                    <input
-                        type="checkbox"
-                        class="accent-primary size-4 shrink-0"
+                    <Checkbox
+                        id={`${question.id}-opt-${i}`}
+                        class="shrink-0"
                         checked={multiValue.includes(i)}
-                        onchange={() => toggleMulti(i)}
+                        onCheckedChange={() => toggleMulti(i)}
+                        aria-labelledby={`${question.id}-opt-${i}-letter ${question.id}-opt-${i}-text`}
                     />
-                    <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs">{optionLetter(i)}</span>
-                    <span class="rg-markdown min-w-0">{@html optionMarkup}</span>
-                </label>
+                    <Label
+                        for={`${question.id}-opt-${i}`}
+                        class="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 font-normal"
+                    >
+                        <span
+                            id={`${question.id}-opt-${i}-letter`}
+                            class="text-muted-foreground w-3 shrink-0 font-mono text-xs">{optionLetter(i)}</span
+                        >
+                        <span id={`${question.id}-opt-${i}-text`} class="rg-markdown min-w-0">{@html optionMarkup}</span
+                        >
+                    </Label>
+                </div>
             {/each}
         </div>
     {:else if question.type === "fill_blank"}
@@ -289,25 +320,26 @@
             {/each}
         </div>
     {:else if question.type === "true_false"}
-        <div class="flex flex-col gap-1.5">
+        <RadioGroup.Root
+            class="gap-1.5"
+            value={boolValue === null ? "" : String(boolValue)}
+            onValueChange={(v) => setBool(v === "true")}
+            aria-labelledby={`${question.id}-stem`}
+        >
             {#each [{ label: t("common.true"), value: true }, { label: t("common.false"), value: false }] as opt (opt.label)}
-                <label
+                <div
                     class={cn(
-                        "hover:bg-accent flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
+                        "hover:bg-accent flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 transition-colors",
                         boolValue === opt.value && "border-primary bg-primary/10"
                     )}
                 >
-                    <input
-                        type="radio"
-                        class="accent-primary size-4 shrink-0"
-                        name={question.id}
-                        checked={boolValue === opt.value}
-                        onchange={() => setBool(opt.value)}
-                    />
-                    <span>{opt.label}</span>
-                </label>
+                    <RadioGroup.Item id={`${question.id}-tf-${opt.value}`} value={String(opt.value)} class="shrink-0" />
+                    <Label for={`${question.id}-tf-${opt.value}`} class="min-w-0 flex-1 cursor-pointer font-normal"
+                        >{opt.label}</Label
+                    >
+                </div>
             {/each}
-        </div>
+        </RadioGroup.Root>
     {:else if question.type === "subjective"}
         <Tabs.Root value={subjectiveMode} onValueChange={(v) => (subjectiveMode = v as typeof subjectiveMode)}>
             <Tabs.List class="mb-2">

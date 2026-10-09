@@ -274,14 +274,15 @@
 
             <div class="flex flex-wrap items-center gap-2">
                 {#if dayFilter}
-                    <button
-                        type="button"
-                        class="border-primary text-primary hover:bg-primary/10 inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs"
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="border-primary text-primary hover:bg-primary/10 gap-1 text-xs"
                         onclick={clearDayFilter}
                         title={t("history.clearDayFilter")}
                     >
                         📅 {dayFilter} ✕
-                    </button>
+                    </Button>
                 {/if}
                 <Input
                     class="h-8 w-full @xl:w-56"
@@ -390,6 +391,11 @@
                                 <Card.Root
                                     class="group relative overflow-hidden transition-shadow focus-within:shadow-rg-md hover:shadow-rg-md"
                                 >
+                                    <!--
+                                        整卡可点是「块级命中区域」，保留原生 button：
+                                        Button 会强加自己的高度、内边距与 hover 底色，
+                                        与卡片自带的 hover 阴影打架。
+                                    -->
                                     <button
                                         type="button"
                                         class="flex w-full flex-col gap-2 p-4 text-left"

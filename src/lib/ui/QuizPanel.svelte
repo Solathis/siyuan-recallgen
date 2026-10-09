@@ -40,6 +40,9 @@
     import * as AlertDialog from "@/lib/components/ui/alert-dialog";
     import { Badge } from "@/lib/components/ui/badge";
     import { Button } from "@/lib/components/ui/button";
+    import { Input } from "@/lib/components/ui/input";
+    import { Label } from "@/lib/components/ui/label";
+    import { Slider } from "@/lib/components/ui/slider";
     import * as Card from "@/lib/components/ui/card";
     import { describeError, type ErrorDescription } from "../ai/errors";
     import { isAbortError } from "../ai/client";
@@ -993,8 +996,8 @@
                             {#if tabData.dateRange === "beforeToday"}
                                 <div class="flex flex-col gap-2">
                                     <div class="flex items-center justify-between">
-                                        <label class="text-sm font-medium" for="rg-date-days"
-                                            >{t("quiz.dateDaysLabel")}</label
+                                        <Label class="text-sm font-medium" for="rg-date-days"
+                                            >{t("quiz.dateDaysLabel")}</Label
                                         >
                                         <span class="text-rg-accent text-sm font-semibold tabular-nums">
                                             {dateCfg.days === 0
@@ -1002,25 +1005,26 @@
                                                 : t("quiz.dateDaysVal", String(dateCfg.days))}
                                         </span>
                                     </div>
-                                    <input
+                                    <Slider
                                         id="rg-date-days"
-                                        class="accent-primary w-full"
-                                        type="range"
-                                        min="0"
-                                        max="90"
-                                        step="1"
-                                        bind:value={dateCfg.days}
+                                        type="single"
+                                        min={0}
+                                        max={90}
+                                        step={1}
+                                        value={dateCfg.days}
+                                        onValueChange={(v) => (dateCfg = { ...dateCfg, days: v })}
+                                        aria-label={t("quiz.dateDaysLabel")}
                                     />
                                     <p class="text-muted-foreground text-xs">{t("quiz.dateDaysHint")}</p>
                                 </div>
                             {/if}
                             <div class="flex items-center justify-between gap-3">
-                                <label class="text-sm font-medium" for="rg-date-base">{t("quiz.dateBaseLabel")}</label>
-                                <input
+                                <Label class="text-sm font-medium" for="rg-date-base">{t("quiz.dateBaseLabel")}</Label>
+                                <Input
                                     id="rg-date-base"
-                                    class="border-input bg-background rounded-md border px-2 py-1 text-sm"
+                                    class="w-32"
                                     type="time"
-                                    bind:value={dateBaseTime}
+                                    value={dateBaseTime}
                                     onchange={onBaseTimeChange}
                                 />
                             </div>
@@ -1304,14 +1308,15 @@
                     title={t("quiz.shortcutHint")}
                 >
                     {#each questions as q, i (q.id)}
-                        <button
-                            type="button"
+                        <Button
+                            variant="outline"
+                            size="icon-sm"
                             class={cn(
-                                "size-7 rounded-md border text-xs font-semibold transition-colors",
+                                "text-xs font-semibold",
                                 session?.flagged?.[q.id] && "border-warning",
                                 session?.answers[q.id]
                                     ? "border-primary bg-primary/10 text-primary"
-                                    : "border-border text-muted-foreground hover:bg-accent",
+                                    : "text-muted-foreground",
                                 i === activeIndex && "ring-ring ring-2"
                             )}
                             aria-label={t(
@@ -1320,8 +1325,10 @@
                                 session?.answers[q.id] ? t("quiz.answeredTag") : t("result.status_unanswered")
                             )}
                             aria-current={i === activeIndex}
-                            onclick={() => goToQuestion(i)}>{i + 1}</button
+                            onclick={() => goToQuestion(i)}
                         >
+                            {i + 1}
+                        </Button>
                     {/each}
                 </div>
 

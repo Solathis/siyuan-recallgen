@@ -89,9 +89,11 @@
                         onchange={(e) =>
                             patchRange(i, { max: Math.max(0, Math.min(100, Number(e.currentTarget.value) || 0)) })}
                     />
-                    <input
+                    <!-- 颜色选择器没有对应的 shadcn 原语：用原生 type=color 但套 Input 的框，
+                     视觉上与相邻的数字输入同高同圆角 -->
+                    <Input
                         type="color"
-                        class="border-border h-8 w-10 cursor-pointer rounded-sm border bg-transparent p-0.5"
+                        class="w-10 cursor-pointer p-0.5"
                         aria-label={t("settings.heatmap.rangeColor")}
                         value={range.color}
                         oninput={(e) => patchRange(i, { color: e.currentTarget.value })}

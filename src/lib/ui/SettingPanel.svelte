@@ -93,6 +93,7 @@
         aria-label={t("settings.title")}
     >
         {#each SECTIONS as section (section.key)}
+            <!-- 设置导航项是「页面级导航」而不是普通按钮：保留原生 button + aria-current -->
             <button
                 type="button"
                 class={cn(

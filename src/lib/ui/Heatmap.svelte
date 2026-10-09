@@ -351,6 +351,12 @@
                                 {#if cell.date}
                                     {@const bg = colorFor(cell.score)}
                                     {@const safeBg = isSafeCssColor(bg) ? bg : null}
+                                    <!--
+                                        热力图格子保留原生 button：一屏上百个格子，
+                                        套 Button 会把边框、内边距、层级都带进来，
+                                        而这里要的是恰好 12-24px 的纯色方块；
+                                        可访问性由 aria-label + roving tabindex 保证。
+                                    -->
                                     <button
                                         type="button"
                                         data-cell-index={cellIndex(colIndex, rowIndex)}
