@@ -1363,7 +1363,12 @@
                 <div class="min-h-0 flex-1 overflow-y-auto" bind:this={listEl}>
                     <div class="flex flex-col gap-4 py-2">
                         {#each questions as q, i (q.id)}
-                            <div class="flex flex-col gap-2" data-question-index={i}>
+                            <!-- 交错入场：每张卡晚 30ms，最多累加到第 10 张，长试卷不至于等太久 -->
+                            <div
+                                class="flex flex-col gap-2 animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+                                style="animation-delay: {Math.min(i, 10) * 30}ms"
+                                data-question-index={i}
+                            >
                                 <div class="flex flex-wrap items-center gap-2">
                                     <Badge variant="secondary">{t("quiz.questionNum", String(i + 1))}</Badge>
                                     <Badge

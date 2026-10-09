@@ -161,8 +161,11 @@
 
         <!-- 总览 -->
         <div class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @4xl:grid-cols-5">
-            {#each [{ label: t("stats.quizCount"), value: String(summary.quizCount), sub: t("stats.questionCount", String(summary.questionCount)) }, { label: t("stats.average"), value: pct(summary.averagePercent), sub: t("stats.best", pct(summary.bestPercent)) }, { label: t("stats.streak"), value: t("stats.days", String(summary.currentStreak)), sub: t("stats.longestStreak", String(summary.longestStreak)) }, { label: t("stats.perQuestion"), value: summary.secondsPerQuestion === null ? "--" : `${summary.secondsPerQuestion.toFixed(0)}s`, sub: t("stats.activeDays", String(summary.activeDays)) }, { label: t("stats.todayProgress"), value: String(todayQuizCount), sub: t("stats.todayDone", String(todayQuestions), "—") }] as item (item.label)}
-                <Card.Root>
+            {#each [{ label: t("stats.quizCount"), value: String(summary.quizCount), sub: t("stats.questionCount", String(summary.questionCount)) }, { label: t("stats.average"), value: pct(summary.averagePercent), sub: t("stats.best", pct(summary.bestPercent)) }, { label: t("stats.streak"), value: t("stats.days", String(summary.currentStreak)), sub: t("stats.longestStreak", String(summary.longestStreak)) }, { label: t("stats.perQuestion"), value: summary.secondsPerQuestion === null ? "--" : `${summary.secondsPerQuestion.toFixed(0)}s`, sub: t("stats.activeDays", String(summary.activeDays)) }, { label: t("stats.todayProgress"), value: String(todayQuizCount), sub: t("stats.todayDone", String(todayQuestions), "—") }] as item, i (item.label)}
+                <Card.Root
+                    class="animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+                    style="animation-delay: {i * 30}ms"
+                >
                     <Card.Content class="flex flex-col gap-0.5 pt-4">
                         <span class="text-xl font-bold">{item.value}</span>
                         <span class="text-muted-foreground text-xs">{item.label}</span>

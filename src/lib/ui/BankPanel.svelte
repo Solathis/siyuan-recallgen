@@ -6,6 +6,8 @@
     import { Checkbox } from "@/lib/components/ui/checkbox";
     import { Label } from "@/lib/components/ui/label";
     import * as Card from "@/lib/components/ui/card";
+    import * as Collapsible from "@/lib/components/ui/collapsible";
+    import * as Empty from "@/lib/components/ui/empty";
     import { Input } from "@/lib/components/ui/input";
     import * as Select from "@/lib/components/ui/select";
     import { Progress } from "@/lib/components/ui/progress";
@@ -127,8 +129,6 @@
 
     /** 题库里出现过的知识点标签（按题数倒序），用于筛选与「按知识点复习」 */
     const tagOptions = $derived(bankTags(items));
-    /** 标签管理展开状态 */
-    let showTagManage = $state(false);
     /** 正在重命名的标签 */
     let renamingTag = $state<string | null>(null);
     let renameValue = $state("");
@@ -261,52 +261,69 @@
     }
 </script>
 
-<div class="@container flex flex-col gap-4">
+<!--
+    题库页。
+
+    结构按 shadcn 的写法重排（不是往旧标记上贴类名）：
+    页头 → 概览卡 → 筛选卡 → 到期入口 → 标签管理 → 列表 → 分页。
+    每块都是 Card / Field / Collapsible / Table / Empty / Progress / Badge 的组合，
+    动效统一走 tw-animate-css 的 animate-in（列表交错必须带 animation-fill-mode:backwards，
+    否则带延迟的元素会在延迟期间先完整显示再闪一下）。
+-->
+<div class="@container flex h-full flex-col gap-4 overflow-y-auto p-4">
+    <!-- 页头 -->
+    <header class="flex flex-wrap items-end justify-between gap-3">
+        <div class="flex flex-col gap-1">
+            <h2 class="text-lg font-semibold">{t("bank.pageTitle")}</h2>
+            <p class="text-muted-foreground text-sm">{t("bank.pageDesc")}</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || items.length === 0}
+                onclick={() =>
+                    downloadText(
+                        `recallgen-anki-${exportStamp()}.txt`,
+                        buildAnkiExport(items),
+                        "text/tab-separated-values"
+                    )}
+            >
+                {t("bank.ankiExport")}
+            </Button>
+            <Button variant="ghost" size="sm" onclick={() => void load()} disabled={loading}>
+                {t("common.refresh")}
+            </Button>
+        </div>
+    </header>
+
+    <!-- 概览：三个数字单独成卡，与统计页同一种读法 -->
+    <dl class="grid grid-cols-1 gap-3 @xl:grid-cols-3">
+        {#each [{ label: t("bank.statTotal"), value: counts.total, tone: "text-foreground" }, { label: t("bank.statDue"), value: counts.due, tone: counts.due > 0 ? "text-warning" : "text-foreground" }, { label: t("bank.statWeak"), value: counts.weak, tone: counts.weak > 0 ? "text-destructive" : "text-foreground" }] as stat, i (stat.label)}
+            <Card.Root
+                class="animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+                style="animation-delay: {i * 30}ms"
+            >
+                <Card.Content class="flex flex-col gap-0.5 pt-4">
+                    <dt class="text-muted-foreground text-xs">{stat.label}</dt>
+                    <dd class={cn("text-xl leading-none font-semibold tabular-nums", stat.tone)}>{stat.value}</dd>
+                </Card.Content>
+            </Card.Root>
+        {/each}
+    </dl>
+
+    <!-- 筛选 -->
     <Card.Root>
         <Card.Content class="flex flex-col gap-3 pt-4">
-            <!--
-                工具栏拆成两行。
-                原实现把「三个概览徽标 + 搜索框 + 四个下拉 + 两个按钮」全塞进一个
-                flex-wrap 行里，宽屏上勉强一排、窄一点就折成两三层且各层长度不一；
-                现在第一行是概览与次要操作，第二行专放筛选，折行后始终是整齐的两段。
-            -->
-            <div class="flex flex-wrap items-center justify-between gap-2">
-                <div class="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{t("bank.totalCount", String(counts.total))}</Badge>
-                    <Badge variant={counts.due > 0 ? "warning" : "outline"}
-                        >{t("bank.dueCount", String(counts.due))}</Badge
-                    >
-                    <Badge variant="outline">{t("bank.weakCount", String(counts.weak))}</Badge>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={loading || items.length === 0}
-                        onclick={() =>
-                            downloadText(
-                                `recallgen-anki-${exportStamp()}.txt`,
-                                buildAnkiExport(items),
-                                "text/tab-separated-values"
-                            )}
-                    >
-                        {t("bank.ankiExport")}
-                    </Button>
-                    <Button variant="ghost" size="sm" onclick={() => void load()} disabled={loading}>
-                        {t("common.refresh")}
-                    </Button>
-                </div>
-            </div>
-
             <div class="flex flex-wrap items-center gap-2">
                 <Input
-                    class="h-8 w-full @xl:w-56"
+                    class="w-full @xl:w-56"
                     placeholder={t("bank.searchPlaceholder")}
                     aria-label={t("bank.searchPlaceholder")}
                     bind:value={query}
                 />
                 <Select.Root type="single" value={filter} onValueChange={(v) => (filter = v as typeof filter)}>
-                    <Select.Trigger class="h-8 w-28" aria-label={t("bank.filterLabel")}>
+                    <Select.Trigger class="w-28" aria-label={t("bank.filterLabel")}>
                         {filter === "all"
                             ? t("bank.filterAll")
                             : filter === "due"
@@ -321,7 +338,7 @@
                 </Select.Root>
                 {#if typeOptions.length > 1}
                     <Select.Root type="single" value={typeFilter} onValueChange={(v) => (typeFilter = v)}>
-                        <Select.Trigger class="h-8 w-28" aria-label={t("bank.filterType")}>
+                        <Select.Trigger class="w-28" aria-label={t("bank.filterType")}>
                             {typeFilter === "all" ? t("bank.filterAllTypes") : typeLabel(typeFilter)}
                         </Select.Trigger>
                         <Select.Content>
@@ -333,7 +350,7 @@
                     </Select.Root>
                 {/if}
                 <Select.Root type="single" value={difficultyFilter} onValueChange={(v) => (difficultyFilter = v)}>
-                    <Select.Trigger class="h-8 w-24" aria-label={t("bank.filterDifficulty")}>
+                    <Select.Trigger class="w-24" aria-label={t("bank.filterDifficulty")}>
                         {difficultyFilter === "all"
                             ? t("bank.filterAllDifficulties")
                             : t(`diff.${difficultyFilter as Difficulty}`)}
@@ -347,7 +364,7 @@
                 </Select.Root>
                 {#if tagOptions.length > 0}
                     <Select.Root type="single" value={tagFilter} onValueChange={(v) => (tagFilter = v)}>
-                        <Select.Trigger class="h-8 w-32" aria-label={t("bank.filterTag")}>
+                        <Select.Trigger class="w-32" aria-label={t("bank.filterTag")}>
                             {tagFilter === "all" ? t("bank.filterAllTags") : tagFilter}
                         </Select.Trigger>
                         <Select.Content>
@@ -361,39 +378,63 @@
                         </Select.Content>
                     </Select.Root>
                 {/if}
+                <Label
+                    class="text-muted-foreground ml-auto flex cursor-pointer items-center gap-1.5 text-xs font-normal"
+                    title={t("bank.cramModeHint")}
+                >
+                    <Checkbox class="size-3.5" checked={cram} onCheckedChange={(v) => (cram = v === true)} />
+                    {t("bank.cramMode")}
+                </Label>
             </div>
+
+            <!-- 当前筛选可直接开一次复习：知识点/题型/难度都是题库的筛选键 -->
+            {#if reviewScope}
+                <div class="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg p-2">
+                    <span class="text-xs">
+                        {t("bank.scopeLine", reviewScope.label, String(scopeItems.length))}
+                        <span class="text-muted-foreground">
+                            {scopeDueCount > 0 ? t("bank.tagDue", String(scopeDueCount)) : t("bank.tagAhead")}
+                        </span>
+                    </span>
+                    <Button
+                        size="sm"
+                        onclick={() => {
+                            if (cram && openFlashcard) openFlashcard(scopeItems);
+                            else
+                                onStartReview({
+                                    tag: reviewScope?.tag,
+                                    type: reviewScope?.type,
+                                    difficulty: reviewScope?.difficulty,
+                                });
+                        }}
+                    >
+                        {cram ? `${t("bank.cramBadge")} · ` : ""}{t("bank.reviewScope")}
+                    </Button>
+                </div>
+            {/if}
+
+            <!-- 池子里有到期题时直接给入口，不必先选筛选 -->
+            {#if !loading && items.length > 0 && counts.due > 0}
+                <div
+                    class="bg-primary/5 border-primary/20 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2"
+                >
+                    <span class="text-xs">{t("bank.dueLine", String(counts.due), String(counts.total))}</span>
+                    <Button size="sm" onclick={() => onStartReview({})}>{t("bank.reviewDue")}</Button>
+                </div>
+            {/if}
         </Card.Content>
     </Card.Root>
 
-    <!--
-        到期题只在顶部有一个数字，却要先选某个标签/题型/难度才出现复习入口，
-        等于「看得到欠账、点不了开始」。池子里有到期题时直接给一个入口。
-    -->
-    {#if !loading && items.length > 0 && counts.due > 0}
-        <div
-            class="bg-primary/5 border-primary/20 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2"
-        >
-            <span class="text-xs">{t("bank.dueLine", String(counts.due), String(counts.total))}</span>
-            <Button size="sm" onclick={() => onStartReview({})}>{t("bank.reviewDue")}</Button>
-        </div>
-    {/if}
-
-    <!-- 标签管理：展开后可重命名或删除知识点标签 -->
+    <!-- 标签管理：折叠区 -->
     {#if tagOptions.length > 0}
-        <div class="flex flex-col gap-1">
-            <Button
-                variant="ghost"
-                size="sm"
-                class="text-muted-foreground h-6 self-start px-1"
-                aria-expanded={showTagManage}
-                onclick={() => (showTagManage = !showTagManage)}
-            >
-                {showTagManage ? "▾" : "▸"}
-                {t("bank.tagManage")} ({tagOptions.length})
-            </Button>
-            {#if showTagManage}
-                <!-- 限宽：行内有一个 flex-1 占位把操作按钮推到右边，不限宽就会隔出半屏空白 -->
-                <div class="flex max-w-md flex-col gap-1 pl-3">
+        <Collapsible.Root class="border-border rounded-lg border">
+            <Collapsible.Trigger class="w-full p-3 text-left">
+                <span class="text-muted-foreground text-xs font-medium">
+                    {t("bank.tagManage")} ({tagOptions.length})
+                </span>
+            </Collapsible.Trigger>
+            <Collapsible.Content>
+                <div class="flex max-w-md flex-col gap-1 px-3 pb-3">
                     {#each tagOptions as option (option.tag)}
                         <div class="flex items-center gap-1.5 text-xs">
                             {#if renamingTag === option.tag}
@@ -404,7 +445,6 @@
                                     placeholder={t("bank.tagRenamePrompt")}
                                     onkeydown={(e) => e.key === "Enter" && void doRenameTag()}
                                 />
-                                <!-- 图标按钮要给可访问名称：✓ / ✕ 读屏只会念成符号 -->
                                 <Button
                                     variant="ghost"
                                     size="icon-xs"
@@ -461,282 +501,260 @@
                         </div>
                     {/each}
                 </div>
-            {/if}
-        </div>
+            </Collapsible.Content>
+        </Collapsible.Root>
     {/if}
 
-    <!-- 按知识点筛选时给出一条可执行的复习入口，而不是只能看列表 -->
-    {#if reviewScope && !loading && items.length > 0}
-        <div class="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2">
-            <span class="text-xs">
-                {t("bank.scopeLine", reviewScope.label, String(scopeItems.length))}
-                {#if scopeDueCount > 0}
-                    <span class="text-muted-foreground">{t("bank.tagDue", String(scopeDueCount))}</span>
-                {:else}
-                    <span class="text-muted-foreground">{t("bank.tagAhead")}</span>
-                {/if}
-            </span>
-            <Button
-                size="sm"
-                variant="outline"
-                onclick={() => {
-                    if (cram && openFlashcard) {
-                        openFlashcard(scopeItems);
-                    } else {
-                        onStartReview({
-                            tag: reviewScope?.tag,
-                            type: reviewScope?.type,
-                            difficulty: reviewScope?.difficulty,
-                        });
-                    }
-                }}
-            >
-                {cram ? t("bank.cramBadge") + " · " : ""}{t("bank.reviewScope")}
-            </Button>
-            <Label
-                class="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs font-normal"
-                title={t("bank.cramModeHint")}
-            >
-                <Checkbox class="size-3.5" checked={cram} onCheckedChange={(v) => (cram = v === true)} />
-                {t("bank.cramMode")}
-            </Label>
-        </div>
-    {/if}
-
+    <!-- 列表 -->
     {#if loading}
-        <div class="flex flex-col gap-2">
-            {#each [0, 1, 2] as i (i)}
-                <Skeleton class="h-12 w-full" />
-            {/each}
-        </div>
-    {:else if loadError}
         <Card.Root>
-            <Card.Content class="flex flex-col items-start gap-2 pt-4">
-                <p class="text-destructive text-sm">{t("bank.loadFailed", loadError)}</p>
-                <Button variant="outline" size="sm" onclick={() => void load()}>{t("common.retry")}</Button>
+            <Card.Content class="flex flex-col gap-2 pt-4">
+                {#each [0, 1, 2] as i (i)}
+                    <Skeleton class="h-12 w-full" />
+                {/each}
             </Card.Content>
         </Card.Root>
+    {:else if loadError}
+        <Empty.Root class="border-border min-h-40 rounded-lg border">
+            <Empty.Header>
+                <Empty.Media variant="icon">⚠️</Empty.Media>
+                <Empty.Title>{t("bank.loadFailed", loadError)}</Empty.Title>
+            </Empty.Header>
+            <Empty.Content>
+                <Button variant="outline" size="sm" onclick={() => void load()}>{t("common.retry")}</Button>
+            </Empty.Content>
+        </Empty.Root>
     {:else if items.length === 0}
-        <div class="text-muted-foreground py-12 text-center text-sm">{t("bank.empty")}</div>
+        <Empty.Root class="border-border min-h-40 rounded-lg border">
+            <Empty.Header>
+                <Empty.Media variant="icon">🗃</Empty.Media>
+                <Empty.Title>{t("bank.empty")}</Empty.Title>
+            </Empty.Header>
+        </Empty.Root>
     {:else if filtered.length === 0}
-        <div class="text-muted-foreground py-12 text-center text-sm">{t("bank.noMatch")}</div>
+        <Empty.Root class="border-border min-h-40 rounded-lg border">
+            <Empty.Header>
+                <Empty.Media variant="icon">🔍</Empty.Media>
+                <Empty.Title>{t("bank.noMatch")}</Empty.Title>
+            </Empty.Header>
+        </Empty.Root>
     {:else}
-        <Table.Root>
-            <Table.Header>
-                <Table.Row>
-                    <Table.Head>{t("bank.colQuestion")}</Table.Head>
-                    <Table.Head class="w-16">{t("bank.colType")}</Table.Head>
-                    <Table.Head class="w-32 text-right">{t("bank.colMastery")}</Table.Head>
-                    <Table.Head class="w-20 text-right">{t("bank.colHistory")}</Table.Head>
-                    <Table.Head class="w-20 text-right">{t("bank.colDue")}</Table.Head>
-                    <Table.Head class="w-10"></Table.Head>
-                </Table.Row>
-            </Table.Header>
-            <Table.Body>
-                {#each shown as item (item.id)}
-                    {@const mastery = masteryScore(item)}
+        <Card.Root class="overflow-hidden py-0">
+            <Table.Root>
+                <Table.Header>
                     <Table.Row>
-                        <Table.Cell>
-                            <Button
-                                variant="ghost"
-                                class="h-auto w-full flex-col items-start gap-0.5 p-0 text-left whitespace-normal"
-                                aria-expanded={expanded === item.id}
-                                onclick={() => toggle(item.id)}
-                            >
-                                <span class="line-clamp-2 text-xs" title={item.question.question}
-                                    >{item.question.question}</span
-                                >
-                                <span class="text-muted-foreground text-2xs">
-                                    {expanded === item.id ? "▾" : "▸"}
-                                    {item.sourceTitle}
-                                </span>
-                            </Button>
-                        </Table.Cell>
-                        <Table.Cell>
-                            <Badge variant="outline">{typeLabel(item.question.type)}</Badge>
-                        </Table.Cell>
-                        <Table.Cell>
-                            <div class="flex items-center justify-end gap-2">
-                                <Progress value={mastery} class={cn("h-2 w-16", masteryTone(mastery))} />
-                                <span class="text-muted-foreground w-6 text-right text-2xs tabular-nums">{mastery}</span
-                                >
-                            </div>
-                        </Table.Cell>
-                        <Table.Cell class="text-muted-foreground text-right text-2xs tabular-nums">
-                            {t("bank.historyValue", String(item.timesPassed), String(item.timesSeen))}
-                        </Table.Cell>
-                        <Table.Cell class="text-right text-2xs">
-                            {#if dueState(item.card, clock.now) === "overdue"}
-                                <span class="text-warning font-medium">{fmtDue(item.card, clock.now)}</span>
-                            {:else}
-                                <span class="text-muted-foreground">{fmtDue(item.card, clock.now)}</span>
-                            {/if}
-                        </Table.Cell>
-                        <Table.Cell>
-                            <AlertDialog.Root>
-                                <AlertDialog.Trigger>
-                                    {#snippet child({ props })}
-                                        <!--
-                                            aria-label / title 必须写在开始标签里。
-                                            原实现把它们放在标签之后，Svelte 会把
-                                            `aria-label=` 当文本、把表达式当插值，
-                                            于是每一行的操作列都渲染出
-                                            「aria-label=删除 title=删除 ✕」这串字面量。
-                                        -->
-                                        <Button
-                                            {...props}
-                                            variant="ghost"
-                                            size="sm"
-                                            disabled={deleting === item.id}
-                                            aria-label={t("common.delete")}
-                                            title={t("common.delete")}
-                                        >
-                                            ✕
-                                        </Button>
-                                    {/snippet}
-                                </AlertDialog.Trigger>
-                                <AlertDialog.Content>
-                                    <AlertDialog.Header>
-                                        <AlertDialog.Title>{t("bank.removeTitle")}</AlertDialog.Title>
-                                        <AlertDialog.Description>
-                                            {t("bank.removeConfirm", item.question.question.slice(0, 40))}
-                                        </AlertDialog.Description>
-                                    </AlertDialog.Header>
-                                    <AlertDialog.Footer>
-                                        <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
-                                        <AlertDialog.Action variant="destructive" onclick={() => void remove(item)}>
-                                            {t("common.delete")}
-                                        </AlertDialog.Action>
-                                    </AlertDialog.Footer>
-                                </AlertDialog.Content>
-                            </AlertDialog.Root>
-                        </Table.Cell>
+                        <Table.Head>{t("bank.colQuestion")}</Table.Head>
+                        <Table.Head class="w-16">{t("bank.colType")}</Table.Head>
+                        <Table.Head class="w-32 text-right">{t("bank.colMastery")}</Table.Head>
+                        <Table.Head class="w-20 text-right">{t("bank.colHistory")}</Table.Head>
+                        <Table.Head class="w-20 text-right">{t("bank.colDue")}</Table.Head>
+                        <Table.Head class="w-10"></Table.Head>
                     </Table.Row>
-                    {#if expanded === item.id}
-                        {@const history = historyOf(item)}
-                        {@const recent = recentAverage(item)}
-                        <Table.Row class="bg-muted/30">
-                            <Table.Cell colspan={6}>
-                                <div class="grid gap-4 py-2 @4xl:grid-cols-2">
-                                    <!-- 复习历史 -->
-                                    <div class="flex flex-col gap-2">
-                                        <span class="text-xs font-medium">
-                                            {t("bank.detailHistory", String(history.length))}
-                                            {#if recent !== null}
-                                                <span class="text-muted-foreground font-normal">
-                                                    <!-- 次数用实际参与平均的条数：只有 2 条历史时
-                                                         说「最近 5 次平均」是假的 -->
-                                                    {t(
-                                                        "bank.detailRecentAvg",
-                                                        String(Math.min(RECENT_AVG_WINDOW, history.length)),
-                                                        recent.toFixed(0)
-                                                    )}
-                                                </span>
-                                            {/if}
-                                        </span>
-                                        {#if history.length === 0}
-                                            <p class="text-muted-foreground text-2xs">
-                                                {item.timesSeen > 0
-                                                    ? t("bank.detailHistoryLegacy", String(item.timesSeen))
-                                                    : t("bank.detailHistoryEmpty")}
-                                            </p>
-                                        {:else}
-                                            <div
-                                                class="h-9 w-full max-w-44"
-                                                role="img"
-                                                aria-label={t("bank.detailHistoryChart")}
-                                            >
-                                                <ChartContainer config={sparkConfig} class="aspect-auto h-full w-full">
-                                                    <Chart
-                                                        data={sparkPoints(item)}
-                                                        x="index"
-                                                        y="percent"
-                                                        yDomain={[0, 100]}
-                                                        padding={{ top: 4, right: 2, bottom: 4, left: 2 }}
-                                                    >
-                                                        <Layer>
-                                                            <Area class="fill-primary/15" />
-                                                            <Spline class="stroke-primary" strokeWidth={1.5} />
-                                                        </Layer>
-                                                    </Chart>
-                                                </ChartContainer>
-                                            </div>
-                                            <div class="flex flex-wrap gap-1">
-                                                {#each historyNewestFirst(item) as attempt, index (attempt.at)}
-                                                    <span
-                                                        class={cn(
-                                                            "rounded-sm border px-1.5 py-0.5 text-2xs",
-                                                            attempt.percent >= 90
-                                                                ? "border-success/40 text-success"
-                                                                : attempt.percent >= 60
-                                                                  ? "border-border text-foreground"
-                                                                  : "border-destructive/40 text-destructive"
-                                                        )}
-                                                        title={fmtDateTime(attempt.at)}
-                                                    >
-                                                        {attempt.percent.toFixed(0)}
-                                                        {#if index === 0}
-                                                            <span class="text-muted-foreground"
-                                                                >· {t("bank.detailLatest")}</span
-                                                            >
-                                                        {/if}
-                                                    </span>
-                                                {/each}
-                                            </div>
-                                            {#if history.length >= MAX_BANK_HISTORY}
-                                                <p class="text-muted-foreground text-2xs">
-                                                    {t("bank.detailHistoryCap", String(MAX_BANK_HISTORY))}
-                                                </p>
-                                            {/if}
-                                        {/if}
-                                    </div>
-
-                                    <!-- 间隔重复状态 -->
-                                    <div class="flex flex-col gap-2">
-                                        <span class="text-xs font-medium">{t("bank.detailSchedule")}</span>
-                                        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-2xs">
-                                            <dt class="text-muted-foreground">{t("bank.detailPhase")}</dt>
-                                            <dd>{phaseLabel(item.card)}</dd>
-                                            <dt class="text-muted-foreground">{t("bank.detailDue")}</dt>
-                                            <dd>{fmtDateTime(item.card.due)}</dd>
-                                            <dt class="text-muted-foreground">{t("bank.detailReps")}</dt>
-                                            <dd>{item.card.reps}</dd>
-                                            <dt class="text-muted-foreground">{t("bank.detailLapses")}</dt>
-                                            <dd>{item.card.lapses}</dd>
-                                            <dt class="text-muted-foreground">{t("bank.detailStability")}</dt>
-                                            <dd>{t("bank.detailStabilityValue", item.card.stability.toFixed(1))}</dd>
-                                            <dt class="text-muted-foreground">{t("bank.detailDifficulty")}</dt>
-                                            <dd>{item.card.difficulty.toFixed(1)}</dd>
-                                            <dt class="text-muted-foreground">{t("bank.detailCreated")}</dt>
-                                            <dd>{fmtDateTime(item.createdAt)}</dd>
-                                        </dl>
-                                        {#if (item.question.tags ?? []).length > 0}
-                                            <div class="flex flex-wrap items-center gap-1">
-                                                <span class="text-muted-foreground text-2xs">
-                                                    {t("bank.detailTags")}
-                                                </span>
-                                                {#each item.question.tags ?? [] as tag (tag)}
-                                                    <Button
-                                                        variant="outline"
-                                                        size="xs"
-                                                        onclick={() => (tagFilter = tag)}
-                                                    >
-                                                        {tag}
-                                                    </Button>
-                                                {/each}
-                                            </div>
-                                        {/if}
-                                        <p class="text-muted-foreground text-2xs">
-                                            {t("bank.detailSource", item.sourceTitle || item.sourceDocId)}
-                                        </p>
-                                    </div>
+                </Table.Header>
+                <Table.Body>
+                    {#each shown as item (item.id)}
+                        {@const mastery = masteryScore(item)}
+                        <Table.Row class="animate-in fade-in-0 duration-200">
+                            <Table.Cell>
+                                <Button
+                                    variant="ghost"
+                                    class="h-auto w-full flex-col items-start gap-0.5 p-0 text-left whitespace-normal"
+                                    aria-expanded={expanded === item.id}
+                                    onclick={() => toggle(item.id)}
+                                >
+                                    <span class="line-clamp-2 text-xs" title={item.question.question}
+                                        >{item.question.question}</span
+                                    >
+                                    <span class="text-muted-foreground text-2xs">
+                                        {expanded === item.id ? "▾" : "▸"}
+                                        {item.sourceTitle}
+                                    </span>
+                                </Button>
+                            </Table.Cell>
+                            <Table.Cell>
+                                <Badge variant="outline">{typeLabel(item.question.type)}</Badge>
+                            </Table.Cell>
+                            <Table.Cell>
+                                <div class="flex items-center justify-end gap-2">
+                                    <Progress value={mastery} class={cn("h-2 w-16", masteryTone(mastery))} />
+                                    <span class="text-muted-foreground w-6 text-right text-2xs tabular-nums"
+                                        >{mastery}</span
+                                    >
                                 </div>
                             </Table.Cell>
+                            <Table.Cell class="text-muted-foreground text-right text-2xs tabular-nums">
+                                {t("bank.historyValue", String(item.timesPassed), String(item.timesSeen))}
+                            </Table.Cell>
+                            <Table.Cell class="text-right text-2xs">
+                                {#if dueState(item.card, clock.now) === "overdue"}
+                                    <span class="text-warning font-medium">{fmtDue(item.card, clock.now)}</span>
+                                {:else}
+                                    <span class="text-muted-foreground">{fmtDue(item.card, clock.now)}</span>
+                                {/if}
+                            </Table.Cell>
+                            <Table.Cell>
+                                <AlertDialog.Root>
+                                    <AlertDialog.Trigger>
+                                        {#snippet child({ props })}
+                                            <Button
+                                                {...props}
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                disabled={deleting === item.id}
+                                                aria-label={t("common.delete")}
+                                                title={t("common.delete")}
+                                            >
+                                                ✕
+                                            </Button>
+                                        {/snippet}
+                                    </AlertDialog.Trigger>
+                                    <AlertDialog.Content>
+                                        <AlertDialog.Header>
+                                            <AlertDialog.Title>{t("bank.removeTitle")}</AlertDialog.Title>
+                                            <AlertDialog.Description>
+                                                {t("bank.removeConfirm", item.question.question.slice(0, 40))}
+                                            </AlertDialog.Description>
+                                        </AlertDialog.Header>
+                                        <AlertDialog.Footer>
+                                            <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                                            <AlertDialog.Action variant="destructive" onclick={() => void remove(item)}>
+                                                {t("common.delete")}
+                                            </AlertDialog.Action>
+                                        </AlertDialog.Footer>
+                                    </AlertDialog.Content>
+                                </AlertDialog.Root>
+                            </Table.Cell>
                         </Table.Row>
-                    {/if}
-                {/each}
-            </Table.Body>
-        </Table.Root>
+
+                        {#if expanded === item.id}
+                            {@const history = historyOf(item)}
+                            {@const recent = recentAverage(item)}
+                            <!-- 展开行：复习历史（迷你折线 + 逐次得分）+ 排程状态 -->
+                            <Table.Row class="bg-muted/30 animate-in fade-in-0 slide-in-from-top-1 duration-150">
+                                <Table.Cell colspan={6}>
+                                    <div class="grid gap-4 py-2 @4xl:grid-cols-2">
+                                        <div class="flex flex-col gap-2">
+                                            <span class="text-xs font-medium">
+                                                {t("bank.detailHistory", String(history.length))}
+                                                {#if recent !== null}
+                                                    <span class="text-muted-foreground font-normal">
+                                                        {t(
+                                                            "bank.detailRecentAvg",
+                                                            String(Math.min(RECENT_AVG_WINDOW, history.length)),
+                                                            recent.toFixed(0)
+                                                        )}
+                                                    </span>
+                                                {/if}
+                                            </span>
+                                            {#if history.length === 0}
+                                                <p class="text-muted-foreground text-2xs">
+                                                    {item.timesSeen > 0
+                                                        ? t("bank.detailHistoryLegacy", String(item.timesSeen))
+                                                        : t("bank.detailHistoryEmpty")}
+                                                </p>
+                                            {:else}
+                                                <div
+                                                    class="h-9 w-full max-w-44"
+                                                    role="img"
+                                                    aria-label={t("bank.detailHistoryChart")}
+                                                >
+                                                    <ChartContainer
+                                                        config={sparkConfig}
+                                                        class="aspect-auto h-full w-full"
+                                                    >
+                                                        <Chart
+                                                            data={sparkPoints(item)}
+                                                            x="index"
+                                                            y="percent"
+                                                            yDomain={[0, 100]}
+                                                            padding={{ top: 4, right: 2, bottom: 4, left: 2 }}
+                                                        >
+                                                            <Layer>
+                                                                <Area class="fill-primary/15" />
+                                                                <Spline class="stroke-primary" strokeWidth={1.5} />
+                                                            </Layer>
+                                                        </Chart>
+                                                    </ChartContainer>
+                                                </div>
+                                                <div class="flex flex-wrap gap-1">
+                                                    {#each historyNewestFirst(item) as attempt, index (attempt.at)}
+                                                        <Badge
+                                                            variant="outline"
+                                                            class={cn(
+                                                                "text-2xs",
+                                                                attempt.percent >= 90
+                                                                    ? "border-success/40 text-success"
+                                                                    : attempt.percent >= 60
+                                                                      ? "text-foreground"
+                                                                      : "border-destructive/40 text-destructive"
+                                                            )}
+                                                            title={fmtDateTime(attempt.at)}
+                                                        >
+                                                            {attempt.percent.toFixed(0)}
+                                                            {#if index === 0}
+                                                                <span class="text-muted-foreground"
+                                                                    >· {t("bank.detailLatest")}</span
+                                                                >
+                                                            {/if}
+                                                        </Badge>
+                                                    {/each}
+                                                </div>
+                                                {#if history.length >= MAX_BANK_HISTORY}
+                                                    <p class="text-muted-foreground text-2xs">
+                                                        {t("bank.detailHistoryCap", String(MAX_BANK_HISTORY))}
+                                                    </p>
+                                                {/if}
+                                            {/if}
+                                        </div>
+
+                                        <div class="flex flex-col gap-2">
+                                            <span class="text-xs font-medium">{t("bank.detailSchedule")}</span>
+                                            <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-2xs">
+                                                <dt class="text-muted-foreground">{t("bank.detailPhase")}</dt>
+                                                <dd>{phaseLabel(item.card)}</dd>
+                                                <dt class="text-muted-foreground">{t("bank.detailDue")}</dt>
+                                                <dd>{fmtDateTime(item.card.due)}</dd>
+                                                <dt class="text-muted-foreground">{t("bank.detailReps")}</dt>
+                                                <dd>{item.card.reps}</dd>
+                                                <dt class="text-muted-foreground">{t("bank.detailLapses")}</dt>
+                                                <dd>{item.card.lapses}</dd>
+                                                <dt class="text-muted-foreground">{t("bank.detailStability")}</dt>
+                                                <dd>
+                                                    {t("bank.detailStabilityValue", item.card.stability.toFixed(1))}
+                                                </dd>
+                                                <dt class="text-muted-foreground">{t("bank.detailDifficulty")}</dt>
+                                                <dd>{item.card.difficulty.toFixed(1)}</dd>
+                                                <dt class="text-muted-foreground">{t("bank.detailCreated")}</dt>
+                                                <dd>{fmtDateTime(item.createdAt)}</dd>
+                                            </dl>
+                                            {#if (item.question.tags ?? []).length > 0}
+                                                <div class="flex flex-wrap items-center gap-1">
+                                                    <span class="text-muted-foreground text-2xs">
+                                                        {t("bank.detailTags")}
+                                                    </span>
+                                                    {#each item.question.tags ?? [] as tag (tag)}
+                                                        <Button
+                                                            variant="outline"
+                                                            size="xs"
+                                                            onclick={() => (tagFilter = tag)}
+                                                        >
+                                                            {tag}
+                                                        </Button>
+                                                    {/each}
+                                                </div>
+                                            {/if}
+                                            <p class="text-muted-foreground text-2xs">
+                                                {t("bank.detailSource", item.sourceTitle || item.sourceDocId)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </Table.Cell>
+                            </Table.Row>
+                        {/if}
+                    {/each}
+                </Table.Body>
+            </Table.Root>
+        </Card.Root>
 
         {#if filtered.length > shown.length}
             <div class="flex flex-col items-center gap-2 py-2">
