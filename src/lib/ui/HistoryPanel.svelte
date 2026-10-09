@@ -6,6 +6,7 @@
     import * as Card from "@/lib/components/ui/card";
     import * as DropdownMenu from "@/lib/components/ui/dropdown-menu";
     import { Input } from "@/lib/components/ui/input";
+    import * as Item from "@/lib/components/ui/item";
     import { Progress } from "@/lib/components/ui/progress";
     import * as Select from "@/lib/components/ui/select";
     import { Skeleton } from "@/lib/components/ui/skeleton";
@@ -95,21 +96,25 @@
         });
     });
 
+    /** 一条记录归到哪个分组：按日期是 YYYY-MM-DD，按来源是文档名 */
+    function groupKeyOf(entry: ScoreIndexEntry): string {
+        if (groupBy === "date") {
+            const d = new Date(entry.timestamp);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        }
+        // 原先来源为空时错用「未作答」当兜底文案，语义不符
+        return (
+            entry.sourceTitle?.replace(/·.*$/, "").trim() ||
+            entry.title.replace(/·.*$/, "").trim() ||
+            t("history.noSource")
+        );
+    }
+
     /** 按日期或来源分组，保持录入顺序（列表本身已按时间倒序） */
     const grouped = $derived.by(() => {
         const map = new Map<string, ScoreIndexEntry[]>();
         for (const r of filtered) {
-            let key: string;
-            if (groupBy === "date") {
-                const d = new Date(r.timestamp);
-                key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-            } else {
-                // 原先来源为空时错用「未作答」当兜底文案，语义不符
-                key =
-                    r.sourceTitle?.replace(/·.*$/, "").trim() ||
-                    r.title.replace(/·.*$/, "").trim() ||
-                    t("history.noSource");
-            }
+            const key = groupKeyOf(r);
             const items = map.get(key);
             if (items) items.push(r);
             else map.set(key, [r]);
@@ -119,6 +124,16 @@
 
     /** 截断后的分组与剩余条数 */
     const limited = $derived(limitGroups(grouped, visible));
+
+    /**
+     * 缩略图视图用的扁平序列。
+     *
+     * 缩略图是按日期/来源分组的，而一天通常只有一两次练习：若照分组逐行铺卡片，
+     * 每组右侧都会剩下一大片空列（一组 2 张卡 + 4 个空位），整个页面看上去像没排完。
+     * 因此缩略图只有一层网格，分组信息下沉成卡片上的一枚小标签；列表与表格视图
+     * 是竖向的，分组标题不占额外横向空间，继续保留。
+     */
+    const flatItems = $derived(limited.groups.flatMap((group) => group.items));
 
     /**
      * 概览数字。
@@ -179,12 +194,28 @@
         return d.getFullYear() === new Date().getFullYear() ? `${date} ${time}` : `${d.getFullYear()}-${date} ${time}`;
     }
 
+    /** 缩略图卡片上的分组标签：今年的日期省掉年份，来源分组直接用文档名 */
+    function groupLabel(entry: ScoreIndexEntry): string {
+        const key = groupKeyOf(entry);
+        if (groupBy === "notebook") return key;
+        const [year, month, day] = key.split("-");
+        return year === String(new Date().getFullYear()) ? `${month}-${day}` : key;
+    }
+
     /** 分数配色：全部走主题语义色，避免硬编码在暗色主题下不可读 */
     function scoreClass(p: number): string {
         if (p >= 80) return "text-success";
         if (p >= 60) return "text-primary";
         if (p >= 30) return "text-warning";
         return "text-destructive";
+    }
+
+    /** 分数条的色调：覆盖 Progress 内部指示条的底色，与分数文字同一口径 */
+    function scoreTone(p: number): string {
+        if (p >= 80) return "[&>[data-slot=progress-indicator]]:bg-success";
+        if (p >= 60) return "[&>[data-slot=progress-indicator]]:bg-primary";
+        if (p >= 30) return "[&>[data-slot=progress-indicator]]:bg-warning";
+        return "[&>[data-slot=progress-indicator]]:bg-destructive";
     }
 
     async function remove(entry: ScoreIndexEntry) {
@@ -245,7 +276,10 @@
         -->
         <header class="flex flex-col gap-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
-                <h2 class="text-lg font-semibold">{t("history.title")}</h2>
+                <div class="flex flex-col gap-1">
+                    <h2 class="text-lg font-semibold">{t("history.title")}</h2>
+                    <p class="text-muted-foreground text-sm">{t("history.pageDesc")}</p>
+                </div>
                 <div class="flex items-center gap-1.5">
                     <Button variant="ghost" size="sm" onclick={() => void load()} disabled={loading}>
                         {t("common.refresh")}
@@ -378,225 +412,163 @@
                 </dl>
             {/if}
 
-            {#each limited.groups as group (group.key)}
-                <section class="flex flex-col gap-2">
-                    <h3 class="text-muted-foreground flex items-center gap-2 text-xs font-semibold tracking-wide">
-                        <span class="text-foreground">{group.key}</span>
-                        <span class="bg-muted rounded-full px-1.5 py-0.5 text-2xs tabular-nums"
-                            >{group.items.length}</span
-                        >
-                        <span class="bg-border h-px flex-1"></span>
-                    </h3>
-
-                    {#if viewMode === "thumbnail"}
-                        <div class="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-3">
-                            {#each group.items as r, i (r.id)}
-                                {@const p = scorePercent(r)}
-                                <!--
+            {#if viewMode === "thumbnail"}
+                <div class="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-3">
+                    {#each flatItems as r, i (r.id)}
+                        {@const p = scorePercent(r)}
+                        <!--
                                     整张卡片即入口。
                                     原实现把「查看」做成卡片里一个整行按钮，删除又并排放在它右边：
                                     一张 200px 宽的卡里最显眼的东西是两个操作按钮，信息反而被压成配角。
                                     现在卡片本身可点开回看，删除退到右上角的小图标（触屏没有 hover，
                                     所以不做「悬停才出现」）。
                                 -->
-                                <Card.Root
-                                    class="group relative overflow-hidden transition-shadow focus-within:shadow-rg-md hover:shadow-rg-md animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
-                                    style="animation-delay: {Math.min(i, 10) * 30}ms"
-                                >
-                                    <Button
-                                        variant="ghost"
-                                        class="hover:bg-transparent h-auto w-full flex-col items-stretch gap-2 p-4 text-left whitespace-normal"
-                                        aria-label={`${t("history.review")}：${r.title}`}
-                                        onclick={() => onOpenReview(r)}
+                        <Card.Root
+                            class="group relative overflow-hidden transition-shadow focus-within:shadow-rg-md hover:shadow-rg-md animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+                            style="animation-delay: {Math.min(i, 10) * 30}ms"
+                        >
+                            <Button
+                                variant="ghost"
+                                class="hover:bg-transparent h-auto w-full flex-col items-stretch gap-2 p-4 text-left whitespace-normal"
+                                aria-label={`${t("history.review")}：${r.title}`}
+                                onclick={() => onOpenReview(r)}
+                            >
+                                <div class="flex items-baseline gap-2 pr-6">
+                                    <span class={cn("text-2xl leading-none font-bold tabular-nums", scoreClass(p))}
+                                        >{p.toFixed(0)}</span
                                     >
-                                        <div class="flex items-baseline gap-2 pr-6">
-                                            <span
-                                                class={cn(
-                                                    "text-2xl leading-none font-bold tabular-nums",
-                                                    scoreClass(p)
-                                                )}>{p.toFixed(0)}</span
-                                            >
-                                            <span class="text-muted-foreground text-xs">{t("history.pts")}</span>
-                                            <span class="text-muted-foreground ml-auto text-2xs tabular-nums">
-                                                {p >= PASS_SCORE ? t("result.passed") : t("result.notPassed")}
-                                            </span>
-                                        </div>
-                                        <div class="min-w-0">
-                                            <div class="line-clamp-2 text-sm font-medium" title={r.title}>
-                                                {r.title}
-                                            </div>
-                                            <div class="text-muted-foreground mt-0.5 text-xs">
-                                                {t("result.qCount", String(r.questionCount))} · {timeLabel(r)}
-                                            </div>
-                                        </div>
-                                        <Progress
-                                            value={p}
-                                            class={cn(
-                                                "mt-0.5 h-1.5",
-                                                p >= PASS_SCORE
-                                                    ? "[&>[data-slot=progress-indicator]]:bg-success"
-                                                    : "[&>[data-slot=progress-indicator]]:bg-destructive"
-                                            )}
-                                            aria-hidden="true"
-                                        />
-                                    </Button>
+                                    <span class="text-muted-foreground text-xs">{t("history.pts")}</span>
+                                    <span class="text-muted-foreground ml-auto text-2xs tabular-nums">
+                                        {p >= PASS_SCORE ? t("result.passed") : t("result.notPassed")}
+                                    </span>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="line-clamp-2 text-sm font-medium" title={r.title}>
+                                        {r.title}
+                                    </div>
+                                    <div class="text-muted-foreground mt-0.5 text-xs">
+                                        {t("result.qCount", String(r.questionCount))} · {groupLabel(r)}
+                                        {timeStr(r.timestamp)}
+                                    </div>
+                                </div>
+                                <Progress
+                                    value={p}
+                                    class={cn(
+                                        "mt-0.5 h-1.5",
+                                        p >= PASS_SCORE
+                                            ? "[&>[data-slot=progress-indicator]]:bg-success"
+                                            : "[&>[data-slot=progress-indicator]]:bg-destructive"
+                                    )}
+                                    aria-hidden="true"
+                                />
+                            </Button>
 
-                                    <div class="absolute top-1.5 right-1.5 z-10">
-                                        <AlertDialog.Root>
-                                            <AlertDialog.Trigger>
-                                                {#snippet child({ props })}
-                                                    <!--
+                            <div class="absolute top-1.5 right-1.5 z-10">
+                                <AlertDialog.Root>
+                                    <AlertDialog.Trigger>
+                                        {#snippet child({ props })}
+                                            <!--
                                                         aria-label / title 必须写在开始标签里：
                                                         放在标签之后会被当成文本渲染出来，
                                                         页面上会直接出现「aria-label=删除 title=删除」。
                                                     -->
-                                                    <Button
-                                                        {...props}
-                                                        variant="ghost"
-                                                        size="icon-xs"
-                                                        class="opacity-70 hover:opacity-100"
-                                                        disabled={deleting === r.id}
-                                                        aria-label={t("common.delete")}
-                                                        title={t("common.delete")}
-                                                    >
-                                                        ✕
-                                                    </Button>
-                                                {/snippet}
-                                            </AlertDialog.Trigger>
-                                            <AlertDialog.Content>
-                                                <AlertDialog.Header>
-                                                    <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
-                                                    <AlertDialog.Description>
-                                                        {t("history.deleteConfirm", r.title)}
-                                                    </AlertDialog.Description>
-                                                </AlertDialog.Header>
-                                                <AlertDialog.Footer>
-                                                    <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
-                                                    <AlertDialog.Action
-                                                        variant="destructive"
-                                                        onclick={() => void remove(r)}
-                                                    >
-                                                        {t("common.delete")}
-                                                    </AlertDialog.Action>
-                                                </AlertDialog.Footer>
-                                            </AlertDialog.Content>
-                                        </AlertDialog.Root>
-                                    </div>
-                                </Card.Root>
-                            {/each}
-                        </div>
-                    {:else if viewMode === "list"}
-                        <div class="flex flex-col gap-1">
-                            {#each group.items as r (r.id)}
-                                {@const p = scorePercent(r)}
-                                <div class="hover:bg-accent flex items-center gap-3 rounded-md px-2 py-2">
-                                    <span class={cn("w-10 shrink-0 text-right text-lg font-bold", scoreClass(p))}>
-                                        {p.toFixed(0)}
-                                    </span>
-                                    <Button
-                                        variant="link"
-                                        class="min-w-0 flex-1 justify-start px-0 text-left"
-                                        onclick={() => onOpenReview(r)}
-                                    >
-                                        <span class="truncate">{r.title}</span>
-                                    </Button>
-                                    <span class="text-muted-foreground shrink-0 text-xs"
-                                        >{t("result.qCount", String(r.questionCount))}</span
-                                    >
-                                    <span class="text-muted-foreground shrink-0 text-xs">{timeLabel(r)}</span>
-                                    <AlertDialog.Root>
-                                        <AlertDialog.Trigger>
-                                            {#snippet child({ props })}
-                                                <!-- 列表视图原先没给图标按钮任何可访问名称 -->
-                                                <Button
-                                                    {...props}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    disabled={deleting === r.id}
-                                                    aria-label={t("common.delete")}
-                                                    title={t("common.delete")}>✕</Button
-                                                >
-                                            {/snippet}
-                                        </AlertDialog.Trigger>
-                                        <AlertDialog.Content>
-                                            <AlertDialog.Header>
-                                                <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
-                                                <AlertDialog.Description
-                                                    >{t("history.deleteConfirm", r.title)}</AlertDialog.Description
-                                                >
-                                            </AlertDialog.Header>
-                                            <AlertDialog.Footer>
-                                                <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
-                                                <AlertDialog.Action
-                                                    variant="destructive"
-                                                    onclick={() => void remove(r)}
-                                                >
-                                                    {t("common.delete")}
-                                                </AlertDialog.Action>
-                                            </AlertDialog.Footer>
-                                        </AlertDialog.Content>
-                                    </AlertDialog.Root>
-                                </div>
-                            {/each}
-                        </div>
-                    {:else}
-                        <Table.Root>
-                            <Table.Header>
-                                <Table.Row>
-                                    <Table.Head>{t("history.colTitle")}</Table.Head>
-                                    <Table.Head class="w-20 text-right">{t("history.colScore")}</Table.Head>
-                                    <Table.Head class="w-16 text-right">{t("history.colCount")}</Table.Head>
-                                    <Table.Head class="w-20 text-right">{t("history.colTime")}</Table.Head>
-                                    <Table.Head class="w-24"></Table.Head>
-                                </Table.Row>
-                            </Table.Header>
-                            <Table.Body>
-                                {#each group.items as r (r.id)}
-                                    {@const p = scorePercent(r)}
-                                    <Table.Row>
-                                        <Table.Cell>
                                             <Button
-                                                variant="link"
-                                                class="h-auto justify-start px-0"
-                                                onclick={() => onOpenReview(r)}
+                                                {...props}
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                class="opacity-70 hover:opacity-100"
+                                                disabled={deleting === r.id}
+                                                aria-label={t("common.delete")}
+                                                title={t("common.delete")}
                                             >
-                                                {r.title}
+                                                ✕
                                             </Button>
-                                        </Table.Cell>
-                                        <Table.Cell class={cn("text-right font-semibold", scoreClass(p))}>
-                                            {p.toFixed(0)}%
-                                        </Table.Cell>
-                                        <Table.Cell class="text-right">{r.questionCount}</Table.Cell>
-                                        <Table.Cell class="text-muted-foreground text-right text-xs">
-                                            {timeLabel(r)}
-                                        </Table.Cell>
-                                        <Table.Cell>
+                                        {/snippet}
+                                    </AlertDialog.Trigger>
+                                    <AlertDialog.Content>
+                                        <AlertDialog.Header>
+                                            <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
+                                            <AlertDialog.Description>
+                                                {t("history.deleteConfirm", r.title)}
+                                            </AlertDialog.Description>
+                                        </AlertDialog.Header>
+                                        <AlertDialog.Footer>
+                                            <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                                            <AlertDialog.Action variant="destructive" onclick={() => void remove(r)}>
+                                                {t("common.delete")}
+                                            </AlertDialog.Action>
+                                        </AlertDialog.Footer>
+                                    </AlertDialog.Content>
+                                </AlertDialog.Root>
+                            </div>
+                        </Card.Root>
+                    {/each}
+                </div>
+            {:else}
+                {#each limited.groups as group (group.key)}
+                    <section class="flex flex-col gap-2">
+                        <h3 class="text-muted-foreground flex items-center gap-2 text-xs font-semibold tracking-wide">
+                            <span class="text-foreground">{group.key}</span>
+                            <span class="bg-muted rounded-full px-1.5 py-0.5 text-2xs tabular-nums"
+                                >{group.items.length}</span
+                            >
+                            <span class="bg-border h-px flex-1"></span>
+                        </h3>
+
+                        {#if viewMode === "list"}
+                            <div class="flex flex-col gap-1">
+                                {#each group.items as r, i (r.id)}
+                                    {@const p = scorePercent(r)}
+                                    <!-- 行改用 shadcn Item：分值、标题与元信息、操作各归各位 -->
+                                    <Item.Root
+                                        variant="muted"
+                                        size="xs"
+                                        class="animate-in fade-in-0 [animation-fill-mode:backwards] duration-200"
+                                        style="animation-delay: {Math.min(i, 10) * 30}ms"
+                                    >
+                                        <Item.Media variant="icon" class="w-10 shrink-0 justify-end bg-transparent">
+                                            <span class={cn("text-lg font-bold tabular-nums", scoreClass(p))}>
+                                                {p.toFixed(0)}
+                                            </span>
+                                        </Item.Media>
+                                        <Item.Content>
+                                            <Item.Title class="truncate text-sm">
+                                                <Button
+                                                    variant="link"
+                                                    class="h-auto max-w-full justify-start px-0 text-left"
+                                                    onclick={() => onOpenReview(r)}
+                                                >
+                                                    <span class="truncate">{r.title}</span>
+                                                </Button>
+                                            </Item.Title>
+                                            <Item.Description class="text-2xs">
+                                                {t("result.qCount", String(r.questionCount))} · {timeLabel(r)}
+                                            </Item.Description>
+                                        </Item.Content>
+                                        <Item.Actions>
                                             <AlertDialog.Root>
                                                 <AlertDialog.Trigger>
                                                     {#snippet child({ props })}
-                                                        <!--
-                                                            aria-label / title 必须写在开始标签里：
-                                                            放在标签之后会被当成文本渲染出来，
-                                                            页面上会直接出现「aria-label=删除 title=删除」。
-                                                        -->
+                                                        <!-- 列表视图原先没给图标按钮任何可访问名称 -->
                                                         <Button
                                                             {...props}
                                                             variant="ghost"
                                                             size="sm"
                                                             disabled={deleting === r.id}
                                                             aria-label={t("common.delete")}
-                                                            title={t("common.delete")}
+                                                            title={t("common.delete")}>✕</Button
                                                         >
-                                                            ✕
-                                                        </Button>
                                                     {/snippet}
                                                 </AlertDialog.Trigger>
                                                 <AlertDialog.Content>
                                                     <AlertDialog.Header>
                                                         <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
-                                                        <AlertDialog.Description>
-                                                            {t("history.deleteConfirm", r.title)}
-                                                        </AlertDialog.Description>
+                                                        <AlertDialog.Description
+                                                            >{t(
+                                                                "history.deleteConfirm",
+                                                                r.title
+                                                            )}</AlertDialog.Description
+                                                        >
                                                     </AlertDialog.Header>
                                                     <AlertDialog.Footer>
                                                         <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
@@ -609,14 +581,109 @@
                                                     </AlertDialog.Footer>
                                                 </AlertDialog.Content>
                                             </AlertDialog.Root>
-                                        </Table.Cell>
-                                    </Table.Row>
+                                        </Item.Actions>
+                                    </Item.Root>
                                 {/each}
-                            </Table.Body>
-                        </Table.Root>
-                    {/if}
-                </section>
-            {/each}
+                            </div>
+                        {:else}
+                            <Table.Root>
+                                <Table.Header>
+                                    <Table.Row>
+                                        <Table.Head class="w-1/2">{t("history.colTitle")}</Table.Head>
+                                        <Table.Head class="w-32 text-right">{t("history.colScore")}</Table.Head>
+                                        <Table.Head class="w-16 text-right">{t("history.colCount")}</Table.Head>
+                                        <Table.Head class="w-20 text-right">{t("history.colTime")}</Table.Head>
+                                        <Table.Head class="w-10"></Table.Head>
+                                    </Table.Row>
+                                </Table.Header>
+                                <Table.Body>
+                                    {#each group.items as r (r.id)}
+                                        {@const p = scorePercent(r)}
+                                        <Table.Row class="animate-in fade-in-0 duration-200">
+                                            <Table.Cell>
+                                                <Button
+                                                    variant="link"
+                                                    class="h-auto justify-start px-0"
+                                                    onclick={() => onOpenReview(r)}
+                                                >
+                                                    {r.title}
+                                                </Button>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <!--
+                                                    分数带一条进度条：表格里标题这一列几乎总是很短，
+                                                    数字全挤在右边会留下中间一大片空白；
+                                                    一条按分值着色的细条既补上这段空间，也让「哪几次差得多」一眼可见。
+                                                -->
+                                                <div class="flex items-center justify-end gap-2">
+                                                    <Progress
+                                                        value={p}
+                                                        class={cn("h-1.5 w-16", scoreTone(p))}
+                                                        aria-hidden="true"
+                                                    />
+                                                    <span
+                                                        class={cn(
+                                                            "w-10 text-right font-semibold tabular-nums",
+                                                            scoreClass(p)
+                                                        )}>{p.toFixed(0)}%</span
+                                                    >
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell class="text-right">{r.questionCount}</Table.Cell>
+                                            <Table.Cell class="text-muted-foreground text-right text-xs">
+                                                {timeLabel(r)}
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <AlertDialog.Root>
+                                                    <AlertDialog.Trigger>
+                                                        {#snippet child({ props })}
+                                                            <!--
+                                                            aria-label / title 必须写在开始标签里：
+                                                            放在标签之后会被当成文本渲染出来，
+                                                            页面上会直接出现「aria-label=删除 title=删除」。
+                                                        -->
+                                                            <Button
+                                                                {...props}
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                disabled={deleting === r.id}
+                                                                aria-label={t("common.delete")}
+                                                                title={t("common.delete")}
+                                                            >
+                                                                ✕
+                                                            </Button>
+                                                        {/snippet}
+                                                    </AlertDialog.Trigger>
+                                                    <AlertDialog.Content>
+                                                        <AlertDialog.Header>
+                                                            <AlertDialog.Title
+                                                                >{t("history.deleteOne")}</AlertDialog.Title
+                                                            >
+                                                            <AlertDialog.Description>
+                                                                {t("history.deleteConfirm", r.title)}
+                                                            </AlertDialog.Description>
+                                                        </AlertDialog.Header>
+                                                        <AlertDialog.Footer>
+                                                            <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel
+                                                            >
+                                                            <AlertDialog.Action
+                                                                variant="destructive"
+                                                                onclick={() => void remove(r)}
+                                                            >
+                                                                {t("common.delete")}
+                                                            </AlertDialog.Action>
+                                                        </AlertDialog.Footer>
+                                                    </AlertDialog.Content>
+                                                </AlertDialog.Root>
+                                            </Table.Cell>
+                                        </Table.Row>
+                                    {/each}
+                                </Table.Body>
+                            </Table.Root>
+                        {/if}
+                    </section>
+                {/each}
+            {/if}
 
             {#if limited.remaining > 0}
                 <!-- 触底自动加载；按钮同时兼顾键盘操作与不支持 IntersectionObserver 的环境 -->

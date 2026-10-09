@@ -276,6 +276,7 @@
     "history.tabRecords": "Records",
     "history.tabStats": "Statistics",
     "history.title": "Quiz History",
+    "history.pageDesc": "Every submitted quiz is kept here, browsable by date or source",
     "history.summaryCount": "Records",
     "history.summaryAvg": "Average",
     "history.summaryBest": "Best",
