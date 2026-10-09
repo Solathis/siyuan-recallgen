@@ -93,6 +93,17 @@
     --ring: var(--b3-theme-primary);
 
     /*
+     * 图表配色（shadcn 的 chart 组件按 --chart-N 取色）。
+     * 原样映射到本项目的语义令牌，这样图表跟着思源主题走，
+     * 不需要为明暗各写一套（--b3-* 自己会变）。
+     */
+    --chart-1: var(--rg-accent);
+    --chart-2: var(--success);
+    --chart-3: var(--warning);
+    --chart-4: var(--destructive);
+    --chart-5: var(--primary);
+
+    /*
      * 圆角刻度全部由思源的圆角变量派生。
      *
      * 注意：bare `rounded` 在 Tailwind 里是写死的 .25rem，不跟随主题，
@@ -178,6 +189,13 @@
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
+
+    /* 图表配色令牌：注册后 fill-chart-1 / stroke-chart-2 / text-chart-3 等才可用 */
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
 
     /* 自有强调色：注册后 bg-rg-accent / text-rg-accent / border-rg-accent-line 等才可用 */
     --color-rg-accent: var(--rg-accent);

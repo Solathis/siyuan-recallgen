@@ -1,5 +1,5 @@
 <script module lang="ts">
-    /** 可聚焦的格子：index 是 DOM 顺序下标，col/row 是网格坐标 */
+    /** 可聚焦的格子：index 是网格坐标算出的下标，col/row 是网格坐标 */
     export interface FocusCell {
         index: number;
         col: number;
@@ -9,7 +9,7 @@
     /**
      * 键盘漫游的目标格子。
      *
-     * 只在「有日期的格子」集合内移动：窗口前后有补位格（渲染成 span、不可聚焦），
+     * 只在「有日期的格子」集合内移动：窗口首尾可能有补位格（不可聚焦），
      * 按几何位置直接加减会让焦点落到不存在的元素上，表现为按键没反应。
      */
     export function nextFocusCell(
@@ -40,12 +40,11 @@
                 }
                 return null;
             case "ArrowRight":
-                for (let c = from.col + 1; ; c++) {
+                for (let c = from.col + 1; c <= 53; c++) {
                     const hit = at(c, from.row);
                     if (hit) return hit;
-                    // 右侧已无列可找
-                    if (c > cells[cells.length - 1].col) return null;
                 }
+                return null;
             case "Home":
                 return cells[0];
             case "End":
@@ -57,14 +56,19 @@
 </script>
 
 <script lang="ts">
-    import { cn } from "@/lib/utils";
+    import { Calendar, Chart, Layer, Rect, Text } from "layerchart";
+
+    import { ChartContainer, type ChartConfig } from "@/lib/components/ui/chart";
     import * as Select from "@/lib/components/ui/select";
-    import { Button } from "@/lib/components/ui/button";
-    import { HEATMAP_WEEKS, rangeYears, startOfDay, windowBounds, type HeatmapRange } from "./heatmap-range";
+    import { cn } from "@/lib/utils";
     import { t } from "../i18n";
-    import { createClock } from "./clock.svelte";
-    import { isSafeCssColor } from "@/types/quiz";
-    import type { ScoreIndexEntry, HeatmapConfig as HMConfig } from "@/types/quiz";
+    import { isSafeCssColor, type HeatmapConfig, type ScoreIndexEntry } from "@/types/quiz";
+    import { rangeYears, startOfDay, windowBounds, type HeatmapRange } from "./heatmap-range";
+
+    type HMConfig = HeatmapConfig;
+
+    /** 一天一格 */
+    type Day = { date: Date; score: number | null; count: number };
 
     let {
         records = [],
@@ -82,216 +86,161 @@
         onDayClick?: (date: string) => void;
     } = $props();
 
-    /*
-     * 单元格边长不在这里写死：由 .rg-heatmap 里的 --rg-heat-cell 按容器宽度算，
-     * 宽面板刚好铺满、窄面板到下限后交给外层横向滚动。见 app.css。
-     */
-    type Cell = { date: string; score: number | null; count: number };
+    const DAY_MS = 86_400_000;
 
-    const weekdayLabels = $derived(
-        lang === "zh" ? ["一", "", "三", "", "五", "", "日"] : ["Mon", "", "Wed", "", "Fri", "", "Sun"]
-    );
+    const today = startOfDay(new Date());
+    const years = $derived(rangeYears(records, today));
+    let range = $state<HeatmapRange>("recent");
 
-    /** 月份标签跟随输出语言，不再硬编码中文月份 */
-    const monthFormatter = $derived(new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "en", { month: "short" }));
+    function onRangeChange(value: string): void {
+        range = value === "recent" ? "recent" : Number(value);
+    }
 
     function fmtDay(d: Date): string {
         const p = (n: number) => String(n).padStart(2, "0");
         return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
     }
 
-    function fmtTip(cell: Cell): string {
-        if (cell.score === null) return `${cell.date} · ${t("heatmap.noRecord")}`;
-        return t("heatmap.scoreTip", cell.date, String(cell.score), String(cell.count));
-    }
-
-    function aggregate(recs: ScoreIndexEntry[], metric: "max" | "avg") {
-        const m = new Map<string, { scores: number[]; count: number }>();
-        for (const r of recs) {
-            const key = fmtDay(new Date(r.timestamp));
-            const pct = r.maxScore > 0 ? (r.totalScore / r.maxScore) * 100 : 0;
-            const e = m.get(key) ?? { scores: [], count: 0 };
-            e.scores.push(pct);
-            e.count++;
-            m.set(key, e);
+    /** 按天聚合得分：配置里选「最高分」还是「平均分」 */
+    const byDay = $derived.by(() => {
+        const map = new Map<string, number[]>();
+        const scoped =
+            range === "recent" ? records : records.filter((r) => new Date(r.timestamp).getFullYear() === range);
+        for (const record of scoped) {
+            const key = fmtDay(new Date(record.timestamp));
+            const percent = record.maxScore > 0 ? (record.totalScore / record.maxScore) * 100 : 0;
+            const list = map.get(key);
+            if (list) list.push(percent);
+            else map.set(key, [percent]);
         }
-        const out = new Map<string, { score: number; count: number }>();
-        for (const [k, v] of m) {
-            const score =
-                metric === "max" ? Math.max(...v.scores) : v.scores.reduce((a, b) => a + b, 0) / v.scores.length;
-            out.set(k, { score: Math.round(score), count: v.count });
+        return map;
+    });
+
+    const bounds = $derived(windowBounds(range, today));
+    const startMs = $derived(startOfDay(bounds.start).getTime());
+
+    /** 窗口内每一天（含无记录的日子），顺序即日历顺序 */
+    const days = $derived.by<Day[]>(() => {
+        const out: Day[] = [];
+        const cursor = new Date(bounds.start);
+        while (cursor <= bounds.end) {
+            const scores = byDay.get(fmtDay(cursor)) ?? [];
+            out.push({
+                date: new Date(cursor),
+                score:
+                    scores.length === 0
+                        ? null
+                        : config.metric === "max"
+                          ? Math.max(...scores)
+                          : scores.reduce((a, b) => a + b, 0) / scores.length,
+                count: scores.length,
+            });
+            cursor.setDate(cursor.getDate() + 1);
         }
-        return out;
-    }
-
-    /**
-     * 今天的零点。
-     * 面板可能被长期打开（思源不重启），若只算一次，跨过午夜后
-     * 「最近一年」的窗口会一直停在昨天，因此跟随共享时钟推进。
-     */
-    const clock = createClock();
-    const today = $derived(startOfDay(new Date(clock.now)));
-
-    /** 有记录的自然年 + 今年，倒序；用于范围选择器 */
-    const years = $derived(rangeYears(records, today));
-
-    let range = $state<HeatmapRange>("recent");
-
-    /**
-     * 键盘漫游位置（roving tabindex）。
-     * 一屏三百多个格子若都在 Tab 序列里，键盘用户要按几百次才能走过热力图，
-     * 因此只让一个格子可 Tab 聚焦，格内用方向键移动。
-     */
-    let focusIndex = $state(0);
-    /** 热力图主体容器，供键盘漫游定位格子 */
-    let listEl: HTMLElement | null = $state(null);
-
-    /** 第几列第几行 → 线性下标（与 DOM 顺序一致） */
-    function cellIndex(colIndex: number, rowIndex: number): number {
-        return colIndex * 7 + rowIndex;
-    }
-
-    /**
-     * 真正可聚焦的格子（有日期的）。
-     * 窗口前后的补位格渲染成 span，不在 Tab 序列里，
-     * 因此方向键只能在可聚焦集合内移动，否则会走到没有对应元素的格子上。
-     */
-    const focusableCells = $derived.by(() => {
-        const out: FocusCell[] = [];
-        cols.forEach((column, col) =>
-            column.forEach((cell, row) => {
-                if (cell.date) out.push({ index: cellIndex(col, row), col, row });
-            })
-        );
         return out;
     });
 
-    /** 当前 Tab 停靠的格子必须存在（数据或范围变化后可能要重算） */
-    $effect(() => {
-        const list = focusableCells;
-        if (list.length === 0) return;
-        if (!list.some((cell) => cell.index === focusIndex)) {
-            // 回落到最新的一天：热力图右端是「最近」，比跳到最左更有用
-            focusIndex = list[list.length - 1].index;
-        }
-    });
-
-    /** 方向键在 7 行 × N 列的网格里移动焦点（跳过补位格） */
-    function onCellKeydown(event: KeyboardEvent, colIndex: number, rowIndex: number): void {
-        const target = nextFocusCell(focusableCells, { col: colIndex, row: rowIndex }, event.key);
-        if (!target) return;
-        event.preventDefault();
-        const next = target.index;
-        focusIndex = next;
-        // 焦点跟随：tabindex 更新后再把焦点移到新格子
-        queueMicrotask(() => {
-            listEl?.querySelector<HTMLElement>(`[data-cell-index="${next}"]`)?.focus();
-        });
-    }
-
-    function onRangeChange(v: string) {
-        range = v === "recent" ? "recent" : Number(v);
-        active = null;
-    }
-
-    function buildCols(recs: ScoreIndexEntry[], cfg: HMConfig, r: HeatmapRange): Cell[][] {
-        const byDate = aggregate(recs, cfg.metric);
-        const { start, end } = windowBounds(r, today);
-
-        const out: Cell[][] = [];
-        const cur = new Date(start);
-        let col: Cell[] = [];
-        let guard = 0;
-        while (cur <= end && guard++ < 4000) {
-            // 年初/窗口前的补位格子没有日期，渲染为空占位
-            const inWindow = r === "recent" || cur.getFullYear() === r;
-            const key = inWindow ? fmtDay(cur) : "";
-            const e = key ? byDate.get(key) : undefined;
-            col.push({ date: key, score: e ? e.score : null, count: e ? e.count : 0 });
-            if (col.length === 7) {
-                out.push(col);
-                col = [];
-            }
-            cur.setDate(cur.getDate() + 1);
-        }
-        if (col.length > 0) {
-            while (col.length < 7) col.push({ date: "", score: null, count: 0 });
-            out.push(col);
-        }
-        if (r === "recent") {
-            while (out.length < HEATMAP_WEEKS) {
-                out.push(Array.from({ length: 7 }, () => ({ date: "", score: null, count: 0 })));
-            }
-        }
-        return out;
-    }
-
-    const cols = $derived(buildCols(records, config, range));
-
-    /** 当前范围内的记录数，用于详情行的兜底文案 */
-    const inRange = $derived(
-        range === "recent" ? records : records.filter((r) => new Date(r.timestamp).getFullYear() === range)
-    );
-
-    /**
-     * 用用户配置的色阶取色。
-     * 无记录的格子不再硬编码 #ebedf0（该颜色在暗色主题下与背景冲突），
-     * 返回 null 表示交给 .bg-muted 跟随主题。
-     */
-    /** 色阶按 min 降序，取第一个命中的区间 */
+    /** 按分数落在哪个区间取色；区间按下限从高到低匹配 */
     const rangesDesc = $derived([...(config?.ranges ?? [])].sort((a, b) => b.min - a.min));
+    const rangesAsc = $derived([...(config?.ranges ?? [])].sort((a, b) => a.min - b.min));
 
     function colorFor(score: number | null): string | null {
         if (score === null) return null;
-        // 复用派生值：每个格子都重新排序会让约 371 个格子各排一次
-        for (const r of rangesDesc) {
-            if (score >= r.min) return r.color;
+        for (const entry of rangesDesc) {
+            if (score >= entry.min) return entry.color;
         }
         return null;
     }
 
-    /**
-     * 当前悬停/聚焦的格子。
-     * 原实现用一个 position:absolute + opacity:0 的浮层显示，且没有任何规则把它显示出来，
-     * 等于提示永远不可见；现改为固定在网格上方的详情行，触屏点按也能看到。
-     */
-    let active = $state<Cell | null>(null);
+    const chartConfig = {
+        score: { label: t("heatmap.ariaLabel"), color: "var(--chart-1)" },
+    } satisfies ChartConfig;
 
-    function onEnter(cell: Cell) {
-        if (cell.date) active = cell;
+    /* ── 悬停 / 聚焦详情行 ───────────────────────────────────────── */
+
+    let active = $state<Day | null>(null);
+
+    function fmtTip(day: Day): string {
+        if (day.score === null) return `${fmtDay(day.date)} · ${t("heatmap.noRecord")}`;
+        return t("heatmap.scoreTip", fmtDay(day.date), String(Math.round(day.score)), String(day.count));
     }
-    function onLeave() {
-        active = null;
+
+    /* ── 键盘漫游（roving tabindex）──────────────────────────────── */
+
+    /**
+     * 网格坐标由日期算，不依赖渲染尺寸。
+     *
+     * 行高是图表库按容器尺寸算出来的，jsdom 下容器为 0 会让一切尺寸为 0；
+     * 若用像素位置反推行列，测试环境里会拿到 NaN，可聚焦的那一格也就找不到了。
+     * row 取 getDay()（0=周日），与图表库 y = getDay() * 行高 的口径一致。
+     */
+    function colOf(day: Day): number {
+        return Math.floor((startOfDay(day.date).getTime() - startMs) / (7 * DAY_MS));
     }
+
+    function indexOf(day: Day, col: number): number {
+        return col * 7 + day.date.getDay();
+    }
+
+    let focusedRaw = $state(-1);
+
+    const focusCells = $derived(
+        days.map((day) => {
+            const col = colOf(day);
+            return { index: indexOf(day, col), col, row: day.date.getDay() };
+        })
+    );
+
+    /**
+     * 当前可聚焦格的下标。
+     * 下标由「周列 × 7 + 星期几」算出，首格不一定是 0（窗口首日是周一，下标就是 1），
+     * 直接拿 0 当初值会出现「没有一格 tabindex=0」，键盘根本进不来；
+     * 切换统计范围后整张网格的下标也会变，所以这里统一收口成「不在集合里就回到首格」。
+     */
+    const focused = $derived(
+        focusCells.some((cell) => cell.index === focusedRaw) ? focusedRaw : (focusCells[0]?.index ?? -1)
+    );
+
+    /** 键盘移动后要把 DOM 焦点移过去，用元素引用直接对应下标 */
+    let cellRefs = new Map<number, SVGRectElement>();
+
+    function onCellKeydown(event: KeyboardEvent, day: Day): void {
+        const next = nextFocusCell(focusCells, { col: colOf(day), row: day.date.getDay() }, event.key);
+        if (!next) return;
+        event.preventDefault();
+        focusedRaw = next.index;
+        cellRefs.get(next.index)?.focus();
+    }
+
+    /** 月份标签：每月第一格上方标一次，格式跟随界面语言 */
+    const monthFormatter = $derived(new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "en", { month: "short" }));
 
     const monthLabels = $derived.by(() => {
+        const out: { col: number; label: string }[] = [];
         let prevMonth = -1;
-        return cols.map((col) => {
-            const first = col.find((c) => c.date);
-            if (!first) return "";
-            const d = new Date(`${first.date}T00:00:00`);
-            const m = d.getMonth();
-            if (m !== prevMonth) {
-                prevMonth = m;
-                return monthFormatter.format(d);
+        for (const day of days) {
+            const month = day.date.getMonth();
+            if (month !== prevMonth) {
+                prevMonth = month;
+                out.push({ col: colOf(day), label: monthFormatter.format(day.date) });
             }
-            return "";
-        });
+        }
+        return out;
     });
 
-    const sortedRanges = $derived([...(config?.ranges ?? [])].sort((a, b) => a.min - b.min));
+    const weekdayLabels = $derived(
+        lang === "zh" ? ["日", "一", "二", "三", "四", "五", "六"] : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    );
 </script>
 
-<div class="rg-heatmap flex w-full flex-col gap-2" style="--rg-heat-cols: {cols.length}">
+<div class="flex w-full flex-col gap-2">
     <!-- 详情行始终占位，避免悬停时布局跳动 -->
     <div class="flex items-center gap-2">
         <div class="text-muted-foreground min-h-5 flex-1 text-xs" aria-live="polite">
             {#if active}
                 {fmtTip(active)}
-            {:else if inRange.length > 0}
-                {t("heatmap.totalRecords", String(inRange.length))}
             {:else}
-                &nbsp;
+                {t("heatmap.totalRecords", String(records.length))}
             {/if}
         </div>
         {#if showRangePicker}
@@ -309,104 +258,89 @@
         {/if}
     </div>
 
-    <div class="flex gap-1">
-        <!--
-            星期标签。
-            顶部必须补一个与右侧月份行等高的占位：月份行在滚动容器内部，
-            而这一列在它外面，不补占位整列标签会整体上移一行，
-            于是「三」实际指向周二那一行（实测偏差 18px = 月份行高度）。
-        -->
-        <div class="text-3xs leading-none text-muted-foreground w-5 shrink-0">
-            <!-- 结构与右侧月份行逐字相同，高度才能由同一套类保证一致 -->
-            <div class="flex gap-1 pb-1 text-3xs leading-none" aria-hidden="true">
-                <span class="w-full">&nbsp;</span>
-            </div>
-            <!--
-                行距必须与格子列的 gap-1 同源（0.25rem）。原先写死 margin-bottom: 4px，
-                而格子用的是 rem 单位（插件基准字号下是 3.25px），每行差 0.75px，
-                七行下来最后一行的「日」会偏出 5px。
-            -->
-            {#each weekdayLabels as label, i (i)}
-                <div class="mb-1 flex items-center" style="height: var(--rg-heat-cell)">{label}</div>
-            {/each}
-        </div>
+    <!--
+        日历网格用图表库的 Calendar：周列位置、月份标签、单元格边长都由它算，
+        本组件只负责每天的颜色与交互。
+        窄容器交给横向滚动兜底（给内容一个最小宽度，格子才不会被压成一条线）。
+    -->
+    <div class="min-w-0 overflow-x-auto">
+        <div class="min-w-3xl">
+            <ChartContainer config={chartConfig} class="aspect-auto h-40 w-full">
+                <Chart data={days} x="date" padding={{ top: 18, right: 4, bottom: 4, left: 24 }}>
+                    <!-- Layer 是必需的中间层：Calendar 要 LayerContext 才拿得到比例尺 -->
+                    <Layer>
+                        <Calendar start={bounds.start} end={bounds.end} monthLabel={false}>
+                            {#snippet children({ cells, cellSize })}
+                                <!-- 月份标签自己画：图表库默认是英文缩写（"Oct"），中文界面要「10月」 -->
+                                {#each monthLabels as month (month.col)}
+                                    <Text
+                                        value={month.label}
+                                        x={month.col * cellSize[0]}
+                                        y={-6}
+                                        verticalAnchor="end"
+                                        class="fill-muted-foreground text-3xs"
+                                    />
+                                {/each}
 
-        <!-- 热力图主体：窄屏横向滚动 -->
-        <div class="min-w-0 flex-1 overflow-x-auto" role="group" aria-label={t("heatmap.ariaLabel")} bind:this={listEl}>
-            <div class="w-max">
-                <div class="flex gap-1 pb-1 text-3xs leading-none text-muted-foreground">
-                    <!--
-                        标签盒宽只有一格（CELL），必须禁止换行：否则「10月」会在
-                        数字与「月」之间折成两行（CJK 可在任意字符间断行），
-                        整行因此从 11px 变成 20px，把左侧星期标签挤得整体上移一行。
-                        溢出到右侧空白列是预期的（月份之间隔约 4 列）。
-                    -->
-                    {#each monthLabels as label, i (i)}
-                        <span class="shrink-0 whitespace-nowrap" style="width: var(--rg-heat-cell)">{label}</span>
-                    {/each}
-                </div>
-                <div class="flex gap-1">
-                    {#each cols as col, colIndex (colIndex)}
-                        <div class="flex flex-col gap-1">
-                            {#each col as cell, rowIndex (rowIndex)}
-                                {#if cell.date}
-                                    {@const bg = colorFor(cell.score)}
-                                    {@const safeBg = isSafeCssColor(bg) ? bg : null}
-                                    <!--
-                                        格子做成 Button variant="ghost" 并覆盖成纯色方块：
-                                        高度、内边距、边框全部由 class 与内联尺寸压掉，
-                                        可访问性交给 Button 与 aria-label / roving tabindex。
-                                    -->
-                                    <Button
-                                        variant="ghost"
-                                        data-cell-index={cellIndex(colIndex, rowIndex)}
-                                        tabindex={cellIndex(colIndex, rowIndex) === focusIndex ? 0 : -1}
-                                        class={cn(
-                                            "hover:bg-transparent size-auto rounded-sm border-0 p-0 transition-transform hover:scale-125",
-                                            bg === null && "bg-muted"
-                                        )}
-                                        style="width: var(--rg-heat-cell); height: var(--rg-heat-cell);{safeBg
-                                            ? ` background:${safeBg};`
-                                            : ''}"
-                                        title={fmtTip(cell)}
-                                        aria-label={fmtTip(cell)}
-                                        onmouseenter={() => onEnter(cell)}
-                                        onmouseleave={onLeave}
+                                <!-- 星期标签：图表库只画月份，星期要自己补；放在左侧留白里，由行高定位 -->
+                                {#each weekdayLabels as label, row (row)}
+                                    <Text
+                                        value={row % 2 === 0 ? label : ""}
+                                        x={-6}
+                                        y={row * cellSize[1] + cellSize[1] / 2}
+                                        textAnchor="end"
+                                        verticalAnchor="middle"
+                                        class="fill-muted-foreground text-3xs"
+                                    />
+                                {/each}
+
+                                {#each cells as cell (fmtDay(cell.data.date))}
+                                    {@const day = cell.data as Day}
+                                    {@const col = colOf(day)}
+                                    {@const index = indexOf(day, col)}
+                                    {@const color = colorFor(day.score)}
+                                    {@const safe = color && isSafeCssColor(color) ? color : null}
+                                    <Rect
+                                        x={cell.x}
+                                        y={cell.y}
+                                        width={cellSize[0]}
+                                        height={cellSize[1]}
+                                        rx={2}
+                                        data-cell-index={index}
+                                        tabindex={index === focused ? 0 : -1}
+                                        class={cn("rg-heat-cell", safe === null && "fill-muted")}
+                                        fill={safe ?? "var(--color-muted)"}
+                                        aria-label={fmtTip(day)}
+                                        onmouseenter={() => (active = day)}
+                                        onmouseleave={() => (active = null)}
                                         onfocus={() => {
-                                            focusIndex = cellIndex(colIndex, rowIndex);
-                                            onEnter(cell);
+                                            focusedRaw = index;
+                                            active = day;
                                         }}
-                                        onblur={onLeave}
+                                        onblur={() => (active = null)}
                                         onclick={() => {
-                                            onEnter(cell);
-                                            // 只在当天有记录时才跳转：空的日期点进去是一份空列表，
-                                            // 用户还得再清一次筛选（与 onDayClick 的说明一致）
-                                            if (onDayClick && cell.date && cell.count > 0) onDayClick(cell.date);
+                                            active = day;
+                                            // 只在当天有记录时才跳转：空的日期点进去是一份空列表
+                                            if (onDayClick && day.count > 0) onDayClick(fmtDay(day.date));
                                         }}
-                                        onkeydown={(e) => onCellKeydown(e, colIndex, rowIndex)}
-                                    ></Button>
-                                {:else}
-                                    <span
-                                        class="block"
-                                        style="width: var(--rg-heat-cell); height: var(--rg-heat-cell)"
-                                        aria-hidden="true"
-                                    ></span>
-                                {/if}
-                            {/each}
-                        </div>
-                    {/each}
-                </div>
-            </div>
+                                        onkeydown={(event: KeyboardEvent) => onCellKeydown(event, day)}
+                                    ></Rect>
+                                {/each}
+                            {/snippet}
+                        </Calendar>
+                    </Layer>
+                </Chart>
+            </ChartContainer>
         </div>
     </div>
 
-    <div class="flex items-center gap-1 text-2xs text-muted-foreground">
+    <div class="text-muted-foreground flex items-center gap-1 text-2xs">
         <span>{t("heatmap.less")}</span>
         <span class="bg-muted border-border inline-block size-3 rounded-sm border"></span>
-        {#each sortedRanges as r, i (i)}
+        {#each rangesAsc as entry, i (i)}
             <span
                 class="border-border inline-block size-3 rounded-sm border"
-                style="background:{isSafeCssColor(r.color) ? r.color : 'transparent'}"
+                style="background:{isSafeCssColor(entry.color) ? entry.color : 'transparent'}"
             ></span>
         {/each}
         <span>{t("heatmap.more")}</span>

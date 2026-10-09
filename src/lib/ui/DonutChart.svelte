@@ -1,72 +1,67 @@
 <script lang="ts">
-    import { donutArcs } from "@/lib/quiz/chart-geometry";
+    import { PieChart } from "layerchart";
+
+    import { ChartContainer, ChartTooltip, type ChartConfig } from "@/lib/components/ui/chart";
+    import * as Item from "@/lib/components/ui/item";
 
     /**
-     * 环形图：用 SVG 弧段绘制，配色由传入的 CSS 变量决定。
+     * 环形图。
      *
-     * 颜色走 CSS 变量而不是 Tailwind 类，是因为 Tailwind 只能生成源码里字面出现过的类，
-     * 动态拼出的 `fill-x` / `bg-x` 不会被生成（此处需要同一颜色同时用于填充与图例色块）。
+     * 改用 shadcn 的 Chart + layerchart 的 PieChart：弧段路径、内外半径、留白
+     * 与补间动画都由图表库算，本组件只把切片整理成它的数据形状。
+     * 图例用 shadcn 的 Item 排版（色块 + 标签 + 数值），不再手写 ul/li。
      */
     let {
         slices,
-        size = 180,
-        thickness = 22,
         ariaLabel = "",
     }: {
-        /** note 是可选的补充说明（例如样本量），显示在数值右侧的括号里 */
+        /** note 是可选的补充说明（例如样本量），显示在数值右侧 */
         slices: { label: string; value: number; color: string; note?: string }[];
-        size?: number;
-        thickness?: number;
         ariaLabel?: string;
     } = $props();
 
-    // 尺寸来自 props，必须用派生值，写成普通常量在 props 变化时不会更新
-    const center = $derived(size / 2);
-    const outer = $derived(center - 2);
-    const inner = $derived(outer - thickness);
+    /** 只保留正值切片：0 值画不出弧段，也不该出现在图例里 */
+    const visible = $derived(slices.filter((slice) => Number.isFinite(slice.value) && slice.value > 0));
 
-    /** 只保留正值切片：与 donutArcs 的过滤保持一致，下标才能对上 */
-    const nonZero = $derived(slices.filter((s) => Number.isFinite(s.value) && s.value > 0));
-    const arcs = $derived(
-        donutArcs(
-            slices.map((s) => s.value),
-            { cx: center, cy: center, inner, outer }
-        )
+    const data = $derived(
+        visible.map((slice, index) => ({
+            name: slice.label,
+            value: slice.value,
+            fill: slice.color || `var(--chart-${(index % 5) + 1})`,
+        }))
+    );
+
+    const config = $derived(
+        Object.fromEntries(data.map((item) => [item.name, { label: item.name, color: item.fill }])) as ChartConfig
     );
 </script>
 
-<div class="flex flex-wrap items-center gap-4">
-    <svg viewBox="0 0 {size} {size}" style="width: {size}px; height: {size}px" role="img" aria-label={ariaLabel}>
-        {#if arcs.length === 0}
-            <!-- 无数据时画一个空心环，避免整块区域空着 -->
-            <circle
-                cx={center}
-                cy={center}
-                r={(outer + inner) / 2}
-                stroke-width={thickness}
-                fill="none"
-                style="stroke: var(--color-muted)"
-            />
-        {:else}
-            {#each arcs as arc, i (i)}
-                {@const slice = nonZero[i]}
-                <path d={arc.path} style="fill: {slice.color}">
-                    <title>{slice.label} · {slice.value.toFixed(0)}%</title>
-                </path>
-            {/each}
-        {/if}
-    </svg>
+<ChartContainer {config} class="aspect-square h-44 w-full" aria-label={ariaLabel}>
+    {#if data.length === 0}
+        <!-- 无数据时留一圈空环，避免整块区域空着 -->
+        <div class="border-border m-auto size-32 rounded-full border-8" aria-hidden="true"></div>
+    {:else}
+        <PieChart {data} key="name" value="value" c="fill" innerRadius={52} padding={2}>
+            {#snippet tooltip()}
+                <ChartTooltip hideLabel />
+            {/snippet}
+        </PieChart>
+    {/if}
+</ChartContainer>
 
-    <!-- 图例：同时承担「文本等价物」的职责，读屏与色盲用户都能读取数值 -->
-    <ul class="flex flex-col gap-1 text-xs">
-        {#each slices as slice (slice.label)}
-            <li class="flex items-center gap-2">
-                <span class="size-2.5 shrink-0 rounded-full" style="background: {slice.color}"></span>
-                <span>{slice.label}</span>
-                <span class="text-muted-foreground">
-                    {slice.value.toFixed(0)}%{#if slice.note}（{slice.note}）{/if}
-                </span>
-            </li>
-        {/each}
-    </ul>
+<!-- 图例：同时承担「文本等价物」的职责，读屏与色盲用户都能读取数值 -->
+<div class="mt-2 flex flex-col">
+    {#each visible as slice (slice.label)}
+        <Item.Root size="xs">
+            <Item.Media variant="icon" class="bg-transparent">
+                <span class="size-2.5 rounded-full" style="background: {slice.color}"></span>
+            </Item.Media>
+            <Item.Content>
+                <Item.Title class="text-xs">{slice.label}</Item.Title>
+            </Item.Content>
+            <Item.Actions class="text-muted-foreground text-xs">
+                {slice.value.toFixed(0)}%{#if slice.note}<span class="text-2xs">（{slice.note}）</span>{/if}
+            </Item.Actions>
+        </Item.Root>
+    {/each}
 </div>
