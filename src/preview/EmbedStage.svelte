@@ -7,6 +7,7 @@
      * 容器查询改造完成后这里同样受益——改宽度就是在改它的容器尺寸。
      */
     import { onMount, untrack } from "svelte";
+    import * as Card from "@/lib/components/ui/card";
     import BankPanel from "@/lib/ui/BankPanel.svelte";
     import FlashcardPanel from "@/lib/ui/FlashcardPanel.svelte";
     import HistoryPanel from "@/lib/ui/HistoryPanel.svelte";
@@ -248,9 +249,16 @@
         </div>
     {/if}
 
-    <div class="rgv-toasts">
+    <!--
+        提示条用 shadcn 的 Card 呈现（思源的 showMessage 在浏览器里没有去处）。
+        这一层必须带 .rg-scope：app.css 把重置限定在该类内，否则 Card 的边框不成立；
+        bg-transparent 用来盖掉 .rg-scope 自带的底色（工具类在后，能压过基础层）。
+    -->
+    <div class="rg-scope pointer-events-none fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2 bg-transparent">
         {#each toasts as toast (toast.id)}
-            <div class="rgv-toast">{toast.msg}</div>
+            <Card.Root class="pointer-events-auto shadow-rg-md">
+                <Card.Content class="py-2 text-xs">{toast.msg}</Card.Content>
+            </Card.Root>
         {/each}
     </div>
 </div>
