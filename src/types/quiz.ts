@@ -29,10 +29,29 @@ export function isSafeCssColor(value: unknown): value is string {
     return /^(#[0-9a-f]{3,8}|rgba?\(\s*[\d.,%\s/]+\)|hsla?\(\s*[\d.,%\s/deg]+\)|var\(--[a-z0-9-]+\))$/i.test(color);
 }
 
-export function hasAnswer(answer: UserAnswer | undefined): boolean {
+/**
+ * 这道题是否真的作答过。
+ *
+ * 空字符串与空数组算未作答：用户在输入框里打了字又清空，会留下一个「有值但为空」
+ * 的条目，按「有没有键」判断会让同一道题在不同页面分别显示已答 / 未答 / 错误。
+ * 判分器（grader.ts）与统计页都以这个函数为准。
+ *
+ * 谓词形式（`answer is UserAnswer`）是为了让调用方在判断之后能直接使用
+ * answer.value，不必再写一遍非空断言。
+ */
+export function hasAnswer(answer: UserAnswer | undefined): answer is UserAnswer {
     if (!answer) return false;
     if (typeof answer.value === "string") return answer.value.trim().length > 0;
-    if (Array.isArray(answer.value)) return answer.value.length > 0;
+    /*
+     * 数组要看内容而不是长度：填空题的空是按题目的空数生成的，
+     * 用户逐个清空后数组长度不变（还是 blankCount 个空串），
+     * 只判长度会让「全部清空」仍算已作答。
+     * 数字/布尔元素一律算有值——多选的选项下标 0 是合法值，
+     * 不能当成「空」。
+     */
+    if (Array.isArray(answer.value)) {
+        return answer.value.some((item) => (typeof item === "string" ? item.trim().length > 0 : true));
+    }
     return true;
 }
 
