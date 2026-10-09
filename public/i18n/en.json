@@ -192,7 +192,7 @@
     "err.generic.hint": "Please check configuration and retry",
     "err.retryGrade": "Retry Grading",
     "result.score": "Score",
-    "result.accuracy": "Accuracy",
+    "result.passRate": "Pass rate",
     "result.time": "Time",
     "result.tabQuestions": "Questions",
     "result.all": "All({0})",
