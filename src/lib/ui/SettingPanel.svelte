@@ -121,33 +121,38 @@
         -->
         <div class="min-h-0 flex-1 overflow-y-auto p-4">
             <div class="flex w-full max-w-5xl flex-col @container">
-                {#if active === "ai"}
-                    <SettingsAI config={localConfig} {onTestConnection} onsave={handleSave} />
-                {:else if active === "roles"}
-                    <SettingsAIRoles config={localConfig} onsave={handleSave} />
-                {:else if active === "general"}
-                    <SettingsGeneral config={localConfig} onsave={handleSave} {service} />
-                {:else if active === "prompts"}
-                    <SettingsPrompts config={localConfig} onsave={handleSave} />
-                {:else if active === "heatmap"}
-                    <SettingsHeatmap config={localConfig} {scores} onsave={handleSave} />
-                {:else if active === "data"}
-                    <SettingsData
-                        {onClearScores}
-                        {onClearProgress}
-                        {onClearBank}
-                        {onExportBank}
-                        {onImportBank}
-                        config={localConfig}
-                        onImportConfig={handleImportConfig}
-                        {onExportScores}
-                        {onImportScores}
-                        existingScoreIds={scores.map((score) => score.id)}
-                        scoreCount={scores.length}
-                        bankSize={bank.total}
-                        bankDue={bank.due}
-                    />
-                {/if}
+                <!-- 按分区做 key：换分区时内容重新入场，切换有反馈 -->
+                {#key active}
+                    <div class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
+                        {#if active === "ai"}
+                            <SettingsAI config={localConfig} {onTestConnection} onsave={handleSave} />
+                        {:else if active === "roles"}
+                            <SettingsAIRoles config={localConfig} onsave={handleSave} />
+                        {:else if active === "general"}
+                            <SettingsGeneral config={localConfig} onsave={handleSave} {service} />
+                        {:else if active === "prompts"}
+                            <SettingsPrompts config={localConfig} onsave={handleSave} />
+                        {:else if active === "heatmap"}
+                            <SettingsHeatmap config={localConfig} {scores} onsave={handleSave} />
+                        {:else if active === "data"}
+                            <SettingsData
+                                {onClearScores}
+                                {onClearProgress}
+                                {onClearBank}
+                                {onExportBank}
+                                {onImportBank}
+                                config={localConfig}
+                                onImportConfig={handleImportConfig}
+                                {onExportScores}
+                                {onImportScores}
+                                existingScoreIds={scores.map((score) => score.id)}
+                                scoreCount={scores.length}
+                                bankSize={bank.total}
+                                bankDue={bank.due}
+                            />
+                        {/if}
+                    </div>
+                {/key}
             </div>
         </div>
     </div>

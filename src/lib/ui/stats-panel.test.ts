@@ -67,7 +67,8 @@ describe("统计面板", () => {
             expect(text, `缺少概览卡「${label}」`).toContain(label);
         }
         // 5 张卡必须由同一个网格承载，否则第 5 张会单独占一行、右侧空三格
-        const grid = [...host.querySelectorAll("div")].find((d) => d.className.toString().includes("grid-cols-5"));
+        // 容器现在是 <dl>（概览是「名称 + 数值」的定义列表，语义比 div 准确）
+        const grid = [...host.querySelectorAll("dl, div")].find((d) => d.className.toString().includes("grid-cols-5"));
         expect(grid, "没找到概览网格").toBeTruthy();
         expect([...grid!.children]).toHaveLength(5);
     });

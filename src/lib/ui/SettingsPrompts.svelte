@@ -2,6 +2,7 @@
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import { Textarea } from "@/lib/components/ui/textarea";
+    import { Field, FieldLegend } from "@/lib/components/ui/field";
     import { t } from "../i18n";
     import { getDefaultPrompts, type RecallGenConfig } from "@/types/config";
 
@@ -41,9 +42,9 @@
     </Card.Header>
     <Card.Content class="flex flex-col gap-4">
         {#each PROMPT_KEYS as key (key)}
-            <div class="flex flex-col gap-1.5">
+            <Field>
                 <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium">{labelOf(key)}</span>
+                    <FieldLegend variant="label">{labelOf(key)}</FieldLegend>
                     <Button variant="ghost" size="sm" onclick={() => resetPrompt(key)}>
                         {t("settings.prompts.reset")}
                     </Button>
@@ -54,7 +55,7 @@
                     value={config.prompts[key]}
                     oninput={(e) => patchPrompt(key, e.currentTarget.value)}
                 />
-            </div>
+            </Field>
         {/each}
     </Card.Content>
 </Card.Root>

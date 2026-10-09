@@ -356,7 +356,11 @@
                 <p class="text-muted-foreground py-6 text-center text-xs">{t("result.filterEmpty")}</p>
             {:else}
                 <!-- 题号条只显示筛出来的题；点一下切换下方详情 -->
-                <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label={t("result.tabQuestions")}>
+                <div
+                    class="animate-in fade-in-0 flex flex-wrap items-center gap-1.5 duration-150"
+                    role="group"
+                    aria-label={t("result.tabQuestions")}
+                >
                     {#each visible as item (item.result.questionId)}
                         <Button
                             variant="outline"
@@ -384,89 +388,96 @@
                 </div>
 
                 {#if activeQuestion && activeResult}
-                    <Card.Root>
-                        <Card.Header>
-                            <div class="flex flex-wrap items-center gap-2">
-                                <Badge variant="outline">{t(`type.${activeQuestion.type}`)}</Badge>
-                                <Badge variant="secondary">{t(`diff.${activeQuestion.difficulty}`)}</Badge>
-                                {#each activeQuestion.tags ?? [] as tag (tag)}
-                                    <Badge variant="outline">{tag}</Badge>
-                                {/each}
-                                <span
-                                    class={cn(
-                                        "ml-auto text-sm font-bold tabular-nums",
-                                        scoreTone((activeResult.score / (activeResult.maxScore || 1)) * 100)
-                                    )}
-                                >
-                                    {activeResult.score.toFixed(0)}/{activeResult.maxScore}
-                                </span>
-                            </div>
-                        </Card.Header>
-                        <Card.Content class="flex flex-col gap-3 text-sm">
-                            <div class="rg-markdown">{@html renderMarkdownLatex(activeQuestion.question)}</div>
+                    <!-- 按题号做 key：切换题目时整卡重新入场，让人看得出内容换了 -->
+                    {#key activeEntry?.index}
+                        <Card.Root class="animate-in fade-in-0 slide-in-from-top-1 duration-150">
+                            <Card.Header>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <Badge variant="outline">{t(`type.${activeQuestion.type}`)}</Badge>
+                                    <Badge variant="secondary">{t(`diff.${activeQuestion.difficulty}`)}</Badge>
+                                    {#each activeQuestion.tags ?? [] as tag (tag)}
+                                        <Badge variant="outline">{tag}</Badge>
+                                    {/each}
+                                    <span
+                                        class={cn(
+                                            "ml-auto text-sm font-bold tabular-nums",
+                                            scoreTone((activeResult.score / (activeResult.maxScore || 1)) * 100)
+                                        )}
+                                    >
+                                        {activeResult.score.toFixed(0)}/{activeResult.maxScore}
+                                    </span>
+                                </div>
+                            </Card.Header>
+                            <Card.Content class="flex flex-col gap-3 text-sm">
+                                <div class="rg-markdown">{@html renderMarkdownLatex(activeQuestion.question)}</div>
 
-                            {#if activeQuestion.type === "single_choice" || activeQuestion.type === "multiple_choice"}
-                                <div class="flex flex-col gap-1">
-                                    {#each activeQuestion.options as option, j (j)}
-                                        <!--
+                                {#if activeQuestion.type === "single_choice" || activeQuestion.type === "multiple_choice"}
+                                    <div class="flex flex-col gap-1">
+                                        {#each activeQuestion.options as option, j (j)}
+                                            <!--
                                             选项行原本把序号写成一个 inline-block 的 span，
                                             里面的 <p> 是块级元素，窄屏下序号就被挤到单独一行。
                                             改成 flex：序号固定宽、正文占剩余宽度，任何宽度都不折。
                                         -->
-                                        <div
-                                            class={cn(
-                                                "flex items-start gap-2 rounded-md px-2.5 py-1.5",
-                                                isCorrectOption(activeQuestion, j) && "bg-success/15"
-                                            )}
-                                        >
-                                            <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs">
-                                                {String.fromCharCode(65 + j)}
-                                            </span>
                                             <div
                                                 class={cn(
-                                                    "rg-markdown min-w-0 flex-1",
-                                                    isCorrectOption(activeQuestion, j) && "font-semibold"
+                                                    "flex items-start gap-2 rounded-md px-2.5 py-1.5",
+                                                    isCorrectOption(activeQuestion, j) && "bg-success/15"
                                                 )}
                                             >
-                                                {@html renderMarkdownLatex(option)}
+                                                <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs">
+                                                    {String.fromCharCode(65 + j)}
+                                                </span>
+                                                <div
+                                                    class={cn(
+                                                        "rg-markdown min-w-0 flex-1",
+                                                        isCorrectOption(activeQuestion, j) && "font-semibold"
+                                                    )}
+                                                >
+                                                    {@html renderMarkdownLatex(option)}
+                                                </div>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                {/if}
+
+                                <div class="grid grid-cols-1 gap-2 @xl:grid-cols-2">
+                                    <div>
+                                        <span class="text-muted-foreground text-xs">{t("result.yourAnswer")}</span>
+                                        <div class="rg-markdown">
+                                            {@html renderMarkdownLatex(userText(activeResult))}
+                                        </div>
+                                    </div>
+                                    {#if activeQuestion.type !== "subjective" && activeQuestion.type !== "coding"}
+                                        <div>
+                                            <span class="text-muted-foreground text-xs"
+                                                >{t("result.correctAnswer")}</span
+                                            >
+                                            <div class="rg-markdown">
+                                                {@html renderMarkdownLatex(correctText(activeQuestion))}
                                             </div>
                                         </div>
-                                    {/each}
+                                    {/if}
                                 </div>
-                            {/if}
 
-                            <div class="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-                                <div>
-                                    <span class="text-muted-foreground text-xs">{t("result.yourAnswer")}</span>
-                                    <div class="rg-markdown">{@html renderMarkdownLatex(userText(activeResult))}</div>
-                                </div>
-                                {#if activeQuestion.type !== "subjective" && activeQuestion.type !== "coding"}
-                                    <div>
-                                        <span class="text-muted-foreground text-xs">{t("result.correctAnswer")}</span>
+                                {#if activeQuestion.explanation}
+                                    <div class="border-border border-t pt-2">
+                                        <span class="text-muted-foreground text-xs">{t("result.explanation")}</span>
                                         <div class="rg-markdown">
-                                            {@html renderMarkdownLatex(correctText(activeQuestion))}
+                                            {@html renderMarkdownLatex(activeQuestion.explanation)}
                                         </div>
                                     </div>
                                 {/if}
-                            </div>
 
-                            {#if activeQuestion.explanation}
-                                <div class="border-border border-t pt-2">
-                                    <span class="text-muted-foreground text-xs">{t("result.explanation")}</span>
-                                    <div class="rg-markdown">
-                                        {@html renderMarkdownLatex(activeQuestion.explanation)}
+                                {#if activeResult.comment}
+                                    <div class="border-border border-t pt-2">
+                                        <span class="text-muted-foreground text-xs">{t("result.comment")}</span>
+                                        <div class="rg-markdown">{@html renderMarkdownLatex(activeResult.comment)}</div>
                                     </div>
-                                </div>
-                            {/if}
-
-                            {#if activeResult.comment}
-                                <div class="border-border border-t pt-2">
-                                    <span class="text-muted-foreground text-xs">{t("result.comment")}</span>
-                                    <div class="rg-markdown">{@html renderMarkdownLatex(activeResult.comment)}</div>
-                                </div>
-                            {/if}
-                        </Card.Content>
-                    </Card.Root>
+                                {/if}
+                            </Card.Content>
+                        </Card.Root>
+                    {/key}
                 {:else}
                     <p class="text-muted-foreground py-8 text-center text-sm">{t("result.questionMissing")}</p>
                 {/if}

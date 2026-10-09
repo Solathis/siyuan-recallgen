@@ -163,87 +163,96 @@
                     </Card.Header>
                 </Card.Root>
             {:else if current}
-                <!-- flex-1：卡片吃满剩余高度，短题干也不会在下方留一大片空白 -->
-                <Card.Root class="flex min-h-64 w-full flex-1 flex-col shadow-rg-sm">
-                    <Card.Header class="pb-1">
-                        <Card.Description class="text-2xs">
-                            {t("flash.progress", String(index + 1), String(items.length))}
-                            · {t(`type.${current.question.type}_short`)}
-                            · {t(`diff.${current.question.difficulty}`)}
-                        </Card.Description>
-                    </Card.Header>
-                    <Card.Content class="flex min-h-0 flex-1 flex-col justify-center gap-4 pb-4">
-                        <div class="rg-markdown text-reading mx-auto max-w-prose leading-relaxed">
-                            {@html renderMarkdownLatex(current.question.question)}
-                        </div>
+                <!--
+                    按题目 id 做 key：切到下一张时整卡重新入场。
+                    flex-1 让卡片吃满剩余高度，短题干也不会在下方留一大片空白。
+                -->
+                {#key current.id}
+                    <Card.Root
+                        class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 flex min-h-64 w-full flex-1 flex-col shadow-rg-sm"
+                    >
+                        <Card.Header class="pb-1">
+                            <Card.Description class="text-2xs">
+                                {t("flash.progress", String(index + 1), String(items.length))}
+                                · {t(`type.${current.question.type}_short`)}
+                                · {t(`diff.${current.question.difficulty}`)}
+                            </Card.Description>
+                        </Card.Header>
+                        <Card.Content class="flex min-h-0 flex-1 flex-col justify-center gap-4 pb-4">
+                            <div class="rg-markdown text-reading mx-auto max-w-prose leading-relaxed">
+                                {@html renderMarkdownLatex(current.question.question)}
+                            </div>
 
-                        <!--
+                            <!--
                             选择题必须把选项渲染出来，否则这张卡没法答：
                             只看题干、四个选项一个都看不到，揭晓时又只给一个字母。
                             揭晓后正确项加底色，与下方「答案」互为印证。
                         -->
-                        {#if choiceOptions(current.question)}
-                            <ul class="mx-auto flex w-full max-w-prose flex-col gap-1 text-sm">
-                                {#each choiceOptions(current.question) as option, i (i)}
-                                    {@const isRight = revealed && correctIndices(current.question).includes(i)}
-                                    <li
-                                        class={cn(
-                                            "flex items-start gap-2 rounded-md px-2.5 py-1.5",
-                                            isRight && "bg-success/15 font-semibold"
-                                        )}
-                                    >
-                                        <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs"
-                                            >{optionLetter(i)}</span
+                            {#if choiceOptions(current.question)}
+                                <ul class="mx-auto flex w-full max-w-prose flex-col gap-1 text-sm">
+                                    {#each choiceOptions(current.question) as option, i (i)}
+                                        {@const isRight = revealed && correctIndices(current.question).includes(i)}
+                                        <li
+                                            class={cn(
+                                                "flex items-start gap-2 rounded-md px-2.5 py-1.5",
+                                                isRight && "bg-success/15 font-semibold"
+                                            )}
                                         >
-                                        <div class="rg-markdown min-w-0 flex-1">
-                                            {@html renderMarkdownLatex(option)}
-                                        </div>
-                                    </li>
-                                {/each}
-                            </ul>
-                        {/if}
+                                            <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs"
+                                                >{optionLetter(i)}</span
+                                            >
+                                            <div class="rg-markdown min-w-0 flex-1">
+                                                {@html renderMarkdownLatex(option)}
+                                            </div>
+                                        </li>
+                                    {/each}
+                                </ul>
+                            {/if}
 
-                        <!-- 编程题：初始代码模板必须一起给，否则「在此实现」没有上下文 -->
-                        {#if starterCode(current.question)}
-                            <pre
-                                class="bg-muted mx-auto max-h-40 w-full max-w-prose overflow-auto rounded-md p-3 font-mono text-xs">{starterCode(
-                                    current.question
-                                )}</pre>
-                        {/if}
+                            <!-- 编程题：初始代码模板必须一起给，否则「在此实现」没有上下文 -->
+                            {#if starterCode(current.question)}
+                                <pre
+                                    class="bg-muted mx-auto max-h-40 w-full max-w-prose overflow-auto rounded-md p-3 font-mono text-xs">{starterCode(
+                                        current.question
+                                    )}</pre>
+                            {/if}
 
-                        {#if !revealed}
-                            <div class="mx-auto w-full max-w-prose">
-                                <Button onclick={reveal} class="w-full" size="lg">
-                                    {t("flash.showAnswer")}
-                                </Button>
-                                <p class="text-muted-foreground mt-2 text-center text-2xs">{t("flash.revealHint")}</p>
-                            </div>
-                        {:else}
-                            <div
-                                class="border-border bg-muted/30 animate-in fade-in-0 mx-auto w-full max-w-prose rounded-md border border-t-2 p-3"
-                            >
-                                <p class="text-muted-foreground mb-1 text-2xs font-semibold">
-                                    {t("flash.answerLabel")}
-                                </p>
-                                <div class="rg-markdown text-sm">
-                                    {@html renderMarkdownLatex(answerText(current))}
-                                </div>
-                            </div>
-
-                            <div class="mx-auto grid w-full max-w-prose grid-cols-4 gap-2">
-                                {#each GRADE_ORDER as g (g)}
-                                    <Button
-                                        variant="outline"
-                                        class={cn("h-auto py-2.5 text-xs font-semibold", GRADE_TONE[g])}
-                                        onclick={() => grade(g)}
-                                    >
-                                        {t(`flash.${g}`)}
+                            {#if !revealed}
+                                <div class="mx-auto w-full max-w-prose">
+                                    <Button onclick={reveal} class="w-full" size="lg">
+                                        {t("flash.showAnswer")}
                                     </Button>
-                                {/each}
-                            </div>
-                        {/if}
-                    </Card.Content>
-                </Card.Root>
+                                    <p class="text-muted-foreground mt-2 text-center text-2xs">
+                                        {t("flash.revealHint")}
+                                    </p>
+                                </div>
+                            {:else}
+                                <div
+                                    class="border-border bg-muted/30 animate-in fade-in-0 mx-auto w-full max-w-prose rounded-md border border-t-2 p-3"
+                                >
+                                    <p class="text-muted-foreground mb-1 text-2xs font-semibold">
+                                        {t("flash.answerLabel")}
+                                    </p>
+                                    <div class="rg-markdown text-sm">
+                                        {@html renderMarkdownLatex(answerText(current))}
+                                    </div>
+                                </div>
+
+                                <div class="mx-auto grid w-full max-w-prose grid-cols-4 gap-2">
+                                    {#each GRADE_ORDER as g (g)}
+                                        <Button
+                                            variant="outline"
+                                            class={cn("h-auto py-2.5 text-xs font-semibold", GRADE_TONE[g])}
+                                            onclick={() => grade(g)}
+                                        >
+                                            {t(`flash.${g}`)}
+                                        </Button>
+                                    {/each}
+                                </div>
+                            {/if}
+                        </Card.Content>
+                    </Card.Root>
+                {/key}
             {:else}
                 <!-- 空列表原先什么都不渲染：面板整块空白，用户不知道是没题还是坏了 -->
                 <Empty.Root class="min-h-40">

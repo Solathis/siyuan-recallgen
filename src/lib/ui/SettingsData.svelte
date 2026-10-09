@@ -6,6 +6,7 @@
     import { Label } from "@/lib/components/ui/label";
     import * as Card from "@/lib/components/ui/card";
     import { Input } from "@/lib/components/ui/input";
+    import { FieldLegend } from "@/lib/components/ui/field";
     import { t } from "../i18n";
     import { downloadText, exportStamp } from "./download";
     import { buildBankBackup, parseBankBackup } from "../quiz/bank-backup";
@@ -220,7 +221,7 @@
         -->
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-col">
-                <span class="text-sm font-medium">{t("settings.data.clearScores")}</span>
+                <FieldLegend variant="label">{t("settings.data.clearScores")}</FieldLegend>
                 <span class="text-muted-foreground text-xs">
                     {t("settings.data.clearScoresDesc", String(scoreCount))}
                 </span>
@@ -252,7 +253,7 @@
 
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-col">
-                <span class="text-sm font-medium">{t("settings.data.clearProgress")}</span>
+                <FieldLegend variant="label">{t("settings.data.clearProgress")}</FieldLegend>
                 <span class="text-muted-foreground text-xs">{t("settings.data.clearProgressDesc")}</span>
             </div>
             <AlertDialog.Root>
@@ -281,7 +282,7 @@
         <!-- 成绩备份：含题目与判分明细，可再导入；与报表导出区分开 -->
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-col">
-                <span class="text-sm font-medium">{t("settings.data.backup")}</span>
+                <FieldLegend variant="label">{t("settings.data.backup")}</FieldLegend>
                 <span class="text-muted-foreground text-xs">{t("settings.data.backupDesc")}</span>
             </div>
             <div class="flex gap-2">
@@ -306,7 +307,7 @@
         <!-- 配置导出/导入：换机器或分享配置时使用 -->
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-col">
-                <span class="text-sm font-medium">{t("settings.data.config")}</span>
+                <FieldLegend variant="label">{t("settings.data.config")}</FieldLegend>
                 <span class="text-muted-foreground text-xs">{t("settings.data.configDesc")}</span>
                 <Label class="mt-1 flex items-center gap-2 text-xs font-normal">
                     <Checkbox
@@ -338,7 +339,7 @@
 
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-col">
-                <span class="text-sm font-medium">{t("settings.data.bank")}</span>
+                <FieldLegend variant="label">{t("settings.data.bank")}</FieldLegend>
                 <span class="text-muted-foreground text-xs">
                     {t("settings.data.bankDesc", String(bankSize), String(bankDue))}
                 </span>

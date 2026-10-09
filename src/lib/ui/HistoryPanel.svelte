@@ -390,7 +390,7 @@
 
                     {#if viewMode === "thumbnail"}
                         <div class="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-3">
-                            {#each group.items as r (r.id)}
+                            {#each group.items as r, i (r.id)}
                                 {@const p = scorePercent(r)}
                                 <!--
                                     整张卡片即入口。
@@ -400,7 +400,8 @@
                                     所以不做「悬停才出现」）。
                                 -->
                                 <Card.Root
-                                    class="group relative overflow-hidden transition-shadow focus-within:shadow-rg-md hover:shadow-rg-md"
+                                    class="group relative overflow-hidden transition-shadow focus-within:shadow-rg-md hover:shadow-rg-md animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+                                    style="animation-delay: {Math.min(i, 10) * 30}ms"
                                 >
                                     <Button
                                         variant="ghost"

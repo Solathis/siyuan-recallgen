@@ -4,10 +4,10 @@
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import { Input } from "@/lib/components/ui/input";
-    import { Label } from "@/lib/components/ui/label";
     import * as Select from "@/lib/components/ui/select";
     import { Separator } from "@/lib/components/ui/separator";
     import { Switch } from "@/lib/components/ui/switch";
+    import { Field, FieldLabel, FieldLegend } from "@/lib/components/ui/field";
     import { t } from "../i18n";
     import type { AIEndpoint, AIModel, AIProvider, AIProtocol, RecallGenConfig } from "@/types/config";
 
@@ -203,8 +203,8 @@
                 </div>
 
                 <div class="grid grid-cols-1 gap-3 @xl:grid-cols-2">
-                    <div class="flex flex-col gap-1.5">
-                        <Label for={`rg-provider-${endpoint.id}`}>{t("settings.ai.provider")}</Label>
+                    <Field>
+                        <FieldLabel for={`rg-provider-${endpoint.id}`}>{t("settings.ai.provider")}</FieldLabel>
                         <Select.Root
                             type="single"
                             value={endpoint.provider}
@@ -220,9 +220,9 @@
                                 <Select.Item value="ollama">{t("settings.ai.ollama")}</Select.Item>
                             </Select.Content>
                         </Select.Root>
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                        <Label for={`rg-protocol-${endpoint.id}`}>{t("settings.ai.protocol")}</Label>
+                    </Field>
+                    <Field>
+                        <FieldLabel for={`rg-protocol-${endpoint.id}`}>{t("settings.ai.protocol")}</FieldLabel>
                         <Select.Root
                             type="single"
                             value={endpoint.protocol}
@@ -245,11 +245,11 @@
                                 <Select.Item value="messages">Messages API</Select.Item>
                             </Select.Content>
                         </Select.Root>
-                    </div>
+                    </Field>
                 </div>
 
-                <div class="flex flex-col gap-1.5">
-                    <Label for={`rg-baseurl-${endpoint.id}`}>{t("settings.ai.baseUrl")}</Label>
+                <Field>
+                    <FieldLabel for={`rg-baseurl-${endpoint.id}`}>{t("settings.ai.baseUrl")}</FieldLabel>
                     <!-- 限宽 + 等宽字体：URL 是技术字符串，铺满整行既难核对也不好看 -->
                     <Input
                         id={`rg-baseurl-${endpoint.id}`}
@@ -258,10 +258,10 @@
                         placeholder="https://api.openai.com/v1"
                         oninput={(e) => patchEndpoint(endpoint.id, { baseUrl: e.currentTarget.value })}
                     />
-                </div>
+                </Field>
 
-                <div class="flex flex-col gap-1.5">
-                    <Label for={`rg-apikey-${endpoint.id}`}>{t("settings.ai.apiKey")}</Label>
+                <Field>
+                    <FieldLabel for={`rg-apikey-${endpoint.id}`}>{t("settings.ai.apiKey")}</FieldLabel>
                     <div class="flex max-w-md gap-2">
                         <Input
                             id={`rg-apikey-${endpoint.id}`}
@@ -280,7 +280,7 @@
                             {showKeys[endpoint.id] ? t("settings.ai.hideKey") : t("settings.ai.showKey")}
                         </Button>
                     </div>
-                </div>
+                </Field>
 
                 <Separator />
 
@@ -366,8 +366,8 @@
         <span class="text-sm font-semibold">{t("settings.ai.testConn")}</span>
 
         <div class="flex flex-col gap-3">
-            <div class="flex flex-col gap-1.5">
-                <Label for="rg-test-endpoint">{t("settings.ai.testEndpoint")}</Label>
+            <Field>
+                <FieldLabel for="rg-test-endpoint">{t("settings.ai.testEndpoint")}</FieldLabel>
                 <Select.Root type="single" value={testEndpointId} onValueChange={onTestEndpointChange}>
                     <Select.Trigger id="rg-test-endpoint" class="w-full">
                         {config.ai.endpoints.find((e) => e.id === testEndpointId)?.name ?? ""}
@@ -378,9 +378,9 @@
                         {/each}
                     </Select.Content>
                 </Select.Root>
-            </div>
-            <div class="flex flex-col gap-1.5">
-                <Label for="rg-test-model">{t("settings.ai.testModel")}</Label>
+            </Field>
+            <Field>
+                <FieldLabel for="rg-test-model">{t("settings.ai.testModel")}</FieldLabel>
                 <Select.Root type="single" value={testModelId} onValueChange={onTestModelChange}>
                     <Select.Trigger id="rg-test-model" class="w-full">
                         {config.ai.models.find((m) => m.id === testModelId)?.name ?? ""}
@@ -391,15 +391,15 @@
                         {/each}
                     </Select.Content>
                 </Select.Root>
-            </div>
-            <div class="flex flex-col gap-1.5">
-                <Label for="rg-test-prompt">{t("settings.ai.testPrompt")}</Label>
+            </Field>
+            <Field>
+                <FieldLabel for="rg-test-prompt">{t("settings.ai.testPrompt")}</FieldLabel>
                 <Input
                     id="rg-test-prompt"
                     value={config.ai.testPrompt}
                     oninput={(e) => patchAi({ testPrompt: e.currentTarget.value })}
                 />
-            </div>
+            </Field>
 
             <div class="flex flex-wrap items-center gap-3">
                 <Button variant="outline" size="sm" onclick={() => void testConn()} disabled={connState === "testing"}>
@@ -429,8 +429,8 @@
         <span class="text-sm font-semibold">{t("settings.ai.globalSettings")}</span>
 
         <div class="flex flex-col gap-3">
-            <div class="flex flex-col gap-1.5">
-                <Label for="rg-ai-timeout">{t("settings.ai.timeout")}</Label>
+            <Field>
+                <FieldLabel for="rg-ai-timeout">{t("settings.ai.timeout")}</FieldLabel>
                 <Input
                     id="rg-ai-timeout"
                     type="number"
@@ -438,7 +438,7 @@
                     value={timeoutSeconds}
                     onchange={(e) => patchAi({ timeout: Math.max(5, parseInt(e.currentTarget.value, 10) || 5) * 1000 })}
                 />
-            </div>
+            </Field>
             <div class="flex items-center gap-3">
                 <Switch
                     checked={config.ai.jsonSchemaEnabled}
@@ -446,7 +446,7 @@
                     aria-label={t("settings.ai.jsonSchema")}
                 />
                 <div class="flex flex-col gap-0.5">
-                    <span class="text-sm font-medium">{t("settings.ai.jsonSchema")}</span>
+                    <FieldLegend variant="label">{t("settings.ai.jsonSchema")}</FieldLegend>
                     <span class="text-muted-foreground text-xs">{t("settings.ai.jsonSchemaDesc")}</span>
                 </div>
             </div>

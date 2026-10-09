@@ -1,7 +1,7 @@
 <script lang="ts">
     import * as Card from "@/lib/components/ui/card";
-    import { Label } from "@/lib/components/ui/label";
     import * as Select from "@/lib/components/ui/select";
+    import { Field, FieldLabel } from "@/lib/components/ui/field";
     import { t } from "../i18n";
     import type { AIRoles, RecallGenConfig } from "@/types/config";
 
@@ -58,8 +58,8 @@
                     </div>
                 </div>
                 <div class="grid grid-cols-1 gap-3 @xl:grid-cols-2">
-                    <div class="flex flex-col gap-1.5">
-                        <Label for={`rg-role-endpoint-${role.key}`}>{t("settings.roles.endpoint")}</Label>
+                    <Field>
+                        <FieldLabel for={`rg-role-endpoint-${role.key}`}>{t("settings.roles.endpoint")}</FieldLabel>
                         <Select.Root
                             type="single"
                             value={endpointIdOf(role.key)}
@@ -74,9 +74,9 @@
                                 {/each}
                             </Select.Content>
                         </Select.Root>
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                        <Label for={`rg-role-model-${role.key}`}>{t("settings.roles.model")}</Label>
+                    </Field>
+                    <Field>
+                        <FieldLabel for={`rg-role-model-${role.key}`}>{t("settings.roles.model")}</FieldLabel>
                         <Select.Root
                             type="single"
                             value={config.ai.roles[role.key]}
@@ -91,7 +91,7 @@
                                 {/each}
                             </Select.Content>
                         </Select.Root>
-                    </div>
+                    </Field>
                 </div>
             </div>
         {/each}
