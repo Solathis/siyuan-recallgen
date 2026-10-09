@@ -183,7 +183,8 @@
             />
         </div>
     {:else if page === "bank"}
-        <div class="rg-scope h-full">
+        <!-- 题库真机上是历史面板的一个分区（外层 p-4），单独预览时要补上同样的内边距 -->
+        <div class="rg-scope h-full p-4">
             <BankPanel
                 {service}
                 lang="zh"
@@ -192,7 +193,11 @@
             />
         </div>
     {:else if page === "stats"}
-        <div class="rg-scope h-full">
+        <!--
+            统计页真机上是历史面板的一个分区（外层 p-4），单独预览时要补上同样的内边距，
+            否则内容会紧贴视口边缘，右侧的数值看着像被裁掉了。
+        -->
+        <div class="rg-scope h-full p-4">
             <StatsPanel
                 records={previewScoreIndex}
                 loading={false}

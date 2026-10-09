@@ -1,8 +1,12 @@
 <script lang="ts">
     import { Badge } from "@/lib/components/ui/badge";
     import { Button } from "@/lib/components/ui/button";
+    import * as Alert from "@/lib/components/ui/alert";
     import * as Card from "@/lib/components/ui/card";
+    import * as Empty from "@/lib/components/ui/empty";
+    import { Spinner } from "@/lib/components/ui/spinner";
     import { Textarea } from "@/lib/components/ui/textarea";
+    import CodeBlock from "../editor/CodeBlock.svelte";
     import * as Tabs from "@/lib/components/ui/tabs";
     import * as ToggleGroup from "@/lib/components/ui/toggle-group";
     import { Progress } from "@/lib/components/ui/progress";
@@ -58,11 +62,63 @@
     const max = $derived(results.reduce((s, r) => s + r.maxScore, 0));
     const pct = $derived(max > 0 ? (total / max) * 100 : 0);
     const passed = $derived(pct >= PASS_SCORE);
-    const correctCount = $derived(results.filter((r) => r.score >= PASS_SCORE).length);
-    const partialCount = $derived(results.filter((r) => r.score > 0 && r.score < 100).length);
-    const wrongCount = $derived(results.filter((r) => r.score === 0 && !!r.userAnswer).length);
-    const unanswered = $derived(results.filter((r) => !r.userAnswer).length);
-    const accuracy = $derived(results.length > 0 ? (correctCount / results.length) * 100 : 0);
+
+    /**
+     * 题目状态：客观题支持部分得分后，「正确」表示完全正确（100 分），
+     * 部分得分单独成一类，避免把 75 分的多选题显示成绿色「正确」。
+     */
+    function qStatus(r: GradingResult): "correct" | "partial" | "wrong" | "unanswered" {
+        if (!r.userAnswer) return "unanswered";
+        if (r.score >= 100) return "correct";
+        if (r.score > 0) return "partial";
+        return "wrong";
+    }
+
+    /** 保留原始下标：题号要显示整卷里的序号，而不是筛选后的序号 */
+    const indexed = $derived(results.map((result, index) => ({ result, index, status: qStatus(result) })));
+
+    /**
+     * 各状态的题数。
+     *
+     * 必须由 status 汇总，不能各自再写一遍过滤条件：原先「正确」用的是
+     * score >= PASS_SCORE（达标），而筛选器里的「正确」用的是 score >= 100（完全正确），
+     * 于是一道 75 分的多选题同时被算进「正确」和「部分得分」，
+     * 筛选片上的数字相加还比总题数多——数字看着像算错了。
+     * 现在两处共用同一份 status，各片之和恒等于总题数。
+     */
+    const counts = $derived.by(() => {
+        const acc = { correct: 0, partial: 0, wrong: 0, unanswered: 0 };
+        for (const item of indexed) acc[item.status]++;
+        return acc;
+    });
+
+    const correctCount = $derived(counts.correct);
+    const partialCount = $derived(counts.partial);
+    const wrongCount = $derived(counts.wrong);
+    const unanswered = $derived(counts.unanswered);
+
+    /**
+     * 达标题数与达标率。
+     *
+     * 顶部这个指标原本叫「正确率」，算法却是「得分 >= PASS_SCORE 的题数」——
+     * 那不叫正确率，叫达标率，与统计页的说法也是两套。现在改成达标率：
+     * 判分走 AI 时几乎不会有满分题（85、90 分都算部分得分），
+     * 按「完全正确」算的话这个数会长期是 0%，看不出练得怎么样。
+     */
+    const passedQuestions = $derived(results.filter((r) => r.score >= PASS_SCORE).length);
+    const passRate = $derived(results.length > 0 ? (passedQuestions / results.length) * 100 : 0);
+
+    /**
+     * 未达标的题数。
+     *
+     * 「重做错题」重做的是未达标的题（成绩低于 PASS_SCORE），其中包含只拿到
+     * 部分分数的那些。原先按钮按「0 分的错题」判断显示，一道题拿 50 分时
+     * 按钮会直接消失，而它恰恰是最该重做的。
+     */
+    const belowPass = $derived(results.filter((r) => r.score < PASS_SCORE).length);
+
+    /** 每题平均耗时；没测到用时（duration 为 0）时保持 null，由 fmtDuration 显示「--」 */
+    const secondsPerQuestion = $derived(duration > 0 && results.length > 0 ? duration / results.length : 0);
 
     /**
      * 按得分取主题语义色，不再硬编码十六进制色值
@@ -85,22 +141,9 @@
     let activeTab = $state<"questions" | "analysis">("questions");
     let activeQ = $state(0);
 
-    /**
-     * 题目状态：客观题支持部分得分后，「正确」表示完全正确（100 分），
-     * 部分得分单独成一类，避免把 75 分的多选题显示成绿色「正确」。
-     */
-    function qStatus(r: GradingResult): "correct" | "partial" | "wrong" | "unanswered" {
-        if (!r.userAnswer) return "unanswered";
-        if (r.score >= 100) return "correct";
-        if (r.score > 0) return "partial";
-        return "wrong";
-    }
-
     type StatusFilter = "all" | "correct" | "partial" | "wrong" | "unanswered";
     let filter = $state<StatusFilter>("all");
 
-    /** 保留原始下标：题号要显示整卷里的序号，而不是筛选后的序号 */
-    const indexed = $derived(results.map((result, index) => ({ result, index, status: qStatus(result) })));
     const visible = $derived(filter === "all" ? indexed : indexed.filter((item) => item.status === filter));
 
     /*
@@ -166,6 +209,19 @@
         if (q.type === "multiple_choice") return q.answer.includes(index);
         return false;
     }
+
+    /**
+     * 用户在选项里勾了哪几个。
+     *
+     * 原先只高亮正确答案，选错的选项与没选的一模一样 —— 回看时看不出自己当初选了什么，
+     * 只能靠旁边那行「你的答案：C」去对号，多选更对不过来。
+     */
+    const chosenOptions = $derived.by(() => {
+        const ua = activeResult?.userAnswer;
+        if (ua?.type === "single_choice") return new Set([ua.value]);
+        if (ua?.type === "multiple_choice") return new Set(ua.value);
+        return new Set<number>();
+    });
 
     const statusDot: Record<string, string> = {
         correct: "bg-success",
@@ -276,26 +332,32 @@
 
                 <dl class="grid grid-cols-2 gap-x-5 gap-y-3 @xl:grid-cols-4 @2xl:ml-auto">
                     <div class="flex flex-col gap-0.5">
-                        <dt class="text-muted-foreground text-xs">{t("result.accuracy")}</dt>
-                        <dd class={cn("text-lg font-semibold tabular-nums", scoreTone(accuracy))}>
-                            {accuracy.toFixed(0)}%
+                        <dt class="text-muted-foreground text-xs">{t("result.passRate")}</dt>
+                        <dd class={cn("text-lg font-semibold tabular-nums", scoreTone(passRate))}>
+                            {passRate.toFixed(0)}%
                         </dd>
                         <span class="text-muted-foreground text-2xs">
-                            {t("result.qCount", `${correctCount}/${results.length}`)}
+                            {t("result.qCount", `${passedQuestions}/${results.length}`)}
                         </span>
                     </div>
                     <div class="flex flex-col gap-0.5">
                         <dt class="text-muted-foreground text-xs">{t("result.time")}</dt>
                         <dd class="text-lg font-semibold tabular-nums">{fmtDuration(duration)}</dd>
                     </div>
-                    <!-- 错误与未答分开两格：合成一句「0 错 · 1 未答」会让值里再重复一次标签 -->
+                    <!--
+                        后两格放「未达标」与「每题平均耗时」，而不是「错误」「未作答」：
+                        后者在下面的筛选片里已经逐项给出计数，顶部再来一遍只是重复；
+                        「未达标」是要不要动手重做的依据，每题均时则看得出这次是不是在赶。
+                    -->
                     <div class="flex flex-col gap-0.5">
-                        <dt class="text-muted-foreground text-xs">{t("result.status_wrong")}</dt>
-                        <dd class="text-lg font-semibold tabular-nums">{wrongCount}</dd>
+                        <dt class="text-muted-foreground text-xs">{t("result.notPassed")}</dt>
+                        <dd class={cn("text-lg font-semibold tabular-nums", belowPass > 0 && "text-destructive")}>
+                            {belowPass}
+                        </dd>
                     </div>
                     <div class="flex flex-col gap-0.5">
-                        <dt class="text-muted-foreground text-xs">{t("result.status_unanswered")}</dt>
-                        <dd class="text-lg font-semibold tabular-nums">{unanswered}</dd>
+                        <dt class="text-muted-foreground text-xs">{t("stats.perQuestion")}</dt>
+                        <dd class="text-lg font-semibold tabular-nums">{fmtDuration(secondsPerQuestion)}</dd>
                     </div>
                 </dl>
             </Card.Content>
@@ -303,16 +365,13 @@
     </div>
 
     {#if submitError}
-        <div
-            class="border-destructive bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm"
-            role="alert"
-        >
-            <p class="font-semibold">{t("result.submitError")}</p>
-            <p class="text-muted-foreground mt-1 text-xs">{t("result.submitErrorHint")}</p>
+        <Alert.Root variant="destructive" class="animate-in fade-in-0 slide-in-from-top-1 duration-200">
+            <Alert.Title>{t("result.submitError")}</Alert.Title>
+            <Alert.Description>{t("result.submitErrorHint")}</Alert.Description>
             {#if submitError.detail}
                 <p class="mt-1 font-mono text-xs break-all">{submitError.detail}</p>
             {/if}
-        </div>
+        </Alert.Root>
     {/if}
 
     <!--
@@ -353,7 +412,12 @@
             </ToggleGroup.Root>
 
             {#if visible.length === 0}
-                <p class="text-muted-foreground py-6 text-center text-xs">{t("result.filterEmpty")}</p>
+                <Empty.Root class="min-h-32">
+                    <Empty.Header>
+                        <Empty.Media variant="icon">🔍</Empty.Media>
+                        <Empty.Title>{t("result.filterEmpty")}</Empty.Title>
+                    </Empty.Header>
+                </Empty.Root>
             {:else}
                 <!-- 题号条只显示筛出来的题；点一下切换下方详情 -->
                 <div
@@ -414,15 +478,22 @@
                                 {#if activeQuestion.type === "single_choice" || activeQuestion.type === "multiple_choice"}
                                     <div class="flex flex-col gap-1">
                                         {#each activeQuestion.options as option, j (j)}
+                                            {@const isCorrect = isCorrectOption(activeQuestion, j)}
+                                            {@const isChosen = chosenOptions.has(j)}
                                             <!--
                                             选项行原本把序号写成一个 inline-block 的 span，
                                             里面的 <p> 是块级元素，窄屏下序号就被挤到单独一行。
                                             改成 flex：序号固定宽、正文占剩余宽度，任何宽度都不折。
+                                            配色分三种：正确答案绿底，选错的那一项红底，其余中性。
                                         -->
                                             <div
                                                 class={cn(
-                                                    "flex items-start gap-2 rounded-md px-2.5 py-1.5",
-                                                    isCorrectOption(activeQuestion, j) && "bg-success/15"
+                                                    "flex items-start gap-2 rounded-md border px-2.5 py-1.5",
+                                                    isCorrect
+                                                        ? "border-success/40 bg-success/15"
+                                                        : isChosen
+                                                          ? "border-destructive/40 bg-destructive/15"
+                                                          : "border-transparent"
                                                 )}
                                             >
                                                 <span class="text-muted-foreground w-3 shrink-0 font-mono text-xs">
@@ -431,11 +502,28 @@
                                                 <div
                                                     class={cn(
                                                         "rg-markdown min-w-0 flex-1",
-                                                        isCorrectOption(activeQuestion, j) && "font-semibold"
+                                                        (isCorrect || isChosen) && "font-semibold"
                                                     )}
                                                 >
                                                     {@html renderMarkdownLatex(option)}
                                                 </div>
+                                                {#if isCorrect}
+                                                    <span
+                                                        class="text-success shrink-0 font-semibold"
+                                                        role="img"
+                                                        aria-label={t("result.status_correct")}
+                                                    >
+                                                        ✓
+                                                    </span>
+                                                {:else if isChosen}
+                                                    <span
+                                                        class="text-destructive shrink-0 font-semibold"
+                                                        role="img"
+                                                        aria-label={t("result.status_wrong")}
+                                                    >
+                                                        ✗
+                                                    </span>
+                                                {/if}
                                             </div>
                                         {/each}
                                     </div>
@@ -460,6 +548,25 @@
                                     {/if}
                                 </div>
 
+                                {#if activeQuestion.type === "coding"}
+                                    <!--
+                                        编程题的参考答案是一段代码，原先只显示「见答案」而没有任何地方能看到它——
+                                        数据里本来就有 answer 字段，这里用只读高亮视图展示出来。
+                                    -->
+                                    <div class="flex flex-col gap-1">
+                                        <span class="text-muted-foreground text-xs">{t("result.correctAnswer")}</span>
+                                        {#if activeQuestion.answer?.trim()}
+                                            <CodeBlock
+                                                code={activeQuestion.answer}
+                                                language={activeQuestion.language}
+                                                title={t("code.reference")}
+                                            />
+                                        {:else}
+                                            <p class="text-muted-foreground text-xs">{t("result.noReference")}</p>
+                                        {/if}
+                                    </div>
+                                {/if}
+
                                 {#if activeQuestion.explanation}
                                     <div class="border-border border-t pt-2">
                                         <span class="text-muted-foreground text-xs">{t("result.explanation")}</span>
@@ -479,12 +586,17 @@
                         </Card.Root>
                     {/key}
                 {:else}
-                    <p class="text-muted-foreground py-8 text-center text-sm">{t("result.questionMissing")}</p>
+                    <Empty.Root class="min-h-32">
+                        <Empty.Header>
+                            <Empty.Media variant="icon">❔</Empty.Media>
+                            <Empty.Title>{t("result.questionMissing")}</Empty.Title>
+                        </Empty.Header>
+                    </Empty.Root>
                 {/if}
             {/if}
 
             <div class="flex flex-wrap justify-end gap-2">
-                {#if wrongCount > 0}
+                {#if belowPass > 0}
                     <Button variant="secondary" size="sm" onclick={() => onretrywrong()}
                         >{t("result.retryWrong")}</Button
                     >
@@ -499,16 +611,22 @@
 
         <Tabs.Content value="analysis" class="pt-3">
             {#if analysis}
-                <Card.Root>
+                <Card.Root class="animate-in fade-in-0 duration-200">
                     <Card.Content class="rg-markdown pt-4 text-sm">{@html renderMarkdownLatex(analysis)}</Card.Content>
                 </Card.Root>
             {:else if analysisError}
                 <!-- 区分「分析失败」与「没有分析」：前者要给出原因，用户才知道可以重试 -->
-                <div class="text-destructive px-2 py-8 text-center text-sm">
-                    {t("quiz.analysisFailed", analysisError)}
-                </div>
+                <Alert.Root variant="destructive">
+                    <Alert.Title>{t("result.noAnalysis")}</Alert.Title>
+                    <Alert.Description>{t("quiz.analysisFailed", analysisError)}</Alert.Description>
+                </Alert.Root>
             {:else}
-                <div class="text-muted-foreground py-8 text-center text-sm">{t("result.noAnalysis")}</div>
+                <Empty.Root class="min-h-40">
+                    <Empty.Header>
+                        <Empty.Media variant="icon">📄</Empty.Media>
+                        <Empty.Title>{t("result.noAnalysis")}</Empty.Title>
+                    </Empty.Header>
+                </Empty.Root>
             {/if}
         </Tabs.Content>
     </Tabs.Root>
@@ -542,7 +660,10 @@
                     </div>
                 {/each}
                 {#if chatLoading}
-                    <div class="bg-muted text-muted-foreground self-start rounded-md px-2.5 py-2 text-sm italic">
+                    <div
+                        class="bg-muted text-muted-foreground flex items-center gap-1.5 self-start rounded-md px-2.5 py-2 text-sm italic"
+                    >
+                        <Spinner class="size-3.5" />
                         {t("common.thinking")}
                     </div>
                 {/if}

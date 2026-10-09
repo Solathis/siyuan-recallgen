@@ -16,3 +16,7 @@ package-lock.json
 package.zip
 # tsc 复合项目的增量编译缓存
 *.tsbuildinfo
+
+# 浏览器验证产物（Playwright MCP 快照与截图），只留在本地
+.playwright-mcp/
+rg-*.png

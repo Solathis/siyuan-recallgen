@@ -33,6 +33,7 @@
 
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
+    import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
     import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
     import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
     import FlagIcon from "@lucide/svelte/icons/flag";
@@ -90,6 +91,8 @@
      */
     let submitError = $state<ErrorDescription | null>(null);
     let error = $state<ErrorDescription | null>(null);
+    /** 失败页「原始返回」折叠区是否展开（只用于箭头方向） */
+    let showRaw = $state(false);
     let progressValue = $state<number | null>(null);
     let progressLabel = $state("");
     let duration = $state(0);
@@ -961,6 +964,60 @@
         用 sm:/md: 判断「该收成几栏」从根上就是错的。
     -->
     <div class="@container mx-auto flex h-full w-full flex-col px-4" style="max-width: var(--rg-panel-width, 1100px)">
+        <!--
+            失败页：出题/判分/恢复三条路径的报错长得一模一样，抽成一个 snippet。
+            原先两处各手写一遍「红标题 + pre + 灰提示 + 重试」，改一处就得记得改另一处；
+            收进 Card 后与其它页面同一套层次，不会在整屏中央浮着几行裸文字。
+        -->
+        {#snippet errorBlock(desc: ErrorDescription, retryLabel: string, onRetry: () => void)}
+            <div class="flex min-h-0 flex-1 items-start justify-center overflow-y-auto py-8">
+                <Card.Root class="animate-in fade-in-0 slide-in-from-bottom-1 w-full max-w-lg duration-200">
+                    <Card.Header>
+                        <Card.Title class="text-destructive">{desc.title}</Card.Title>
+                        <Card.Description>{desc.hint}</Card.Description>
+                    </Card.Header>
+                    <Card.Content class="flex flex-col gap-3">
+                        <pre
+                            class="bg-muted text-muted-foreground max-h-40 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">{desc.detail}</pre>
+                        {#if desc.raw}
+                            <!-- 解析类失败只看一句报错无从排查：把模型原文摊开，能直接看出是截断还是形状不对 -->
+                            <Collapsible.Root bind:open={showRaw} class="bg-muted/40 rounded-md border p-3">
+                                <!--
+                                    带一个会翻转的箭头：原先只有一行灰色小字，
+                                    看不出这块能点开，很多人直接当成一个空输入框跳过了。
+                                -->
+                                <Collapsible.Trigger
+                                    class="text-muted-foreground flex w-full items-center gap-1.5 text-left text-xs font-medium"
+                                >
+                                    <ChevronDownIcon
+                                        class={cn("size-3.5 shrink-0 transition-transform", showRaw && "rotate-180")}
+                                        aria-hidden="true"
+                                    />
+                                    {t("err.raw.title")}
+                                    <span class="text-2xs">{t("err.raw.size", String(desc.raw.length))}</span>
+                                </Collapsible.Trigger>
+                                <Collapsible.Content>
+                                    <pre
+                                        class="text-muted-foreground mt-2 max-h-60 overflow-auto text-2xs break-all whitespace-pre-wrap">{desc.raw}</pre>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        class="mt-2"
+                                        onclick={() => void copyRaw(desc.raw ?? "")}
+                                    >
+                                        {t("err.raw.copy")}
+                                    </Button>
+                                </Collapsible.Content>
+                            </Collapsible.Root>
+                        {/if}
+                    </Card.Content>
+                    <Card.Footer>
+                        <Button onclick={onRetry}>{retryLabel}</Button>
+                    </Card.Footer>
+                </Card.Root>
+            </div>
+        {/snippet}
+
         {#if panelState === "configuring"}
             <!--
                 配置页自适应。
@@ -968,7 +1025,7 @@
                 现在放宽到 64rem，并在容器够宽时把「出题计划」与「参数」并排两栏——
                 前者是只读概览、后者是要调的东西，分开之后一眼能看出「改哪儿、影响什么」。
             -->
-            <div class="rg-safe-center flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-6">
+            <div class="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-2 py-6">
                 <Card.Root class="h-fit w-full max-w-4xl">
                     <Card.Header>
                         <Card.Title>{t("quiz.dateConfigTitle")}</Card.Title>
@@ -1042,7 +1099,7 @@
                 </Card.Root>
             </div>
         {:else if panelState === "loading_generating" || panelState === "loading_grading"}
-            <div class="rg-safe-center flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-6">
+            <div class="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-2 py-6">
                 <!--
                     只做进场（in:），不做退场。
                     这里是一整屏状态容器：用 transition: 会在切到结果页时给旧内容播一段
@@ -1207,36 +1264,7 @@
             </div>
         {:else if panelState === "answering"}
             {#if error && questions.length === 0}
-                <div
-                    class="animate-in fade-in-0 mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-20 text-center duration-200"
-                >
-                    <h3 class="text-destructive text-lg font-semibold">{error.title}</h3>
-                    <pre
-                        class="bg-muted text-muted-foreground max-h-32 w-full overflow-auto rounded-md p-3 text-left text-xs">{error.detail}</pre>
-                    <p class="text-muted-foreground text-sm">{error.hint}</p>
-                    {#if error.raw}
-                        <!-- 解析类失败只看一句报错无从排查：把模型原文摊开，能直接看出是截断还是形状不对 -->
-                        <Collapsible.Root class="bg-muted/40 w-full rounded-md border p-3 text-left">
-                            <Collapsible.Trigger class="text-muted-foreground w-full text-left text-xs font-medium">
-                                {t("err.raw.title")}
-                                <span class="text-2xs">{t("err.raw.size", String(error.raw.length))}</span>
-                            </Collapsible.Trigger>
-                            <Collapsible.Content>
-                                <pre
-                                    class="text-muted-foreground mt-2 max-h-60 overflow-auto text-2xs break-all whitespace-pre-wrap">{error.raw}</pre>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    class="mt-2"
-                                    onclick={() => void copyRaw(error?.raw ?? "")}
-                                >
-                                    {t("err.raw.copy")}
-                                </Button>
-                            </Collapsible.Content>
-                        </Collapsible.Root>
-                    {/if}
-                    <Button onclick={() => void retry()}>{t("common.retry")}</Button>
-                </div>
+                {@render errorBlock(error, t("common.retry"), () => void retry())}
             {:else if questions.length === 0}
                 <!-- 补齐空态：恢复到一个空会话时原实现会整屏空白 -->
                 <Empty.Root class="animate-in fade-in-0 min-h-40 duration-200">
@@ -1435,15 +1463,7 @@
             {/if}
         {:else if panelState === "result"}
             {#if error && !results}
-                <div
-                    class="animate-in fade-in-0 mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-20 text-center duration-200"
-                >
-                    <h3 class="text-destructive text-lg font-semibold">{error.title}</h3>
-                    <pre
-                        class="bg-muted text-muted-foreground max-h-32 w-full overflow-auto rounded-md p-3 text-left text-xs">{error.detail}</pre>
-                    <p class="text-muted-foreground text-sm">{error.hint}</p>
-                    <Button onclick={() => void submit()}>{t("err.retryGrade")}</Button>
-                </div>
+                {@render errorBlock(error, t("err.retryGrade"), () => void submit())}
             {:else if results && session}
                 <!--
                     结果页自己滚动：它是最长的页面，原先直接挂在 h-full 的列里，

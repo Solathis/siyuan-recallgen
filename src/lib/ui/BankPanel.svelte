@@ -32,6 +32,7 @@
     import { nextLimit, PAGE_SIZE } from "../quiz/paging";
     import { downloadText, exportStamp } from "./download";
     import type { QuizService } from "../quiz/service";
+    import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
     import type { QuestionType, Difficulty } from "@/types/quiz";
 
     let {
@@ -129,6 +130,8 @@
 
     /** 题库里出现过的知识点标签（按题数倒序），用于筛选与「按知识点复习」 */
     const tagOptions = $derived(bankTags(items));
+    /** 标签管理折叠区的展开状态；只用于让箭头翻转，展开本身由 Collapsible 管理 */
+    let showTagManage = $state(false);
     /** 正在重命名的标签 */
     let renamingTag = $state<string | null>(null);
     let renameValue = $state("");
@@ -270,7 +273,12 @@
     动效统一走 tw-animate-css 的 animate-in（列表交错必须带 animation-fill-mode:backwards，
     否则带延迟的元素会在延迟期间先完整显示再闪一下）。
 -->
-<div class="@container flex h-full flex-col gap-4 overflow-y-auto p-4">
+<!--
+        滚动容器本身是 flex 列，直接子项默认 flex-shrink: 1 ——
+        内容比可视区高时它们会被压扁，筛选卡的最后一行（到期入口）就被卡底裁掉。
+        因此所有直接子项固定不由内容以外的原因收缩。
+    -->
+<div class="@container flex h-full flex-col gap-4 overflow-y-auto p-4 *:shrink-0">
     <!-- 页头 -->
     <header class="flex flex-wrap items-end justify-between gap-3">
         <div class="flex flex-col gap-1">
@@ -427,11 +435,16 @@
 
     <!-- 标签管理：折叠区 -->
     {#if tagOptions.length > 0}
-        <Collapsible.Root class="border-border rounded-lg border">
-            <Collapsible.Trigger class="w-full p-3 text-left">
-                <span class="text-muted-foreground text-xs font-medium">
-                    {t("bank.tagManage")} ({tagOptions.length})
-                </span>
+        <Collapsible.Root bind:open={showTagManage} class="border-border rounded-lg border">
+            <!-- 同样补一个会翻转的箭头：只有一行灰字时看不出这块能展开 -->
+            <Collapsible.Trigger
+                class="text-muted-foreground flex w-full items-center gap-1.5 p-3 text-left text-xs font-medium"
+            >
+                <ChevronDownIcon
+                    class={cn("size-3.5 shrink-0 transition-transform", showTagManage && "rotate-180")}
+                    aria-hidden="true"
+                />
+                {t("bank.tagManage")} ({tagOptions.length})
             </Collapsible.Trigger>
             <Collapsible.Content>
                 <div class="flex max-w-md flex-col gap-1 px-3 pb-3">

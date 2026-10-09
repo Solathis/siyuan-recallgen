@@ -54,13 +54,14 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 - **独立 Tab**：自定义 `addTab`，支持宽屏与移动端响应式布局，面板宽度可配置（600-1600px）
 - **单页全题视图**：所有题目在同一页面滚动展示；题号导航条标记已答/未答并可点击跳题，另有上一题/下一题按钮与当前位置指示
 - **快捷键**：← / →（或 PageUp / PageDown）切换题目，Ctrl/Cmd + Enter 交卷；在输入框与代码编辑器内不生效，避免打断输入
-- **编程题编辑器**：CodeMirror 6，支持语法高亮、行号、自动补全，深色/浅色主题跟随思源
+- **编程题编辑器**：CodeMirror 6，支持语法高亮、行号、自动补全、软换行开关、复制、重置为初始代码，深色/浅色主题跟随思源。语言包按需加载（Python、JavaScript/TypeScript、Go、Java、C/C++、SQL、JSON、CSS、Markdown），未知语言回落为纯文本
 - **主观题 Markdown 编辑**：支持编辑/预览切换，实时渲染 Markdown + LaTeX
 - **倒计时**：可开启答题倒计时，时间到自动交卷
 - **进度自动保存**：答题过程每 800ms 防抖保存到思源 `saveData`，关闭后可恢复
 - **取消与恢复**：生成阶段可取消；关闭 Tab 时如在答题中，强制保存进度
 - **题目标记**：给不确定的题目打标记，标记随进度保存
-- **运行测试**：编程题可用当前代码运行测试用例并逐条查看结果（仅 JavaScript）
+- **运行测试**：编程题可用当前代码运行测试用例，结果以通过/未通过徽标逐条展示；只有 JavaScript 有执行环境，其余语言直接写出原因而不是给一个点了才知道的按钮
+- **参考代码**：结果页把编程题的参考答案渲染成只读高亮代码块
 - **单题计时**：记录每道题的作答耗时，并在结果与统计中体现
 - **二次确认**：重新生成和交卷操作需弹窗确认
 - **日期范围生成**：支持「今日笔记」「近 N 天笔记」生成，可配置基点时间（如凌晨 4 点作为日期边界，适合深夜写笔记的用户）
@@ -134,7 +135,7 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 | 构建工具 | Vite | 7.3+ |
 | 类型系统 | TypeScript | 5.9+ |
 | 样式与组件 | Tailwind CSS 4 + shadcn-svelte（bits-ui） | 4.3+ / 1.7+ |
-| 图表 | 自绘 SVG + CSS（无图表库依赖） | — |
+| 图表 | layerchart + d3-scale（走 shadcn `chart`） | 2.5+ |
 | 思源 SDK | siyuan | 1.2.3 |
 | 代码编辑器 | CodeMirror 6 | 6.x |
 | 数学渲染 | KaTeX | 0.18.1 |
@@ -155,7 +156,8 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
   - `recallgen-progress.json`：答题进度（未交卷的会话）
 - **异步存储基类**：`AsyncStore` 统一处理读串行化、写串行化、读写不互相覆盖、写入失败上抛；配置写入按 400ms 合并，避免每次按键都重写配置文件；答题进度按 30 天 TTL 自动清理
 - **Tab 状态机**：`configuring → loading_generating → answering → loading_grading → result`
-- **UI 组件**：全部使用 shadcn-svelte 组件（Button/Card/Badge/Input/Select/Switch/Tabs/Table/AlertDialog/DropdownMenu/Progress/Skeleton 等，基于 bits-ui）。shadcn 的语义变量映射到思源 `--b3-*`，因此明暗主题自动跟随；`dark:` 变体绑定思源的 `.theme-dark`
+- **UI 组件**：全部使用 shadcn-svelte 组件（Alert/AlertDialog/Badge/Button/Card/Checkbox/Collapsible/DropdownMenu/Empty/Field/Input/Item/Label/Progress/RadioGroup/Select/Separator/Skeleton/Slider/Spinner/Switch/Table/Tabs/Textarea/ToggleGroup，基于 bits-ui），全部图表走 shadcn `chart`。shadcn 的语义变量映射到思源 `--b3-*`，因此明暗主题自动跟随；`dark:` 变体绑定思源的 `.theme-dark`
+- **响应式走容器查询**：面板可用宽度与视口宽度无关（思源的 tab 可以很窄，设置弹窗永远比窗口窄），因此布局一律按 `@container` 变体切换，而不是 `md:`/`sm:`；只有真正与设备相关的规则留在媒体查询里（触摸目标、安全区）
 - **样式隔离**：**刻意不引入 Tailwind 的 preflight**——思源本体与插件共享同一文档，全局重置会破坏思源界面。只引入 theme 与 utilities 两个 layer，并把工具类依赖的重置收窄到插件容器 `.rg-scope` 内；KaTeX 自带的 `body{counter-reset}` 规则也改写为容器作用域。KaTeX 样式表本身仍是全局注入的（随插件一起打包以保证离线公式正常），这是本插件唯一新增的全局样式
 - **Tab 恢复**：思源重启时恢复自定义 Tab，`mode='generate'` 的 Tab 自动检测已有进度并恢复为答题状态，避免重新生成
 - **公式渲染**：KaTeX 样式与字体随插件打包（仅 woff2，共约 296KB），不再依赖 CDN，离线可用；渲染走「marked → DOMPurify 净化 → 回填 KaTeX」的顺序，净化时公式还是占位符，既拦住了笔记/AI 文本里的脚本注入，又不会误伤 KaTeX 生成的 MathML

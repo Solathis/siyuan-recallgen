@@ -302,6 +302,17 @@
         margin: 0;
     }
 
+    /*
+     * shadcn 的组件是按「有 preflight」的前提写的，其中 card-description /
+     * item-description / field-description 都是 <p>：没有 preflight 时浏览器会给
+     * 它们上下各 1em 的默认外边距，把一行两段小字从 38px 撑到 62px，列表看着发虚。
+     * 只清掉带 data-slot 的节点——思源 markdown 渲染出的 p/h1-h6 不带这个属性，
+     * 笔记正文的段落间距不受影响；本规则在 base 层里，任何 mt-* 工具类仍可覆盖。
+     */
+    .rg-scope :where([data-slot]) {
+        margin: 0;
+    }
+
     /* 思源自身的 markdown 内容样式依赖 h1-h6 / ul / ol 的浏览器默认，
        因此这里刻意不重置标题与列表，保证题目与解析的排版正常 */
 }
@@ -448,18 +459,6 @@
         calc((100cqw - 24px - (var(--rg-heat-cols, 27) - 1) * 4px) / var(--rg-heat-cols, 27)),
         28px
     );
-}
-
-/*
- * 可滚动容器里的「安全居中」。
- *
- * 整屏状态块（出题配置、生成中）内容通常比可视区矮，直接顶对齐会在下方留一大片空白；
- * 但用普通的 justify-content: center 居中又有个陷阱——内容一旦比容器高，
- * 顶部会被裁掉且滚不上去。safe center 在放不下时自动退回 start，两种情况都对。
- */
-.rg-safe-center {
-    align-items: center;
-    justify-content: safe center;
 }
 
 /*

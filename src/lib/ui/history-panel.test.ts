@@ -104,7 +104,8 @@ describe("历史记录面板", () => {
         const host = await mountPanel();
         clickTab(host, "列表");
         // 组标题带了日期，行内不该再重复一遍 MM-DD
-        const row = host.querySelector("section div.hover\\:bg-accent");
+        // 列表行现在是 shadcn 的 Item（原先手写 div + hover:bg-accent）
+        const row = host.querySelector('section [data-slot="item"]');
         expect(row?.textContent).toBeTruthy();
         expect(/\d{2}-\d{2} \d{2}:\d{2}/.test(host.textContent ?? ""), "按日期分组不该在行内出现 MM-DD").toBe(false);
     });
