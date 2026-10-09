@@ -159,7 +159,7 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 - **异步存储基类**：`AsyncStore` 统一处理读串行化、写串行化、读写不互相覆盖、写入失败上抛；配置写入按 400ms 合并，避免每次按键都重写配置文件；答题进度按 30 天 TTL 自动清理
 - **Tab 状态机**：`configuring → loading_generating → answering → loading_grading → result`
 - **UI 组件**：全部使用 shadcn-svelte 组件（Alert/AlertDialog/Badge/Button/Card/Checkbox/Collapsible/DropdownMenu/Empty/Field/Input/Item/Label/Progress/RadioGroup/Select/Separator/Skeleton/Slider/Spinner/Switch/Table/Tabs/Textarea/ToggleGroup，基于 bits-ui），全部图表走 shadcn `chart`。shadcn 的语义变量映射到思源 `--b3-*`，因此明暗主题自动跟随；`dark:` 变体绑定思源的 `.theme-dark`
-- **响应式走容器查询**：面板可用宽度与视口宽度无关（思源的 tab 可以很窄，设置弹窗永远比窗口窄），因此布局一律按 `@container` 变体切换，而不是 `md:`/`sm:`；只有真正与设备相关的规则留在媒体查询里（触摸目标、安全区）
+- **响应式走容器查询**：面板可用宽度与视口宽度无关（思源的 tab 可以很窄，设置弹窗永远比窗口窄），因此布局一律按 `@container` 变体切换，而不是 `md:`/`sm:`；只有真正与设备相关的规则留在媒体查询里。触摸设备上把命中区抬到 44px（阈值只在 `--rg-tap-size` 声明一处），贴底操作栏用 `env(safe-area-inset-bottom)` 避开 iOS 的底部小横条
 - **样式隔离**：**刻意不引入 Tailwind 的 preflight**——思源本体与插件共享同一文档，全局重置会破坏思源界面。只引入 theme 与 utilities 两个 layer，并把工具类依赖的重置收窄到插件容器 `.rg-scope` 内；KaTeX 自带的 `body{counter-reset}` 规则也改写为容器作用域。KaTeX 样式表本身仍是全局注入的（随插件一起打包以保证离线公式正常），这是本插件唯一新增的全局样式
 - **Tab 恢复**：思源重启时恢复自定义 Tab，`mode='generate'` 的 Tab 自动检测已有进度并恢复为答题状态，避免重新生成
 - **公式渲染**：KaTeX 样式与字体随插件打包（仅 woff2，共约 296KB），不再依赖 CDN，离线可用；渲染走「marked → DOMPurify 净化 → 回填 KaTeX」的顺序，净化时公式还是占位符，既拦住了笔记/AI 文本里的脚本注入，又不会误伤 KaTeX 生成的 MathML
