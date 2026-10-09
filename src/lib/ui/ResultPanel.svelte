@@ -356,7 +356,11 @@
                 <p class="text-muted-foreground py-6 text-center text-xs">{t("result.filterEmpty")}</p>
             {:else}
                 <!-- 题号条只显示筛出来的题；点一下切换下方详情 -->
-                <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label={t("result.tabQuestions")}>
+                <div
+                    class="animate-in fade-in-0 flex flex-wrap items-center gap-1.5 duration-150"
+                    role="group"
+                    aria-label={t("result.tabQuestions")}
+                >
                     {#each visible as item (item.result.questionId)}
                         <Button
                             variant="outline"
