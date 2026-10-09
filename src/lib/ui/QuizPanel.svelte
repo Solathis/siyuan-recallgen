@@ -1207,7 +1207,9 @@
             </div>
         {:else if panelState === "answering"}
             {#if error && questions.length === 0}
-                <div class="mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-20 text-center">
+                <div
+                    class="animate-in fade-in-0 mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-20 text-center duration-200"
+                >
                     <h3 class="text-destructive text-lg font-semibold">{error.title}</h3>
                     <pre
                         class="bg-muted text-muted-foreground max-h-32 w-full overflow-auto rounded-md p-3 text-left text-xs">{error.detail}</pre>
@@ -1237,7 +1239,7 @@
                 </div>
             {:else if questions.length === 0}
                 <!-- 补齐空态：恢复到一个空会话时原实现会整屏空白 -->
-                <Empty.Root class="min-h-40">
+                <Empty.Root class="animate-in fade-in-0 min-h-40 duration-200">
                     <Empty.Header>
                         <Empty.Media variant="icon">📄</Empty.Media>
                         <Empty.Title>{t("quiz.emptySession")}</Empty.Title>
@@ -1433,7 +1435,9 @@
             {/if}
         {:else if panelState === "result"}
             {#if error && !results}
-                <div class="mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-20 text-center">
+                <div
+                    class="animate-in fade-in-0 mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-20 text-center duration-200"
+                >
                     <h3 class="text-destructive text-lg font-semibold">{error.title}</h3>
                     <pre
                         class="bg-muted text-muted-foreground max-h-32 w-full overflow-auto rounded-md p-3 text-left text-xs">{error.detail}</pre>
