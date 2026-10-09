@@ -54,13 +54,14 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 - **Dedicated Tab**: Custom `addTab` with responsive layout for desktop and mobile; configurable panel width (600–1600px)
 - **Single-Page All-Questions View**: All questions scroll in one page; a numbered nav bar marks answered/unanswered and jumps to a question, with previous/next buttons and a position indicator
 - **Keyboard Shortcuts**: ← / → (or PageUp / PageDown) change question, Ctrl/Cmd + Enter submits; they do not fire inside inputs or the code editor
-- **Coding Editor**: CodeMirror 6 with syntax highlighting, line numbers, auto-completion, and light/dark theme following SiYuan
+- **Coding Editor**: CodeMirror 6 with syntax highlighting, line numbers, auto-completion, soft-wrap toggle, copy, reset-to-starter, and light/dark theme following SiYuan. Language packs load on demand (Python, JavaScript/TypeScript, Go, Java, C/C++, SQL, JSON, CSS, Markdown); unknown languages fall back to plain text
 - **Subjective Markdown Editor**: Edit/preview toggle with real-time Markdown + LaTeX rendering
 - **Countdown**: Optional answer countdown timer; auto-submits when time expires
 - **Auto-Save Progress**: Debounced (800ms) save to SiYuan `saveData`; resumable after closing
 - **Cancel & Resume**: Cancel during generation; force-save progress on tab close during answering
 - **Flagging**: mark questions you are unsure about; flags are saved with the progress
-- **Run Tests**: coding questions can run their test cases against the current code, with per-case results (JavaScript only)
+- **Run Tests**: coding questions can run their test cases against the current code, with per-case pass/fail badges; only JavaScript has an execution environment, so other languages show the reason instead of a dead button
+- **Reference Solution**: the result page renders the coding question's reference solution as a read-only highlighted code block
 - **Per-question timing**: each question's time is measured and surfaced in results and statistics
 - **Confirmation Dialogs**: Regenerate and submit actions require secondary confirmation
 - **Date-Range Generation**: "Today's notes" and "Recent N days" generation with configurable base time (e.g., 4 AM as the day boundary for late-night note-takers)
@@ -133,7 +134,7 @@ Left sidebar navigation + right content area, 6 independent sections:
 | Build Tool | Vite | 7.3+ |
 | Type System | TypeScript | 5.9+ |
 | Styling & Components | Tailwind CSS 4 + shadcn-svelte (bits-ui) | 4.3+ / 1.7+ |
-| Charts | Hand-drawn SVG + CSS (no chart library) | — |
+| Charts | layerchart + d3-scale (via shadcn `chart`) | 2.5+ |
 | SiYuan SDK | siyuan | 1.2.3 |
 | Code Editor | CodeMirror 6 | 6.x |
 | Math Rendering | KaTeX | 0.18.1 |
@@ -154,7 +155,8 @@ Left sidebar navigation + right content area, 6 independent sections:
   - `recallgen-progress.json`: Answer progress (unsaved sessions)
 - **Async Store Base**: `AsyncStore` handles serialized reads/writes, prevents a read from clobbering a concurrent write, and propagates write failures. Config writes are coalesced over a 400ms window so typing in a field no longer rewrites the whole file; quiz progress expires after 30 days
 - **Tab State Machine**: `configuring → loading_generating → answering → loading_grading → result`
-- **UI Components**: all built on shadcn-svelte (Button/Card/Badge/Input/Select/Switch/Tabs/Table/AlertDialog/DropdownMenu/Progress/Skeleton, powered by bits-ui). shadcn semantic variables are mapped to SiYuan's `--b3-*`, so light/dark follow the host theme, and the `dark:` variant is bound to SiYuan's `.theme-dark`
+- **UI Components**: all built on shadcn-svelte (Alert/AlertDialog/Badge/Button/Card/Checkbox/Collapsible/DropdownMenu/Empty/Field/Input/Item/Label/Progress/RadioGroup/Select/Separator/Skeleton/Slider/Spinner/Switch/Table/Tabs/Textarea/ToggleGroup, powered by bits-ui) plus shadcn `chart` for every chart. shadcn semantic variables are mapped to SiYuan's `--b3-*`, so light/dark follow the host theme, and the `dark:` variant is bound to SiYuan's `.theme-dark`
+- **Responsive by container queries**: panel width is unrelated to viewport width (a SiYuan tab can be narrow, the settings dialog is always narrower than the window), so layout switches on `@container` variants rather than `md:`/`sm:`. Only genuinely device-bound rules stay in media queries (touch targets, safe areas)
 - **Style isolation**: Tailwind's preflight is **deliberately not imported** — SiYuan and the plugin share one document, and a global reset would break SiYuan's own UI. Only the theme and utilities layers are imported, with the resets Tailwind relies on narrowed to the plugin container `.rg-scope`. KaTeX's own `body{counter-reset}` rule is rewritten to that scope too. KaTeX's stylesheet itself is still appended globally (it ships with the plugin so formulas render offline), which is the only global style the plugin adds
 - **Tab Restore**: SiYuan restores custom tabs on restart; `mode='generate'` tabs auto-detect existing progress and resume to answering state
 - **Formula rendering**: KaTeX styles and fonts ship with the plugin (woff2 only, ~296KB) instead of a CDN, so formulas render offline. The pipeline is `marked → DOMPurify → restore KaTeX`: at sanitize time formulas are still placeholders, which blocks script injection from notes/AI text without damaging KaTeX's own MathML

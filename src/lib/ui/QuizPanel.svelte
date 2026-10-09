@@ -33,6 +33,7 @@
 
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
+    import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
     import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
     import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
     import FlagIcon from "@lucide/svelte/icons/flag";
@@ -90,6 +91,8 @@
      */
     let submitError = $state<ErrorDescription | null>(null);
     let error = $state<ErrorDescription | null>(null);
+    /** 失败页「原始返回」折叠区是否展开（只用于箭头方向） */
+    let showRaw = $state(false);
     let progressValue = $state<number | null>(null);
     let progressLabel = $state("");
     let duration = $state(0);
@@ -978,8 +981,18 @@
                             class="bg-muted text-muted-foreground max-h-40 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">{desc.detail}</pre>
                         {#if desc.raw}
                             <!-- 解析类失败只看一句报错无从排查：把模型原文摊开，能直接看出是截断还是形状不对 -->
-                            <Collapsible.Root class="bg-muted/40 rounded-md border p-3">
-                                <Collapsible.Trigger class="text-muted-foreground w-full text-left text-xs font-medium">
+                            <Collapsible.Root bind:open={showRaw} class="bg-muted/40 rounded-md border p-3">
+                                <!--
+                                    带一个会翻转的箭头：原先只有一行灰色小字，
+                                    看不出这块能点开，很多人直接当成一个空输入框跳过了。
+                                -->
+                                <Collapsible.Trigger
+                                    class="text-muted-foreground flex w-full items-center gap-1.5 text-left text-xs font-medium"
+                                >
+                                    <ChevronDownIcon
+                                        class={cn("size-3.5 shrink-0 transition-transform", showRaw && "rotate-180")}
+                                        aria-hidden="true"
+                                    />
                                     {t("err.raw.title")}
                                     <span class="text-2xs">{t("err.raw.size", String(desc.raw.length))}</span>
                                 </Collapsible.Trigger>
