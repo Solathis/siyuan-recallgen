@@ -90,6 +90,44 @@ describe("闪卡面板", () => {
         expect(text).not.toContain("single_choice");
     });
 
+    /** 在 window 上派发一次按键（面板的监听挂在那里，模拟真实焦点不在面板内） */
+    const press = (key: string, target: EventTarget = window) => {
+        target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+        flushSync();
+    };
+
+    it("空格揭示答案、数字键自评", { timeout: MOUNT_TIMEOUT }, () => {
+        const host = mountPanel(items);
+        // 自评按钮只在揭示后出现，用它判断是否已揭示
+        expect(buttonWith(host, "显示答案"), "未揭示时应有揭示按钮").toBeTruthy();
+        expect(buttonWith(host, "忘了"), "未揭示时不该有自评按钮").toBeUndefined();
+
+        press(" ");
+        expect(buttonWith(host, "显示答案"), "揭示后揭示按钮应消失").toBeUndefined();
+        expect(buttonWith(host, "忘了"), "揭示后应有自评按钮").toBeTruthy();
+
+        // 1 → 忘了（与按钮顺序一致）
+        press("1");
+        const text = (host.textContent ?? "").replace(/\s+/g, " ");
+        expect(text).toContain("2 / 2");
+        expect(text).toContain("忘了 1");
+    });
+
+    it("未揭示答案时数字键不生效（避免盲评）", { timeout: MOUNT_TIMEOUT }, () => {
+        const host = mountPanel(items);
+        press("1");
+        expect((host.textContent ?? "").replace(/\s+/g, " ")).toContain("1 / 2");
+        expect(buttonWith(host, "显示答案"), "仍应停在未揭示状态").toBeTruthy();
+    });
+
+    it("焦点在输入控件里时不劫持按键", { timeout: MOUNT_TIMEOUT }, () => {
+        const host = mountPanel(items);
+        const input = document.createElement("input");
+        host.appendChild(input);
+        press(" ", input);
+        expect(buttonWith(host, "显示答案"), "输入框里的空格不该揭示答案").toBeTruthy();
+    });
+
     it("空列表给出说明而不是整块空白", { timeout: MOUNT_TIMEOUT }, () => {
         const host = mountPanel([]);
         expect(host.textContent).toContain("没有可复习的题目");

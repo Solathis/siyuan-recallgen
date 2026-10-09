@@ -134,7 +134,8 @@ export interface ReviewPayload {
 
 /** Tab 初始数据 */
 export interface QuizTabData {
-    mode: "generate" | "resume" | "dateGenerate" | "review" | "reviewDue";
+    /** manual：内容由用户在出题页直接粘贴，不经由选块/文档/日期范围 */
+    mode: "generate" | "manual" | "resume" | "dateGenerate" | "review" | "reviewDue";
     content?: string;
     quizId?: string;
     sourceDocId: string;

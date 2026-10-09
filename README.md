@@ -51,7 +51,8 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 
 ### Answer Panel
 
-- **Dedicated Tab**: Custom `addTab` with responsive layout for desktop and mobile; configurable panel width (600–1600px)
+- **Dedicated Tab**: Custom `addTab` with responsive layout; configurable panel width (600–1600px)
+- **Narrow containers switch to one-question-per-screen**: below 640px of *panel* width (not viewport) only the current question is rendered, with previous/next in the footer and left/right swipe to change question. Swipes starting in the code editor, a formula, an input, or any horizontally scrollable ancestor are left to that element
 - **Single-Page All-Questions View**: All questions scroll in one page; a numbered nav bar marks answered/unanswered and jumps to a question, with previous/next buttons and a position indicator
 - **Keyboard Shortcuts**: ← / → (or PageUp / PageDown) change question, Ctrl/Cmd + Enter submits; they do not fire inside inputs or the code editor
 - **Coding Editor**: CodeMirror 6 with syntax highlighting, line numbers, auto-completion, soft-wrap toggle, copy, reset-to-starter, and light/dark theme following SiYuan. Language packs load on demand (Python, JavaScript/TypeScript, Go, Java, C/C++, SQL, JSON, CSS, Markdown); unknown languages fall back to plain text
@@ -65,6 +66,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 - **Per-question timing**: each question's time is measured and surfaced in results and statistics
 - **Confirmation Dialogs**: Regenerate and submit actions require secondary confirmation
 - **Date-Range Generation**: "Today's notes" and "Recent N days" generation with configurable base time (e.g., 4 AM as the day boundary for late-night note-takers)
+- **Quiz from pasted text**: paste lecture notes, code or an excerpt straight into the plugin and generate from it — no need to save it as a note first (block menu, or the `Quiz from pasted text` command)
 
 ### Grading & Results
 
@@ -371,7 +373,7 @@ After submitting, every question enters the question bank keyed by a stem finger
 - **Mastery**: half accuracy, half stability, used for the bank overview and pruning policy
 - **Automatic pruning**: on load, questions that have not been reviewed for 180 days and have reached 85 mastery are removed so the bank cannot grow without bound
 - **Browse & manage**: the Bank view in the history panel supports searching by question text, filtering by state (all / due / weak), by question type and by difficulty, shows mastery, passed/seen counts and the next review time, and allows deleting a single question with confirmation. A row shows the date as well as the time when you group by source, and the toolbar has a one-click entry to review everything that is due
-- **Flashcard quick pass**: "Flashcard review" from the Bank view skips typing: read the question, reveal the answer, then self-grade **Again / Hard / Good / Easy**, which map to 0 / 50 / 80 / 100 and feed the same FSRS schedule. The card header shows progress, question type and difficulty; you can end early, and only the cards you actually graded are recorded
+- **Flashcard quick pass**: "Flashcard review" from the Bank view skips typing: read the question, reveal the answer, then self-grade **Again / Hard / Good / Easy**, which map to 0 / 50 / 80 / 100 and feed the same FSRS schedule. The card header shows progress, question type and difficulty; you can end early, and only the cards you actually graded are recorded. Keyboard-driven: Space/Enter reveals, 1–4 rates
 - **Cram (drill) mode**: with any filter selected, ticking **cram** ignores the FSRS schedule and takes every question matching the filter, running it as a flashcard pass instead of a scheduled quiz — for last-minute drilling before an exam
 - **Anki export**: the Bank toolbar exports a tab-separated `.txt` (front / back / tags, cells escaped) that Anki imports directly, so an existing review deck can absorb the bank
 - **Filter and review by knowledge point**: the Bank view can filter by knowledge point (with counts in the dropdown); once selected it shows how many questions and how many are due, and "Review this topic" starts a session containing only that topic's due questions. Knowledge-point chips in the expanded detail also jump straight to that filter

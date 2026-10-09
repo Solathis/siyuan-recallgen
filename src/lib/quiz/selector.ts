@@ -42,6 +42,11 @@ export class QuizSelector {
             langText: localeText(this.plugin.i18n, "generateNotebookQuiz", t("generateNotebookQuiz")),
             callback: () => void this.onNotebookCommand(),
         });
+        this.plugin.addCommand({
+            langKey: "pasteMaterial",
+            langText: localeText(this.plugin.i18n, "pasteMaterial", t("selector.pasteMaterial")),
+            callback: () => this.openPasteMaterial(),
+        });
     }
 
     unregister(): void {
@@ -58,6 +63,27 @@ export class QuizSelector {
             icon: "iconSparkles",
             label: localeText(this.plugin.i18n, "generateQuiz", t("generateQuiz")),
             click: () => void this.run(() => this.fromBlocks(detail)),
+        });
+        detail.menu.addItem({
+            icon: "iconEdit",
+            label: t("selector.pasteMaterial"),
+            click: () => this.openPasteMaterial(),
+        });
+    }
+
+    /**
+     * 打开「粘贴材料出题」。
+     *
+     * sourceDocId 带时间戳而不是固定值：出题进度是按 sourceDocId 回查的，
+     * 用固定值会让上一次没答完的粘贴内容永远劫持下一次的新标签页
+     * （打开直接进答题，看不到输入框）。
+     */
+    private openPasteMaterial() {
+        const stamp = Date.now();
+        this.open({
+            mode: "manual",
+            sourceDocId: `manual-${stamp}`,
+            sourceTitle: t("compose.sourcePlaceholder"),
         });
     }
 
