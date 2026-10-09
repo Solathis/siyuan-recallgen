@@ -14,6 +14,8 @@
 
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+/* 动效走 shadcn 生态的 tw-animate-css（animate-in / fade-in-0 / slide-in-from-* */
+@import "tw-animate-css";
 
 /* 思源用 .theme-dark 标记暗色主题，把它接到 Tailwind 的 dark: 变体上 */
 @custom-variant dark (&:where(.theme-dark, .theme-dark *));
@@ -394,44 +396,6 @@
 }
 
 /*
- * 通用进入动效：淡入 + 轻微上移。
- *
- * 用 CSS 而不是 Svelte 的 transition，是为了让列表能按序错开：
- * 模板给出 --rg-i（第几项），延迟就按它累加；Svelte 的 transition 想错开
- * 得给每项单独算 delay，反而更啰嗦。
- */
-@keyframes rg-rise {
-    from {
-        opacity: 0;
-        transform: translateY(6px);
-    }
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
-.rg-rise {
-    animation: rg-rise var(--rg-dur-3) var(--rg-ease-out) both;
-    animation-delay: calc(var(--rg-i, 0) * 40ms);
-}
-
-/* 状态翻转时的一次轻弹：只用在得分、开关这类「刚变了」的元素上 */
-@keyframes rg-pop {
-    0% {
-        transform: scale(0.92);
-    }
-    60% {
-        transform: scale(1.03);
-    }
-    100% {
-        transform: scale(1);
-    }
-}
-.rg-pop {
-    animation: rg-pop var(--rg-dur-2) var(--rg-ease-out);
-}
-
-/*
  * 可横向滚动的窄条（分段选择器、标签行）隐藏滚动条。
  * 这类控件在窄屏上靠横滑放下，但桌面浏览器的滚动条会占掉好几像素、
  * 在 1 行高的控件上显得像多了一条边框；触摸板与触摸屏都能直接滑，
@@ -497,13 +461,6 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
-    }
-
-    .rg-rise,
-    .rg-pop {
-        animation: none;
-        opacity: 1;
-        transform: none;
     }
 
     .rg-indeterminate-bar {

@@ -12,6 +12,7 @@
     import StatsPanel from "./StatsPanel.svelte";
     import * as Table from "@/lib/components/ui/table";
     import * as Tabs from "@/lib/components/ui/tabs";
+    import * as Empty from "@/lib/components/ui/empty";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { dayKey } from "../quiz/charts";
@@ -19,7 +20,6 @@
     import { EXPORT_EXTENSION, EXPORT_MIME, buildExport, type ExportFormat } from "../quiz/export";
     import { PAGE_SIZE, limitGroups, nextLimit } from "../quiz/paging";
     import { PASS_SCORE, scorePercent } from "../quiz/stats";
-    import StateBlock from "./StateBlock.svelte";
     import type { QuizService } from "../quiz/service";
     import type { QuestionType, ScoreIndexEntry, Difficulty } from "@/types/quiz";
 
@@ -339,9 +339,19 @@
                 </Card.Content>
             </Card.Root>
         {:else if records.length === 0}
-            <StateBlock kind="empty" icon="🗂" title={t("history.empty")} />
+            <Empty.Root class="min-h-40">
+                <Empty.Header>
+                    <Empty.Media variant="icon">🗂</Empty.Media>
+                    <Empty.Title>{t("history.empty")}</Empty.Title>
+                </Empty.Header>
+            </Empty.Root>
         {:else if filtered.length === 0}
-            <StateBlock kind="empty" icon="🔍" title={t("history.noMatch")} />
+            <Empty.Root class="min-h-40">
+                <Empty.Header>
+                    <Empty.Media variant="icon">🔍</Empty.Media>
+                    <Empty.Title>{t("history.noMatch")}</Empty.Title>
+                </Empty.Header>
+            </Empty.Root>
         {:else}
             <!-- 概览：先用一排数字说清「这段时间练得怎么样」，不必一张张卡片去数 -->
             {#if summary}
@@ -391,14 +401,9 @@
                                 <Card.Root
                                     class="group relative overflow-hidden transition-shadow focus-within:shadow-rg-md hover:shadow-rg-md"
                                 >
-                                    <!--
-                                        整卡可点是「块级命中区域」，保留原生 button：
-                                        Button 会强加自己的高度、内边距与 hover 底色，
-                                        与卡片自带的 hover 阴影打架。
-                                    -->
-                                    <button
-                                        type="button"
-                                        class="flex w-full flex-col gap-2 p-4 text-left"
+                                    <Button
+                                        variant="ghost"
+                                        class="hover:bg-transparent h-auto w-full flex-col items-stretch gap-2 p-4 text-left whitespace-normal"
                                         aria-label={`${t("history.review")}：${r.title}`}
                                         onclick={() => onOpenReview(r)}
                                     >
@@ -431,7 +436,7 @@
                                                 style="width: {Math.min(100, Math.max(0, p))}%"
                                             ></div>
                                         </div>
-                                    </button>
+                                    </Button>
 
                                     <div class="absolute top-1.5 right-1.5 z-10">
                                         <AlertDialog.Root>

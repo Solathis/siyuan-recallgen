@@ -9,6 +9,7 @@
     import SettingsGeneral from "./SettingsGeneral.svelte";
     import SettingsHeatmap from "./SettingsHeatmap.svelte";
     import SettingsPrompts from "./SettingsPrompts.svelte";
+    import { Button } from "@/lib/components/ui/button";
 
     let {
         config,
@@ -93,21 +94,20 @@
         aria-label={t("settings.title")}
     >
         {#each SECTIONS as section (section.key)}
-            <!-- 设置导航项是「页面级导航」而不是普通按钮：保留原生 button + aria-current -->
-            <button
-                type="button"
+            <Button
+                variant="ghost"
                 class={cn(
-                    "flex h-9 shrink-0 items-center gap-2 rounded-md border-l-2 px-3 text-left text-sm whitespace-nowrap transition-colors",
+                    "h-9 shrink-0 justify-start gap-2 rounded-md border-l-2 px-3 text-left text-sm whitespace-nowrap",
                     active === section.key
-                        ? "border-primary bg-background font-semibold"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground border-transparent"
+                        ? "border-primary bg-background hover:bg-background font-semibold"
+                        : "text-muted-foreground border-transparent"
                 )}
                 aria-current={active === section.key}
                 onclick={() => (active = section.key)}
             >
                 <span aria-hidden="true">{section.icon}</span>
                 <span>{section.label}</span>
-            </button>
+            </Button>
         {/each}
     </nav>
 

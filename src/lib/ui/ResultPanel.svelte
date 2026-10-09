@@ -4,14 +4,13 @@
     import * as Card from "@/lib/components/ui/card";
     import { Textarea } from "@/lib/components/ui/textarea";
     import * as Tabs from "@/lib/components/ui/tabs";
+    import * as ToggleGroup from "@/lib/components/ui/toggle-group";
+    import { Progress } from "@/lib/components/ui/progress";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { ChatTurn, QuizService } from "../quiz/service";
     import { formatClock } from "./duration";
     import { renderMarkdownLatex } from "./latex";
-    import { rise } from "./motion";
-    import ScoreRing from "./ScoreRing.svelte";
-    import Segmented from "./Segmented.svelte";
     import { PASS_SCORE } from "@/types/quiz";
     import type { GradingResult, Question } from "@/types/quiz";
 
@@ -232,19 +231,26 @@
         现在左侧是得分环 + 达标徽标（一眼可判），右侧是指标行；窄容器下
         指标行排成两列，不再出现三块纵向堆叠的大空白。
     -->
-    <div in:rise={{ y: 8 }}>
+    <div class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
         <Card.Root>
             <Card.Content class="flex flex-col gap-4 pt-4 @2xl:flex-row @2xl:items-center @2xl:gap-6">
                 <div class="flex items-center gap-4">
-                    <ScoreRing value={total} {max} pass={PASS_SCORE} size={124}>
-                        <span
-                            class={cn(
-                                "text-3xl leading-none font-semibold tabular-nums",
-                                passed ? "text-success" : "text-destructive"
-                            )}>{pct.toFixed(0)}</span
-                        >
-                        <span class="text-muted-foreground text-2xs">{t("result.score")}</span>
-                    </ScoreRing>
+                    <div class="flex w-full max-w-56 flex-col gap-2">
+                        <div class="flex items-baseline gap-2">
+                            <span
+                                class={cn(
+                                    "text-3xl leading-none font-semibold tabular-nums",
+                                    passed ? "text-success" : "text-destructive"
+                                )}>{pct.toFixed(0)}</span
+                            >
+                            <span class="text-muted-foreground text-2xs">{t("result.score")}</span>
+                        </div>
+                        <Progress
+                            value={pct}
+                            class="h-2 [&>[data-slot=progress-indicator]]:bg-rg-accent"
+                            aria-label={t("result.score")}
+                        />
+                    </div>
 
                     <div class="flex min-w-0 flex-col items-start gap-1.5">
                         <Badge variant={passed ? "success" : "destructive"}>
@@ -325,13 +331,26 @@
                 下方还挂着一条只表示「看到第几题」的蓝色进度条（就是那条
                 「没来由的蓝线」）。现在图例本身即筛选，蓝线去掉。
             -->
-            <Segmented
-                items={filterItems}
+            <ToggleGroup.Root
+                type="single"
                 value={filter}
-                ariaLabel={t("result.filterLabel")}
+                variant="outline"
                 size="sm"
-                onchange={(next) => (filter = next as StatusFilter)}
-            />
+                spacing={2}
+                class="flex-wrap"
+                aria-label={t("result.filterLabel")}
+                onValueChange={(next) => next && (filter = next as StatusFilter)}
+            >
+                {#each filterItems as item (item.value)}
+                    <!-- data-[state=on] 是 bits-ui 的选中态；描边变体默认只给一层浅灰底，
+                         筛选这种场景需要一眼看出选中项，这里补成强调色填充 -->
+                    <ToggleGroup.Item
+                        value={item.value}
+                        class="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                        >{item.label}</ToggleGroup.Item
+                    >
+                {/each}
+            </ToggleGroup.Root>
 
             {#if visible.length === 0}
                 <p class="text-muted-foreground py-6 text-center text-xs">{t("result.filterEmpty")}</p>
@@ -501,10 +520,9 @@
                 {#each chatHistory as turn, i (i)}
                     <div
                         class={cn(
-                            "max-w-4/5 rounded-md px-2.5 py-2 text-sm",
+                            "max-w-4/5 animate-in fade-in-0 rounded-md px-2.5 py-2 text-sm",
                             turn.role === "user" ? "bg-primary/10 self-end" : "bg-muted self-start"
                         )}
-                        in:rise={{ y: 4, duration: 160 }}
                     >
                         <span class="text-muted-foreground text-2xs font-semibold">
                             {turn.role === "user" ? t("common.me") : t("common.ai")}

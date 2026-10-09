@@ -44,6 +44,10 @@
     import { Label } from "@/lib/components/ui/label";
     import { Slider } from "@/lib/components/ui/slider";
     import * as Card from "@/lib/components/ui/card";
+    import * as Empty from "@/lib/components/ui/empty";
+    import { Separator } from "@/lib/components/ui/separator";
+    import * as Collapsible from "@/lib/components/ui/collapsible";
+    import { GEN_STEPS, stepStates } from "../quiz/gen-progress";
     import { describeError, type ErrorDescription } from "../ai/errors";
     import { isAbortError } from "../ai/client";
     import { copyText } from "./clipboard";
@@ -58,12 +62,9 @@
     import type { AIProtocol } from "@/types/config";
     import type { GradingResult, PanelState, QuizSession, UserAnswer } from "@/types/quiz";
     import GenPlan from "./GenPlan.svelte";
-    import GenSteps from "./GenSteps.svelte";
     import ProgressBar from "./ProgressBar.svelte";
     import QuestionView from "./QuestionView.svelte";
     import ResultPanel from "./ResultPanel.svelte";
-    import StateBlock from "./StateBlock.svelte";
-    import { rise } from "./motion";
 
     let {
         service,
@@ -1049,7 +1050,9 @@
                     更糟的是面板不在前台时（思源里切到别的 tab）WAAPI 动画会被浏览器暂停，
                     退场永远播不完，旧界面就一直在那不退。进场动效没有这个问题。
                 -->
-                <div class="flex w-full max-w-5xl flex-col gap-4" in:rise={{ y: 8 }}>
+                <div
+                    class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 flex w-full max-w-5xl flex-col gap-4"
+                >
                     <!--
                         容器够宽时进度卡与出题计划并排：进度是「正在发生什么」、
                         计划是「按什么在生成」，两栏并看比上下堆叠更好读，
@@ -1080,10 +1083,32 @@
 
                             <Card.Content class="flex flex-col gap-4">
                                 {#if panelState === "loading_generating"}
-                                    <GenSteps
-                                        phase={genStats?.phase ?? "generating"}
-                                        hasReviewer={!!config.ai.roles.reviewer}
-                                    />
+                                    <!--
+                                        流程步骤条用 Badge + Separator 组合。
+                                        这套 shadcn 没有 stepper，而三步的状态表达
+                                        （已走完 / 进行中 / 未开始）用徽标加分隔符已经够用。
+                                    -->
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        {#each GEN_STEPS as step, index (step)}
+                                            {@const state = stepStates(genStats?.phase ?? "generating")[step]}
+                                            {#if index === 0 || config.ai.roles.reviewer}
+                                                <Badge
+                                                    variant={state === "active"
+                                                        ? "default"
+                                                        : state === "done"
+                                                          ? "secondary"
+                                                          : "outline"}
+                                                    class={state === "pending" ? "text-muted-foreground" : undefined}
+                                                    aria-current={state === "active" ? "step" : undefined}
+                                                >
+                                                    {index + 1}. {t(`gen.phase.${step}`)}
+                                                </Badge>
+                                                {#if index < GEN_STEPS.length - 1 && config.ai.roles.reviewer}
+                                                    <Separator class="w-5" />
+                                                {/if}
+                                            {/if}
+                                        {/each}
+                                    </div>
                                 {/if}
 
                                 <ProgressBar
@@ -1189,33 +1214,36 @@
                     <p class="text-muted-foreground text-sm">{error.hint}</p>
                     {#if error.raw}
                         <!-- 解析类失败只看一句报错无从排查：把模型原文摊开，能直接看出是截断还是形状不对 -->
-                        <details class="bg-muted/40 w-full rounded-md border p-3 text-left">
-                            <summary class="text-muted-foreground cursor-pointer text-xs font-medium">
+                        <Collapsible.Root class="bg-muted/40 w-full rounded-md border p-3 text-left">
+                            <Collapsible.Trigger class="text-muted-foreground w-full text-left text-xs font-medium">
                                 {t("err.raw.title")}
                                 <span class="text-2xs">{t("err.raw.size", String(error.raw.length))}</span>
-                            </summary>
-                            <pre
-                                class="text-muted-foreground mt-2 max-h-60 overflow-auto text-2xs break-all whitespace-pre-wrap">{error.raw}</pre>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                class="mt-2"
-                                onclick={() => void copyRaw(error?.raw ?? "")}
-                            >
-                                {t("err.raw.copy")}
-                            </Button>
-                        </details>
+                            </Collapsible.Trigger>
+                            <Collapsible.Content>
+                                <pre
+                                    class="text-muted-foreground mt-2 max-h-60 overflow-auto text-2xs break-all whitespace-pre-wrap">{error.raw}</pre>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    class="mt-2"
+                                    onclick={() => void copyRaw(error?.raw ?? "")}
+                                >
+                                    {t("err.raw.copy")}
+                                </Button>
+                            </Collapsible.Content>
+                        </Collapsible.Root>
                     {/if}
                     <Button onclick={() => void retry()}>{t("common.retry")}</Button>
                 </div>
             {:else if questions.length === 0}
                 <!-- 补齐空态：恢复到一个空会话时原实现会整屏空白 -->
-                <StateBlock
-                    kind="empty"
-                    icon="📄"
-                    title={t("quiz.emptySession")}
-                    description={t("quiz.emptySessionHint")}
-                />
+                <Empty.Root class="min-h-40">
+                    <Empty.Header>
+                        <Empty.Media variant="icon">📄</Empty.Media>
+                        <Empty.Title>{t("quiz.emptySession")}</Empty.Title>
+                        <Empty.Description>{t("quiz.emptySessionHint")}</Empty.Description>
+                    </Empty.Header>
+                </Empty.Root>
             {:else}
                 <!--
                     顶栏重排。

@@ -540,10 +540,9 @@
                     {@const mastery = masteryScore(item)}
                     <Table.Row>
                         <Table.Cell>
-                            <!-- 整行展开的命中区域，保留原生 button（块级内容，Button 的排版会冲突） -->
-                            <button
-                                type="button"
-                                class="flex w-full flex-col gap-0.5 text-left"
+                            <Button
+                                variant="ghost"
+                                class="h-auto w-full flex-col items-start gap-0.5 p-0 text-left whitespace-normal"
                                 aria-expanded={expanded === item.id}
                                 onclick={() => toggle(item.id)}
                             >
@@ -554,7 +553,7 @@
                                     {expanded === item.id ? "▾" : "▸"}
                                     {item.sourceTitle}
                                 </span>
-                            </button>
+                            </Button>
                         </Table.Cell>
                         <Table.Cell>
                             <Badge variant="outline">{typeLabel(item.question.type)}</Badge>

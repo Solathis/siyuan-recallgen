@@ -5,6 +5,7 @@
     import { Checkbox } from "@/lib/components/ui/checkbox";
     import { Label } from "@/lib/components/ui/label";
     import * as Card from "@/lib/components/ui/card";
+    import { Input } from "@/lib/components/ui/input";
     import { t } from "../i18n";
     import { downloadText, exportStamp } from "./download";
     import { buildBankBackup, parseBankBackup } from "../quiz/bank-backup";
@@ -291,11 +292,12 @@
                     {t("settings.data.backupImport")}
                 </Button>
                 <!-- 隐藏在按钮背后的文件选择器：没有可见外观，保留原生 input 即可 -->
-                <input
-                    bind:this={backupInput}
+                <Input
+                    bind:ref={backupInput}
                     type="file"
                     accept="application/json,.json"
                     class="hidden"
+                    aria-label={t("settings.data.backupImport")}
                     onchange={importBackup}
                 />
             </div>
@@ -323,11 +325,12 @@
                     {t("settings.data.configImport")}
                 </Button>
                 <!-- 隐藏的文件选择器：思源环境没有可用的原生文件对话框 API -->
-                <input
-                    bind:this={fileInput}
+                <Input
+                    bind:ref={fileInput}
                     type="file"
                     accept="application/json,.json"
                     class="hidden"
+                    aria-label={t("settings.data.configImport")}
                     onchange={importConfig}
                 />
             </div>
@@ -347,11 +350,12 @@
                 <Button variant="outline" onclick={() => bankInput?.click()} disabled={bankBusy}>
                     {t("settings.data.bankImport")}
                 </Button>
-                <input
-                    bind:this={bankInput}
+                <Input
+                    bind:ref={bankInput}
                     type="file"
                     accept="application/json,.json"
                     class="hidden"
+                    aria-label={t("settings.data.bankImport")}
                     onchange={importBankBackup}
                 />
                 <AlertDialog.Root>

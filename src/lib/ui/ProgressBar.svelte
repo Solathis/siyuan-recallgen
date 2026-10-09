@@ -1,5 +1,6 @@
 <script lang="ts">
     import { Progress } from "@/lib/components/ui/progress";
+    import { Skeleton } from "@/lib/components/ui/skeleton";
     import { cn } from "@/lib/utils";
 
     /**
@@ -56,18 +57,11 @@
     {/if}
 
     {#if indeterminate}
-        <div
-            class={cn("bg-muted relative w-full overflow-hidden rounded-full", track)}
-            role="progressbar"
-            aria-label={label || undefined}
-        >
-            <div
-                class={cn(
-                    "rg-indeterminate-bar absolute h-full w-1/3 rounded-full",
-                    tone === "accent" ? "bg-rg-accent" : "bg-primary"
-                )}
-            ></div>
-        </div>
+        <!--
+            总量未知时用 Skeleton：shadcn 的 Progress 指示条由 value 定位，
+            表达不了「一直在跑但不知道到哪」，而 Skeleton 的脉冲本就是「进行中」的语义。
+        -->
+        <Skeleton class={cn("w-full rounded-full", track)} aria-label={label || undefined} />
     {:else}
         <Progress {value} class={cn(track, toneClass)} aria-label={label || undefined} />
     {/if}
