@@ -68,8 +68,13 @@ describe("代码静态体检", () => {
         expect(issues, `以下文案应走 i18n：\n${issues.join("\n")}`).toEqual([]);
     });
 
-    it("{@html} 的取值都经过净化助手（renderMarkdownLatex / DOMPurify）", () => {
-        const SANITIZED = /renderMarkdownLatex|DOMPurify|sanitize/;
+    it("{@html} 的取值都经过净化助手（renderMarkdownLatex / renderAnswerSegments / DOMPurify）", () => {
+        /*
+         * renderAnswerSegments 也算净化助手：它内部逐段调用 renderMarkdownLatex，
+         * 只是把「多个片段」各自渲染后用分隔符拼起来（填空题的每个空一段）。
+         * 允许列表里列的是「明确经过净化的入口」，新增时要先确认它确实走 renderMarkdownLatex。
+         */
+        const SANITIZED = /renderMarkdownLatex|renderAnswerSegments|DOMPurify|sanitize/;
         const issues: string[] = [];
 
         for (const { file, source, html } of templates) {

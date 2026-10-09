@@ -116,6 +116,64 @@ describe("renderMarkdownLatex - LaTeX 渲染", () => {
 });
 
 describe("renderMarkdownLatex - 边界", () => {
+    it("代码区间里的 $ 不会被配成公式（原先会把中间的文字整段吃掉）", () => {
+        // 自写扫描器不认识代码区间：`5$` 与 `10$` 里的 $ 会配成一对，
+        // 把「，折扣是」连同一半的反引号一起吃进 KaTeX
+        const html = renderMarkdownLatex("价格是 `5$` ，折扣是 `10$` 。");
+        expect(html, "不该出现公式").not.toContain("katex");
+        expect(html).toContain("折扣是");
+        expect(html).toContain("10");
+    });
+
+    it("行内代码里的 $rune 名字保持字面（本项目笔记最常见的写法）", () => {
+        const html = renderMarkdownLatex("用 `$state` 与 `$derived` 两个 rune。");
+        expect(html).not.toContain("katex");
+        expect(html).toContain("$state");
+        expect(html).toContain("$derived");
+    });
+
+    it("围栏代码块里的 $ 不参与公式", () => {
+        const html = renderMarkdownLatex("```js\nconst a = '$';\nconst b = '$';\n```");
+        expect(html).not.toContain("katex");
+        expect(html).toContain("const a");
+    });
+
+    it("代码区间之外的真实公式照常渲染", () => {
+        const html = renderMarkdownLatex("`$state` 与 $a^2+b^2=c^2$ 一起出现");
+        expect(html, "公式仍要渲染").toContain("katex");
+        expect(html, "代码里的 $state 保持字面").toContain("$state");
+    });
+
+    it("公式里的下划线不会被当成 Markdown 强调", () => {
+        // 交给 marked 的行内扩展意味着公式内容不再参与强调解析；
+        // 若哪天改成「先 marked 再找 $」，下标会被吃成 <em>
+        const html = renderMarkdownLatex("$x_1 + x_2$ 之和");
+        expect(html).toContain("katex");
+        expect(html, "公式里的下标不该变成 <em>").not.toContain("<em>");
+    });
+
+    it("正文里两个裸露的 $rune 名不会被配成公式（Pandoc 写法约定）", () => {
+        // 笔记与 AI 解析里常写成「$derived 与 $effect 的分工」而不加反引号。
+        // 不设限时这两个 $ 会配成一对，把中间的文字渲染成公式
+        // （预览里实测出现过内容为「derived 与」的公式）。
+        const html = renderMarkdownLatex("「$derived 与 $effect 的分工」是本单元的基础。");
+        expect(html, "不该出现公式").not.toContain("katex");
+        expect(html).toContain("$derived");
+        expect(html).toContain("$effect");
+    });
+
+    it("价格写法不会被当成公式", () => {
+        const html = renderMarkdownLatex("价格从 $5 到 $10 不等。");
+        expect(html).not.toContain("katex");
+        expect(html).toContain("$5");
+        expect(html).toContain("$10");
+    });
+
+    it("紧贴内容的 $ 仍是公式（写法约定不影响正常公式）", () => {
+        expect(renderMarkdownLatex("$x$")).toContain("katex");
+        expect(renderMarkdownLatex("公式 $a_b$ 结束")).toContain("katex");
+    });
+
     it("空输入返回空串", () => {
         expect(renderMarkdownLatex("")).toBe("");
     });
