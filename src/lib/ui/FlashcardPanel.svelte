@@ -312,6 +312,7 @@
                                     {#each GRADE_ORDER as g (g)}
                                         <Button
                                             variant="outline"
+                                            data-tap
                                             class={cn("h-auto py-2.5 text-xs font-semibold", GRADE_TONE[g])}
                                             onclick={() => grade(g)}
                                         >

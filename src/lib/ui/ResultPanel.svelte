@@ -429,6 +429,7 @@
                         <Button
                             variant="outline"
                             size="icon"
+                            data-tap="icon"
                             class={cn(
                                 "relative text-xs font-semibold transition-transform hover:scale-105",
                                 item.index === activeEntry?.index
