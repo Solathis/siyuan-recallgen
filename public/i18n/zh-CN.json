@@ -657,6 +657,7 @@
     "flash.title": "闪卡复习",
     "flash.showAnswer": "显示答案",
     "flash.revealHint": "先在心里想答案，再点这里对照",
+    "flash.keyHint": "空格揭示答案，1–4 自评",
     "flash.again": "忘了",
     "flash.hard": "模糊",
     "flash.good": "记住了",

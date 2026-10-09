@@ -657,6 +657,7 @@
     "flash.title": "Flashcard Review",
     "flash.showAnswer": "Show Answer",
     "flash.revealHint": "Think of the answer first, then click to compare",
+    "flash.keyHint": "Space reveals the answer, 1–4 rates it",
     "flash.again": "Forgot",
     "flash.hard": "Fuzzy",
     "flash.good": "Got it",

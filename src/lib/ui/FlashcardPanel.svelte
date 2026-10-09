@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onMount } from "svelte";
     import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import * as Empty from "@/lib/components/ui/empty";
@@ -22,6 +23,9 @@
         /** 全部卡片完成时触发；调用方用返回的得分率做 FSRS 排程 */
         onDone?: (grades: Array<{ id: string; percent: number }>) => void;
     } = $props();
+
+    /** 根元素：键盘监听挂在 window 上，需要自己判断面板是否真的在前台 */
+    let rootEl = $state<HTMLDivElement | null>(null);
 
     let index = $state(0);
     let revealed = $state(false);
@@ -51,6 +55,66 @@
     function reveal(): void {
         revealed = true;
     }
+
+    /**
+     * 面板是否真的在前台。
+     *
+     * 按键监听挂在 window 上，而思源会把非活动的 tab 留在 DOM 里，
+     * 不加判断就会「在别的 tab 里按空格，这边的卡片跟着翻」。
+     *
+     * 用祖先的 display/visibility 判断而不是 getClientRects：后者依赖布局引擎，
+     * jsdom 下恒为空列表，等于让整条按键路径无法写用例。
+     */
+    function isPanelVisible(): boolean {
+        if (!rootEl?.isConnected) return false;
+        for (let node: HTMLElement | null = rootEl; node; node = node.parentElement) {
+            const style = getComputedStyle(node);
+            if (style.display === "none" || style.visibility === "hidden") return false;
+        }
+        return true;
+    }
+
+    /*
+     * 键盘操作：闪卡是整套流程里最适合键盘的一个环节——一屏一张卡，
+     * 手上不必离开键盘。空格/回车揭示，1–4 自评（与按钮顺序一致）。
+     *
+     * 监听挂在 window 上（用户可能刚点完别处，焦点不在面板里），因此要自己
+     * 排除两种情况：面板不在前台（另一个 tab 里按空格不该翻这里的卡）、
+     * 焦点在输入控件里。
+     */
+    function onKeydown(event: KeyboardEvent): void {
+        if (done || !current) return;
+        const element = event.target as HTMLElement | null;
+        if (
+            element &&
+            (element.tagName === "INPUT" ||
+                element.tagName === "TEXTAREA" ||
+                element.tagName === "SELECT" ||
+                element.isContentEditable)
+        ) {
+            return;
+        }
+        if (!isPanelVisible()) return;
+
+        if (event.key === " " || event.key === "Enter") {
+            if (revealed) return;
+            event.preventDefault();
+            reveal();
+            return;
+        }
+        if (!revealed) return;
+        const position = Number.parseInt(event.key, 10);
+        const grade_ = GRADE_ORDER[position - 1];
+        if (grade_) {
+            event.preventDefault();
+            grade(grade_);
+        }
+    }
+
+    onMount(() => {
+        window.addEventListener("keydown", onKeydown);
+        return () => window.removeEventListener("keydown", onKeydown);
+    });
 
     /** 提前结束：把已自评的卡片结果交给调用方，未评的不算 */
     function finishEarly(): void {
@@ -130,7 +194,7 @@
     「本次复习」统计，把自评分布与剩余题量从底部那行小字挪过去，
     宽面板的横向空间因此有内容可用，而不是留白。
 -->
-<div class="@container flex h-full flex-col gap-4 px-4 py-5">
+<div bind:this={rootEl} class="@container flex h-full flex-col gap-4 px-4 py-5">
     <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 @3xl:flex-row @3xl:items-stretch">
         <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
             <div class="flex items-center justify-between gap-2">
@@ -140,12 +204,18 @@
                         原先这里传的是 0 基下标，于是在第一张卡上出现
                         进度条写「0 / 10」、卡片里写「1 / 10」的矛盾。
                     -->
+                    <!--
+                        进度条与文案同源（当前位置 / 共几张），也与卡片标题一致。
+                        原先条按位置、文案在「全部评完」或「提前结束」时按总题数，
+                        提前结束会出现「10 / 10」配一条 40% 的条；
+                        全部评完时 index = n-1，两者自然都到 100%。
+                    -->
                     <ProgressBar
-                        value={items.length > 0 ? ((index + (done ? 1 : 0)) / items.length) * 100 : 0}
+                        value={items.length > 0 ? ((index + 1) / items.length) * 100 : 0}
                         label={t(
                             "flash.progress",
                             // 空列表时下标会算出 1（1 / 0），用 min 收口
-                            String(done ? items.length : Math.min(index + 1, items.length)),
+                            String(Math.min(index + 1, items.length)),
                             String(items.length)
                         )}
                     />
@@ -223,7 +293,7 @@
                                         {t("flash.showAnswer")}
                                     </Button>
                                     <p class="text-muted-foreground mt-2 text-center text-2xs">
-                                        {t("flash.revealHint")}
+                                        {t("flash.revealHint")} · {t("flash.keyHint")}
                                     </p>
                                 </div>
                             {:else}
