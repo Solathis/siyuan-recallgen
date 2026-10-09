@@ -493,6 +493,8 @@
     "settings.data.title": "Data Management",
     "settings.data.desc": "Clear locally stored records",
     "settings.data.clearScores": "Clear Score Records",
+    "settings.data.dangerTitle": "Dangerous actions",
+    "settings.data.dangerDesc": "These cannot be undone — export a backup first",
     "settings.data.clearProgress": "Clear Answer Progress",
     "settings.title": "Plugin settings",
     "settings.nav.ai": "AI Service",

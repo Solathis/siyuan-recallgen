@@ -493,6 +493,8 @@
     "settings.data.title": "数据管理",
     "settings.data.desc": "清除本地存储的记录",
     "settings.data.clearScores": "清空成绩记录",
+    "settings.data.dangerTitle": "危险操作",
+    "settings.data.dangerDesc": "以下操作不可撤销，建议先导出备份",
     "settings.data.clearProgress": "清空答题进度",
     "settings.title": "插件设置",
     "settings.nav.ai": "AI 服务",

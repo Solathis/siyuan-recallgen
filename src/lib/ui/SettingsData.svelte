@@ -6,7 +6,7 @@
     import { Label } from "@/lib/components/ui/label";
     import * as Card from "@/lib/components/ui/card";
     import { Input } from "@/lib/components/ui/input";
-    import { FieldLegend } from "@/lib/components/ui/field";
+    import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/lib/components/ui/field";
     import { t } from "../i18n";
     import { downloadText, exportStamp } from "./download";
     import { buildBankBackup, parseBankBackup } from "../quiz/bank-backup";
@@ -209,180 +209,230 @@
     }
 </script>
 
-<Card.Root>
-    <Card.Header>
-        <Card.Title>{t("settings.data.title")}</Card.Title>
-        <Card.Description>{t("settings.data.desc")}</Card.Description>
-    </Card.Header>
-    <Card.Content class="flex flex-col gap-4">
-        <!--
-            清空类操作此前没有任何确认，点一下就永久丢失全部成绩；
-            现统一走 AlertDialog 二次确认，并在按钮旁标出影响范围。
-        -->
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-col">
-                <FieldLegend variant="label">{t("settings.data.clearScores")}</FieldLegend>
-                <span class="text-muted-foreground text-xs">
-                    {t("settings.data.clearScoresDesc", String(scoreCount))}
-                </span>
-            </div>
-            <AlertDialog.Root>
-                <AlertDialog.Trigger>
-                    {#snippet child({ props })}
-                        <Button {...props} variant="outline" disabled={busy !== null}>
-                            {t("settings.data.clearScores")}
+<div class="flex flex-col gap-4">
+    <!--
+        两张卡：可逆的备份/迁移与不可逆的清空分开。
+        原先六项操作平铺在同一张卡里，两个「清空」夹在导出按钮之间，
+        点错就是永久丢失；现在危险操作单独一张卡并加破坏色边框。
+    -->
+    <Card.Root>
+        <Card.Header>
+            <Card.Title>{t("settings.data.title")}</Card.Title>
+            <Card.Description>{t("settings.data.desc")}</Card.Description>
+        </Card.Header>
+        <Card.Content>
+            <FieldGroup>
+                <!--
+                每行用 Field（横向）：左侧标签与说明、右侧操作按钮。
+                窄容器下 Field 自己折成上下两段，不再靠 flex-wrap 手工凑。
+            -->
+                <Field orientation="responsive">
+                    <div class="flex flex-col gap-0.5">
+                        <FieldLabel>{t("settings.data.backup")}</FieldLabel>
+                        <FieldDescription>{t("settings.data.backupDesc")}</FieldDescription>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Button
+                            variant="outline"
+                            onclick={() => void exportBackup()}
+                            disabled={backupBusy || scoreCount === 0}
+                        >
+                            {t("settings.data.backupExport")}
                         </Button>
-                    {/snippet}
-                </AlertDialog.Trigger>
-                <AlertDialog.Content>
-                    <AlertDialog.Header>
-                        <AlertDialog.Title>{t("settings.data.clearScoresConfirmTitle")}</AlertDialog.Title>
-                        <AlertDialog.Description>
-                            {t("settings.data.clearScoresConfirmDesc", String(scoreCount))}
-                        </AlertDialog.Description>
-                    </AlertDialog.Header>
-                    <AlertDialog.Footer>
-                        <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
-                        <AlertDialog.Action variant="destructive" onclick={() => void run("scores", onClearScores)}>
-                            {t("settings.data.confirmClear")}
-                        </AlertDialog.Action>
-                    </AlertDialog.Footer>
-                </AlertDialog.Content>
-            </AlertDialog.Root>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-col">
-                <FieldLegend variant="label">{t("settings.data.clearProgress")}</FieldLegend>
-                <span class="text-muted-foreground text-xs">{t("settings.data.clearProgressDesc")}</span>
-            </div>
-            <AlertDialog.Root>
-                <AlertDialog.Trigger>
-                    {#snippet child({ props })}
-                        <Button {...props} variant="outline" disabled={busy !== null}>
-                            {t("settings.data.clearProgress")}
+                        <Button variant="outline" onclick={() => backupInput?.click()} disabled={backupBusy}>
+                            {t("settings.data.backupImport")}
                         </Button>
-                    {/snippet}
-                </AlertDialog.Trigger>
-                <AlertDialog.Content>
-                    <AlertDialog.Header>
-                        <AlertDialog.Title>{t("settings.data.clearProgressConfirmTitle")}</AlertDialog.Title>
-                        <AlertDialog.Description>{t("settings.data.clearProgressConfirmDesc")}</AlertDialog.Description>
-                    </AlertDialog.Header>
-                    <AlertDialog.Footer>
-                        <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
-                        <AlertDialog.Action variant="destructive" onclick={() => void run("progress", onClearProgress)}>
-                            {t("settings.data.confirmClear")}
-                        </AlertDialog.Action>
-                    </AlertDialog.Footer>
-                </AlertDialog.Content>
-            </AlertDialog.Root>
-        </div>
+                        <!-- 隐藏在按钮背后的文件选择器：没有可见外观，保留原生 input 即可 -->
+                        <Input
+                            bind:ref={backupInput}
+                            type="file"
+                            accept="application/json,.json"
+                            class="hidden"
+                            aria-label={t("settings.data.backupImport")}
+                            onchange={importBackup}
+                        />
+                    </div>
+                </Field>
 
-        <!-- 成绩备份：含题目与判分明细，可再导入；与报表导出区分开 -->
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-col">
-                <FieldLegend variant="label">{t("settings.data.backup")}</FieldLegend>
-                <span class="text-muted-foreground text-xs">{t("settings.data.backupDesc")}</span>
-            </div>
-            <div class="flex gap-2">
-                <Button variant="outline" onclick={() => void exportBackup()} disabled={backupBusy || scoreCount === 0}>
-                    {t("settings.data.backupExport")}
-                </Button>
-                <Button variant="outline" onclick={() => backupInput?.click()} disabled={backupBusy}>
-                    {t("settings.data.backupImport")}
-                </Button>
-                <!-- 隐藏在按钮背后的文件选择器：没有可见外观，保留原生 input 即可 -->
-                <Input
-                    bind:ref={backupInput}
-                    type="file"
-                    accept="application/json,.json"
-                    class="hidden"
-                    aria-label={t("settings.data.backupImport")}
-                    onchange={importBackup}
-                />
-            </div>
-        </div>
+                <Field orientation="responsive">
+                    <div class="flex flex-col gap-0.5">
+                        <FieldLabel>{t("settings.data.config")}</FieldLabel>
+                        <FieldDescription>{t("settings.data.configDesc")}</FieldDescription>
+                        <Label class="mt-1 flex items-center gap-2 text-xs font-normal">
+                            <Checkbox
+                                class="size-3.5"
+                                checked={includeSecrets}
+                                onCheckedChange={(checked) => (includeSecrets = checked === true)}
+                            />
+                            {t("settings.data.configIncludeSecrets")}
+                        </Label>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Button variant="outline" onclick={exportConfig} disabled={!config}>
+                            {t("settings.data.configExport")}
+                        </Button>
+                        <Button variant="outline" onclick={() => fileInput?.click()} disabled={!config}>
+                            {t("settings.data.configImport")}
+                        </Button>
+                        <!-- 隐藏的文件选择器：思源环境没有可用的原生文件对话框 API -->
+                        <Input
+                            bind:ref={fileInput}
+                            type="file"
+                            accept="application/json,.json"
+                            class="hidden"
+                            aria-label={t("settings.data.configImport")}
+                            onchange={importConfig}
+                        />
+                    </div>
+                </Field>
 
-        <!-- 配置导出/导入：换机器或分享配置时使用 -->
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-col">
-                <FieldLegend variant="label">{t("settings.data.config")}</FieldLegend>
-                <span class="text-muted-foreground text-xs">{t("settings.data.configDesc")}</span>
-                <Label class="mt-1 flex items-center gap-2 text-xs font-normal">
-                    <Checkbox
-                        class="size-3.5"
-                        checked={includeSecrets}
-                        onCheckedChange={(checked) => (includeSecrets = checked === true)}
-                    />
-                    {t("settings.data.configIncludeSecrets")}
-                </Label>
-            </div>
-            <div class="flex gap-2">
-                <Button variant="outline" onclick={exportConfig} disabled={!config}>
-                    {t("settings.data.configExport")}
-                </Button>
-                <Button variant="outline" onclick={() => fileInput?.click()} disabled={!config}>
-                    {t("settings.data.configImport")}
-                </Button>
-                <!-- 隐藏的文件选择器：思源环境没有可用的原生文件对话框 API -->
-                <Input
-                    bind:ref={fileInput}
-                    type="file"
-                    accept="application/json,.json"
-                    class="hidden"
-                    aria-label={t("settings.data.configImport")}
-                    onchange={importConfig}
-                />
-            </div>
-        </div>
+                <Field orientation="responsive">
+                    <div class="flex flex-col gap-0.5">
+                        <FieldLabel>{t("settings.data.bank")}</FieldLabel>
+                        <FieldDescription>
+                            {t("settings.data.bankDesc", String(bankSize), String(bankDue))}
+                        </FieldDescription>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Button
+                            variant="outline"
+                            onclick={() => void exportBank()}
+                            disabled={bankBusy || bankSize === 0}
+                        >
+                            {t("settings.data.bankExport")}
+                        </Button>
+                        <Button variant="outline" onclick={() => bankInput?.click()} disabled={bankBusy}>
+                            {t("settings.data.bankImport")}
+                        </Button>
+                        <Input
+                            bind:ref={bankInput}
+                            type="file"
+                            accept="application/json,.json"
+                            class="hidden"
+                            aria-label={t("settings.data.bankImport")}
+                            onchange={importBankBackup}
+                        />
+                    </div>
+                </Field>
+            </FieldGroup>
+        </Card.Content>
+    </Card.Root>
 
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-col">
-                <FieldLegend variant="label">{t("settings.data.bank")}</FieldLegend>
-                <span class="text-muted-foreground text-xs">
-                    {t("settings.data.bankDesc", String(bankSize), String(bankDue))}
-                </span>
-            </div>
-            <div class="flex flex-wrap gap-2">
-                <Button variant="outline" onclick={() => void exportBank()} disabled={bankBusy || bankSize === 0}>
-                    {t("settings.data.bankExport")}
-                </Button>
-                <Button variant="outline" onclick={() => bankInput?.click()} disabled={bankBusy}>
-                    {t("settings.data.bankImport")}
-                </Button>
-                <Input
-                    bind:ref={bankInput}
-                    type="file"
-                    accept="application/json,.json"
-                    class="hidden"
-                    aria-label={t("settings.data.bankImport")}
-                    onchange={importBankBackup}
-                />
-                <AlertDialog.Root>
-                    <AlertDialog.Trigger>
-                        {#snippet child({ props })}
-                            <Button {...props} variant="outline" disabled={busy !== null || bankSize === 0}>
-                                {t("settings.data.clearBank")}
-                            </Button>
-                        {/snippet}
-                    </AlertDialog.Trigger>
-                    <AlertDialog.Content>
-                        <AlertDialog.Header>
-                            <AlertDialog.Title>{t("settings.data.clearBankConfirmTitle")}</AlertDialog.Title>
-                            <AlertDialog.Description>
-                                {t("settings.data.clearBankConfirmDesc", String(bankSize))}
-                            </AlertDialog.Description>
-                        </AlertDialog.Header>
-                        <AlertDialog.Footer>
-                            <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
-                            <AlertDialog.Action variant="destructive" onclick={() => void run("bank", onClearBank)}>
-                                {t("settings.data.confirmClear")}
-                            </AlertDialog.Action>
-                        </AlertDialog.Footer>
-                    </AlertDialog.Content>
-                </AlertDialog.Root>
-            </div>
-        </div>
-    </Card.Content>
-</Card.Root>
+    <Card.Root class="border-destructive/40">
+        <Card.Header>
+            <Card.Title class="text-destructive">{t("settings.data.dangerTitle")}</Card.Title>
+            <Card.Description>{t("settings.data.dangerDesc")}</Card.Description>
+        </Card.Header>
+        <Card.Content>
+            <FieldGroup>
+                <Field orientation="responsive">
+                    <div class="flex flex-col gap-0.5">
+                        <FieldLabel>{t("settings.data.clearScores")}</FieldLabel>
+                        <FieldDescription>{t("settings.data.clearScoresDesc", String(scoreCount))}</FieldDescription>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <AlertDialog.Root>
+                            <AlertDialog.Trigger>
+                                {#snippet child({ props })}
+                                    <Button {...props} variant="outline" disabled={busy !== null}>
+                                        {t("settings.data.clearScores")}
+                                    </Button>
+                                {/snippet}
+                            </AlertDialog.Trigger>
+                            <AlertDialog.Content>
+                                <AlertDialog.Header>
+                                    <AlertDialog.Title>{t("settings.data.clearScoresConfirmTitle")}</AlertDialog.Title>
+                                    <AlertDialog.Description>
+                                        {t("settings.data.clearScoresConfirmDesc", String(scoreCount))}
+                                    </AlertDialog.Description>
+                                </AlertDialog.Header>
+                                <AlertDialog.Footer>
+                                    <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                                    <AlertDialog.Action
+                                        variant="destructive"
+                                        onclick={() => void run("scores", onClearScores)}
+                                    >
+                                        {t("settings.data.confirmClear")}
+                                    </AlertDialog.Action>
+                                </AlertDialog.Footer>
+                            </AlertDialog.Content>
+                        </AlertDialog.Root>
+                    </div>
+                </Field>
+
+                <Field orientation="responsive">
+                    <div class="flex flex-col gap-0.5">
+                        <FieldLabel>{t("settings.data.clearProgress")}</FieldLabel>
+                        <FieldDescription>{t("settings.data.clearProgressDesc")}</FieldDescription>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <AlertDialog.Root>
+                            <AlertDialog.Trigger>
+                                {#snippet child({ props })}
+                                    <Button {...props} variant="outline" disabled={busy !== null}>
+                                        {t("settings.data.clearProgress")}
+                                    </Button>
+                                {/snippet}
+                            </AlertDialog.Trigger>
+                            <AlertDialog.Content>
+                                <AlertDialog.Header>
+                                    <AlertDialog.Title>{t("settings.data.clearProgressConfirmTitle")}</AlertDialog.Title
+                                    >
+                                    <AlertDialog.Description
+                                        >{t("settings.data.clearProgressConfirmDesc")}</AlertDialog.Description
+                                    >
+                                </AlertDialog.Header>
+                                <AlertDialog.Footer>
+                                    <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                                    <AlertDialog.Action
+                                        variant="destructive"
+                                        onclick={() => void run("progress", onClearProgress)}
+                                    >
+                                        {t("settings.data.confirmClear")}
+                                    </AlertDialog.Action>
+                                </AlertDialog.Footer>
+                            </AlertDialog.Content>
+                        </AlertDialog.Root>
+                    </div>
+                </Field>
+
+                <Field orientation="responsive">
+                    <div class="flex flex-col gap-0.5">
+                        <FieldLabel>{t("settings.data.clearBank")}</FieldLabel>
+                        <FieldDescription>
+                            {t("settings.data.clearBankConfirmDesc", String(bankSize))}
+                        </FieldDescription>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <AlertDialog.Root>
+                            <AlertDialog.Trigger>
+                                {#snippet child({ props })}
+                                    <Button {...props} variant="outline" disabled={busy !== null || bankSize === 0}>
+                                        {t("settings.data.clearBank")}
+                                    </Button>
+                                {/snippet}
+                            </AlertDialog.Trigger>
+                            <AlertDialog.Content>
+                                <AlertDialog.Header>
+                                    <AlertDialog.Title>{t("settings.data.clearBankConfirmTitle")}</AlertDialog.Title>
+                                    <AlertDialog.Description>
+                                        {t("settings.data.clearBankConfirmDesc", String(bankSize))}
+                                    </AlertDialog.Description>
+                                </AlertDialog.Header>
+                                <AlertDialog.Footer>
+                                    <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+                                    <AlertDialog.Action
+                                        variant="destructive"
+                                        onclick={() => void run("bank", onClearBank)}
+                                    >
+                                        {t("settings.data.confirmClear")}
+                                    </AlertDialog.Action>
+                                </AlertDialog.Footer>
+                            </AlertDialog.Content>
+                        </AlertDialog.Root>
+                    </div>
+                </Field>
+            </FieldGroup>
+        </Card.Content>
+    </Card.Root>
+</div>
