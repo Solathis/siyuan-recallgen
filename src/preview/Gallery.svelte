@@ -2,14 +2,23 @@
     /**
      * 预览台外框。
      *
-     * 左侧选页面，右侧是被预览组件所在的 iframe；宽度拉杆直接改 iframe 元素的宽度，
-     * 于是里面的视口断点（以及后续的容器查询）会跟着变——这是能真正看到窄屏表现的关键。
+     * 左侧选页面，右侧是被预览组件所在的 iframe；宽度滑块直接改 iframe 元素的宽度，
+     * 于是里面的视口断点（以及容器查询）会跟着变——这是能真正看到窄屏表现的关键。
      *
      * iframe 的 src 只在「换页/换语言」时用命令式赋值一次，不用 $state 派生：
      * 被预览的组件自己也会跳页（例如历史页点「回看」跳到结果页），
      * src 若是派生的，会被立刻重置回画廊以为的那一页，等于把用户的点击吃掉。
+     *
+     * 外框本身也用 shadcn 组件（Button / ToggleGroup / Slider / Textarea / Card / Badge），
+     * 与插件界面同一套观感——它虽然是开发工具，但它是唯一被反复盯着看的一屏，
+     * 自写样式的工具条会让人误以为插件里也是这样。
      */
     import { onMount } from "svelte";
+    import { Badge } from "@/lib/components/ui/badge";
+    import { Button } from "@/lib/components/ui/button";
+    import { Slider } from "@/lib/components/ui/slider";
+    import { Textarea } from "@/lib/components/ui/textarea";
+    import * as ToggleGroup from "@/lib/components/ui/toggle-group";
     import { L } from "./labels";
     import { ALL_PAGES, DEFAULT_WIDTH, PAGE_GROUPS, WIDTH_STEPS, pageDef, type PageKey } from "./pages";
     import { PREVIEW_MESSAGE_TYPE, isPreviewPageMessage, type PreviewTheme } from "./state.svelte";
@@ -128,95 +137,149 @@
     });
 </script>
 
-<div class="rgv-app">
-    <header class="rgv-topbar">
-        <div class="rgv-brand">
-            <strong>{L.appTitle}</strong>
-            <span>{L.appSubtitle}</span>
+<div class="rg-scope flex h-full flex-col">
+    <!-- 顶栏：品牌 + 三组开关 + 主题变量入口 -->
+    <header class="border-border bg-muted/40 flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2">
+        <div class="mr-auto flex items-baseline gap-2">
+            <strong class="text-sm">{L.appTitle}</strong>
+            <span class="text-muted-foreground text-2xs">{L.appSubtitle}</span>
         </div>
 
-        <div class="rgv-group">
-            <span id="rgv-theme">{L.theme}</span>
-            <span class="rgv-seg" role="group" aria-labelledby="rgv-theme">
-                <button type="button" aria-pressed={theme === "light"} onclick={() => (theme = "light")}
-                    >{L.themeLight}</button
-                >
-                <button type="button" aria-pressed={theme === "dark"} onclick={() => (theme = "dark")}
-                    >{L.themeDark}</button
-                >
-            </span>
+        <div class="flex items-center gap-1.5">
+            <span id="rgv-theme" class="text-muted-foreground text-xs">{L.theme}</span>
+            <ToggleGroup.Root
+                type="single"
+                value={theme}
+                variant="outline"
+                size="sm"
+                spacing={2}
+                aria-labelledby="rgv-theme"
+                onValueChange={(next) => next && (theme = next as PreviewTheme)}
+            >
+                <ToggleGroup.Item value="light">{L.themeLight}</ToggleGroup.Item>
+                <ToggleGroup.Item value="dark">{L.themeDark}</ToggleGroup.Item>
+            </ToggleGroup.Root>
         </div>
 
-        <div class="rgv-group">
-            <span id="rgv-lang">{L.lang}</span>
-            <span class="rgv-seg" role="group" aria-labelledby="rgv-lang">
-                <button type="button" aria-pressed={lang === "zh"} onclick={() => selectLang("zh")}>{L.langZh}</button>
-                <button type="button" aria-pressed={lang === "en"} onclick={() => selectLang("en")}>{L.langEn}</button>
-            </span>
+        <div class="flex items-center gap-1.5">
+            <span id="rgv-lang" class="text-muted-foreground text-xs">{L.lang}</span>
+            <ToggleGroup.Root
+                type="single"
+                value={lang}
+                variant="outline"
+                size="sm"
+                spacing={2}
+                aria-labelledby="rgv-lang"
+                onValueChange={(next) => next && selectLang(next as Lang)}
+            >
+                <ToggleGroup.Item value="zh">{L.langZh}</ToggleGroup.Item>
+                <ToggleGroup.Item value="en">{L.langEn}</ToggleGroup.Item>
+            </ToggleGroup.Root>
         </div>
 
-        <div class="rgv-group">
-            <span id="rgv-touch">{L.touch}</span>
-            <span class="rgv-seg" role="group" aria-labelledby="rgv-touch">
-                <button type="button" aria-pressed={!forceMobile} onclick={() => (forceMobile = false)}
-                    >{L.touchOff}</button
-                >
-                <button type="button" aria-pressed={forceMobile} onclick={() => (forceMobile = true)}
-                    >{L.touchOn}</button
-                >
-            </span>
+        <div class="flex items-center gap-1.5">
+            <span id="rgv-touch" class="text-muted-foreground text-xs">{L.touch}</span>
+            <ToggleGroup.Root
+                type="single"
+                value={forceMobile ? "on" : "off"}
+                variant="outline"
+                size="sm"
+                spacing={2}
+                aria-labelledby="rgv-touch"
+                onValueChange={(next) => next && (forceMobile = next === "on")}
+            >
+                <ToggleGroup.Item value="off">{L.touchOff}</ToggleGroup.Item>
+                <ToggleGroup.Item value="on">{L.touchOn}</ToggleGroup.Item>
+            </ToggleGroup.Root>
         </div>
 
-        <button type="button" class="rgv-btn" onclick={() => (showVars = !showVars)}>{L.varsToggle}</button>
+        <Button variant="outline" size="sm" onclick={() => (showVars = !showVars)} aria-expanded={showVars}>
+            {L.varsToggle}
+        </Button>
     </header>
 
     {#if showVars}
-        <section class="rgv-vars">
-            <p><strong>{L.varsTitle}</strong></p>
-            <p>{L.varsDesc}</p>
-            <textarea bind:value={varsText} placeholder={L.varsPlaceholder} aria-label={L.varsTitle}></textarea>
-            <div class="rgv-vars-row">
-                <button type="button" class="rgv-btn" onclick={applyVars}>{L.varsApply}</button>
-                <button type="button" class="rgv-btn" onclick={resetVars}>{L.varsClear}</button>
-                <span>{varsApplied > 0 ? `${L.varsApplied}: ${varsApplied}` : L.varsEmpty}</span>
+        <section class="border-border bg-muted/40 flex flex-col gap-2 border-b p-3">
+            <p class="text-sm font-medium">{L.varsTitle}</p>
+            <p class="text-muted-foreground text-xs">{L.varsDesc}</p>
+            <Textarea
+                bind:value={varsText}
+                placeholder={L.varsPlaceholder}
+                aria-label={L.varsTitle}
+                class="bg-background min-h-24 font-mono text-xs"
+            />
+            <div class="flex flex-wrap items-center gap-2">
+                <Button size="sm" onclick={applyVars}>{L.varsApply}</Button>
+                <Button variant="outline" size="sm" onclick={resetVars}>{L.varsClear}</Button>
+                <Badge variant={varsApplied > 0 ? "secondary" : "outline"}>
+                    {varsApplied > 0 ? `${L.varsApplied}: ${varsApplied}` : L.varsEmpty}
+                </Badge>
             </div>
         </section>
     {/if}
 
-    <div class="rgv-body">
-        <nav class="rgv-nav" aria-label={L.appTitle}>
+    <div class="flex min-h-0 flex-1">
+        <!-- 页面清单 -->
+        <nav class="border-border bg-muted/20 w-48 shrink-0 overflow-y-auto border-r p-2" aria-label={L.appTitle}>
             {#each PAGE_GROUPS as group (group.group)}
-                <h3>{group.group}</h3>
+                <h3 class="text-muted-foreground mt-2 mb-1 px-2 text-2xs font-semibold tracking-wide uppercase">
+                    {group.group}
+                </h3>
                 {#each group.pages as item (item.key)}
-                    <button type="button" aria-current={page === item.key} onclick={() => selectPage(item.key)}>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start text-xs {page === item.key ? 'bg-background font-medium' : ''}"
+                        aria-current={page === item.key}
+                        onclick={() => selectPage(item.key)}
+                    >
                         {item.label}
-                    </button>
+                    </Button>
                 {/each}
             {/each}
         </nav>
 
-        <div class="rgv-stage-wrap">
-            <div class="rgv-stage-bar">
-                <span id="rgv-width">{L.width}</span>
-                <input type="range" min="320" max="1600" step="1" bind:value={width} aria-labelledby="rgv-width" />
-                <span>{width}{L.widthPx}</span>
-                <button type="button" class="rgv-btn" onclick={fitWidth}>{L.widthFit}</button>
-                <button type="button" class="rgv-btn" onclick={() => (width = DEFAULT_WIDTH)}>{L.widthReset}</button>
-                <span class="rgv-seg" role="group" aria-label={L.width}>
+        <div class="flex min-w-0 flex-1 flex-col">
+            <!-- 舞台工具条：宽度滑块 + 档位 + 当前屏要点 -->
+            <div class="border-border flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2">
+                <span id="rgv-width" class="text-muted-foreground text-xs">{L.width}</span>
+                <div class="w-56">
+                    <Slider
+                        type="single"
+                        min={320}
+                        max={1600}
+                        step={1}
+                        value={width}
+                        onValueChange={(v) => (width = v)}
+                        aria-labelledby="rgv-width"
+                    />
+                </div>
+                <Badge variant="outline">{width}{L.widthPx}</Badge>
+                <Button variant="outline" size="sm" onclick={fitWidth}>{L.widthFit}</Button>
+                <Button variant="ghost" size="sm" onclick={() => (width = DEFAULT_WIDTH)}>{L.widthReset}</Button>
+
+                <ToggleGroup.Root
+                    type="single"
+                    value={String(width)}
+                    variant="outline"
+                    size="sm"
+                    spacing={2}
+                    aria-label={L.width}
+                    onValueChange={(next) => next && (width = Number(next))}
+                >
                     {#each WIDTH_STEPS as step (step)}
-                        <button type="button" aria-pressed={width === step} onclick={() => (width = step)}>
-                            {step}
-                        </button>
+                        <ToggleGroup.Item value={String(step)}>{step}</ToggleGroup.Item>
                     {/each}
-                </span>
-                <span>{pageDef(page).hint}</span>
+                </ToggleGroup.Root>
+
+                <span class="text-muted-foreground text-xs">{pageDef(page).hint}</span>
             </div>
 
-            <div class="rgv-stage-scroll" bind:this={stageEl}>
+            <div class="rgv-stage min-h-0 flex-1 overflow-auto p-4">
                 <iframe
                     bind:this={frameEl}
                     src={initialSrc}
-                    class="rgv-stage rgv-stage--iframe"
+                    class="border-border bg-background mx-auto block h-full min-h-[560px] border shadow-sm"
                     style="width: {width}px"
                     title={pageDef(page).label}
                     onload={post}
