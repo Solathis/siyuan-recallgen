@@ -71,6 +71,7 @@
     import { describeError, type ErrorDescription } from "../ai/errors";
     import { isAbortError } from "../ai/client";
     import { copyText } from "./clipboard";
+    import { isElementVisible } from "./visibility";
     import { formatClock } from "./duration";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
@@ -1030,9 +1031,9 @@
         );
     }
 
-    /** 面板是否真的显示在屏幕上：隐藏的 tab 里不能抢全局按键 */
+    /** 面板是否真的显示在屏幕上：隐藏的 tab 里不能抢全局按键（见 visibility.ts） */
     function isPanelVisible(): boolean {
-        return !!rootEl && rootEl.isConnected && rootEl.getClientRects().length > 0;
+        return isElementVisible(rootEl);
     }
 
     /**
