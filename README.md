@@ -143,6 +143,8 @@ Left sidebar navigation + right content area, 6 independent sections:
 | Markdown Rendering | marked | 18.0.9 |
 | JSON Repair | jsonrepair | 3.15+ |
 | HTML Sanitizing | DOMPurify | 3.4+ |
+| Date math | date-fns | 4.4+ |
+| Concurrency limiting | p-limit | 7.3+ |
 | Unit Tests | Vitest | 4.1+ |
 | Package Manager | pnpm | 11+ |
 

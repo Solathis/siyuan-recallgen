@@ -7,6 +7,7 @@
     import { Spinner } from "@/lib/components/ui/spinner";
     import { Textarea } from "@/lib/components/ui/textarea";
     import CodeBlock from "../editor/CodeBlock.svelte";
+    import { renderAnswerSegments } from "./answer-render";
     import * as Tabs from "@/lib/components/ui/tabs";
     import * as ToggleGroup from "@/lib/components/ui/toggle-group";
     import { Progress } from "@/lib/components/ui/progress";
@@ -169,44 +170,51 @@
     const activeResult = $derived(activeEntry?.result);
     const activeQuestion = $derived(questions[activeEntry?.index ?? -1]);
 
-    function correctText(q: Question): string {
+    /** 正确答案的可渲染片段；填空题一个空一段，其余题型只有一段 */
+    function correctSegments(q: Question): string[] {
         switch (q.type) {
             case "single_choice":
-                return String.fromCharCode(65 + q.answer);
+                return [String.fromCharCode(65 + q.answer)];
             case "multiple_choice":
-                return q.answer
-                    .map((i) => String.fromCharCode(65 + i))
-                    .sort()
-                    .join("、");
+                return [
+                    q.answer
+                        .map((i) => String.fromCharCode(65 + i))
+                        .sort()
+                        .join("、"),
+                ];
             case "true_false":
-                return q.answer ? t("common.true") : t("common.false");
+                return [q.answer ? t("common.true") : t("common.false")];
             case "fill_blank":
-                return q.answer.map((o) => o.join(" / ")).join("；");
+                // 逐空分段：拼接成一个字符串再渲染会让两个空里的 $ 配成一对
+                return q.answer.map((o) => o.join(" / "));
             case "subjective":
-                return q.reference_answer;
+                return [q.reference_answer];
             case "coding":
-                return t("common.seeAnswer");
+                return [t("common.seeAnswer")];
         }
     }
 
-    function userText(r: GradingResult): string {
+    /** 你的答案的可渲染片段；填空题一个空一段，其余题型只有一段 */
+    function userSegments(r: GradingResult): string[] {
         const ua = r.userAnswer;
-        if (!hasAnswer(ua)) return t("common.unanswered");
+        if (!hasAnswer(ua)) return [t("common.unanswered")];
         switch (ua.type) {
             case "single_choice":
-                return String.fromCharCode(65 + ua.value);
+                return [String.fromCharCode(65 + ua.value)];
             case "multiple_choice":
-                return ua.value
-                    .map((i) => String.fromCharCode(65 + i))
-                    .sort()
-                    .join("、");
+                return [
+                    ua.value
+                        .map((i) => String.fromCharCode(65 + i))
+                        .sort()
+                        .join("、"),
+                ];
             case "true_false":
-                return ua.value ? t("common.true") : t("common.false");
+                return [ua.value ? t("common.true") : t("common.false")];
             case "fill_blank":
-                return ua.value.join("；");
+                return ua.value;
             case "subjective":
             case "coding":
-                return ua.value;
+                return [ua.value];
         }
     }
 
@@ -540,7 +548,7 @@
                                     <div>
                                         <span class="text-muted-foreground text-xs">{t("result.yourAnswer")}</span>
                                         <div class="rg-markdown">
-                                            {@html renderMarkdownLatex(userText(activeResult))}
+                                            {@html renderAnswerSegments(userSegments(activeResult))}
                                         </div>
                                     </div>
                                     {#if activeQuestion.type !== "subjective" && activeQuestion.type !== "coding"}
@@ -549,7 +557,7 @@
                                                 >{t("result.correctAnswer")}</span
                                             >
                                             <div class="rg-markdown">
-                                                {@html renderMarkdownLatex(correctText(activeQuestion))}
+                                                {@html renderAnswerSegments(correctSegments(activeQuestion))}
                                             </div>
                                         </div>
                                     {/if}

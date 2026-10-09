@@ -1,5 +1,5 @@
 import { t } from "@/lib/i18n";
-import PromiseLimitPool from "@/libs/promise-pool";
+import pLimit from "p-limit";
 import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
 import { activePrompts, buildGradeSubjectiveMessages } from "../ai/prompts";
 import {
@@ -30,7 +30,8 @@ export async function gradeAll(
 ): Promise<GradingResult[]> {
     const policy = config.general.multipleChoicePolicy ?? "partial";
     const results: GradingResult[] = [];
-    const pool = new PromiseLimitPool<GradingResult>(MAX_CONCURRENT);
+    const limit = pLimit(MAX_CONCURRENT);
+    const tasks: Promise<unknown>[] = [];
     let done = 0;
     const total = questions.length;
 
@@ -52,25 +53,27 @@ export async function gradeAll(
             done++;
             onProgress?.(done, total);
         } else {
-            pool.add(async () => {
-                const r = await gradeAI(config, q, ua, signal).catch((e): GradingResult => ({
-                    questionId: q.id,
-                    type: q.type,
-                    method: "ai",
-                    correct: null,
-                    score: 0,
-                    maxScore: 100,
-                    comment: t("grade.failed", (e as Error).message),
-                    userAnswer: ua,
-                }));
-                results.push(withSeconds(r, secondsByQuestion));
-                done++;
-                onProgress?.(done, total);
-                return r;
-            });
+            tasks.push(
+                limit(async () => {
+                    const r = await gradeAI(config, q, ua, signal).catch((e): GradingResult => ({
+                        questionId: q.id,
+                        type: q.type,
+                        method: "ai",
+                        correct: null,
+                        score: 0,
+                        maxScore: 100,
+                        comment: t("grade.failed", (e as Error).message),
+                        userAnswer: ua,
+                    }));
+                    results.push(withSeconds(r, secondsByQuestion));
+                    done++;
+                    onProgress?.(done, total);
+                    return r;
+                })
+            );
         }
     }
-    await pool.awaitAll();
+    await Promise.all(tasks);
     // 按原题序返回，避免依赖 questionId 的字符串排序（id 格式一旦变化就会错位）
     const byId = new Map(results.map((r) => [r.questionId, r]));
     return questions.map((q) => byId.get(q.id)).filter((r): r is GradingResult => r !== undefined);

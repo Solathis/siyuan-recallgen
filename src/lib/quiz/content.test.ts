@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { __resetFetchSyncPost, __setFetchSyncPost } from "@/test/siyuan-stub";
-import { clampContent, exportDocsMarkdown, MAX_CONTENT_CHARS } from "./content";
+import { clampContent, EXPORT_CONCURRENCY, exportDocsMarkdown, MAX_CONTENT_CHARS } from "./content";
 
 /** 按文档 id 返回导出内容的 handler；返回 null 表示该文档导出失败 */
 function serveExports(contentById: Record<string, string | null>, delays: Record<string, number> = {}) {
@@ -35,6 +35,27 @@ describe("exportDocsMarkdown", () => {
         const result = await exportDocsMarkdown(["a", "b", "c"]);
         expect(result.content.indexOf("第一")).toBeLessThan(result.content.indexOf("第二"));
         expect(result.content.indexOf("第二")).toBeLessThan(result.content.indexOf("第三"));
+    });
+
+    it("并发导出有上限：同时在途的文档数不超过 EXPORT_CONCURRENCY", async () => {
+        // 这条原先压在自写的并发池身上；换成 p-limit 后留在调用方这一层，
+        // 它才是真正需要保证的东西（上限值与调用方的常量同步）
+        let inFlight = 0;
+        let maxInFlight = 0;
+        __setFetchSyncPost(async (_url, data) => {
+            const id = (data as { id: string }).id;
+            inFlight++;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            await new Promise((r) => setTimeout(r, 5));
+            inFlight--;
+            return { code: 0, msg: "", data: { content: `内容 ${id}` } };
+        });
+
+        const ids = Array.from({ length: 12 }, (_, i) => `d${i}`);
+        const result = await exportDocsMarkdown(ids);
+        expect(result.exported).toBe(12);
+        expect(maxInFlight, "并发上限被突破").toBeLessThanOrEqual(EXPORT_CONCURRENCY);
+        expect(maxInFlight, "没有真正并发，退化成串行了").toBeGreaterThan(1);
     });
 
     it("单个文档导出失败不影响其余文档", async () => {

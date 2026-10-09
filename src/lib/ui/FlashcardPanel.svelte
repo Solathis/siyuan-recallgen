@@ -6,6 +6,7 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { renderMarkdownLatex } from "./latex";
+    import { renderAnswerSegments } from "./answer-render";
     import { isElementVisible } from "./visibility";
     import ProgressBar from "./ProgressBar.svelte";
     import type { BankItem } from "@/lib/quiz/bank";
@@ -157,19 +158,24 @@
     }
 
     /** 正确答案的展示文本（按题型） */
-    function answerText(item: BankItem): string {
+    /**
+     * 正确答案的可渲染片段（按题型）。
+     * 填空题逐空分段：拼成一个字符串再渲染会让两个空里的 $ 配成一对。
+     */
+    function answerSegments(item: BankItem): string[] {
         const q = item.question;
         if (q.type === "single_choice" || q.type === "multiple_choice") {
             // 只给字母没有意义，必须带上选项原文
-            return correctIndices(q)
-                .map((i) => `- ${optionLetter(i)}. ${q.options[i] ?? ""}`)
-                .join("\n");
+            return [
+                correctIndices(q)
+                    .map((i) => `- ${optionLetter(i)}. ${q.options[i] ?? ""}`)
+                    .join("\n"),
+            ];
         }
-        if (q.type === "true_false") return q.answer ? t("common.true") : t("common.false");
-        if (q.type === "fill_blank")
-            return (Array.isArray(q.answer) ? q.answer : []).map((opts) => opts.join(" / ")).join("；");
-        if (q.type === "coding") return q.answer ?? "";
-        return q.reference_answer ?? "";
+        if (q.type === "true_false") return [q.answer ? t("common.true") : t("common.false")];
+        if (q.type === "fill_blank") return (Array.isArray(q.answer) ? q.answer : []).map((opts) => opts.join(" / "));
+        if (q.type === "coding") return [q.answer ?? ""];
+        return [q.reference_answer ?? ""];
     }
 </script>
 
@@ -292,7 +298,7 @@
                                         {t("flash.answerLabel")}
                                     </p>
                                     <div class="rg-markdown text-sm">
-                                        {@html renderMarkdownLatex(answerText(current))}
+                                        {@html renderAnswerSegments(answerSegments(current))}
                                     </div>
                                 </div>
 

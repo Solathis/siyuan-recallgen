@@ -144,6 +144,8 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 | Markdown 渲染 | marked | 18.0.9 |
 | JSON 修复 | jsonrepair | 3.15+ |
 | HTML 净化 | DOMPurify | 3.4+ |
+| 日期计算 | date-fns | 4.4+ |
+| 并发限制 | p-limit | 7.3+ |
 | 单元测试 | Vitest | 4.1+ |
 | 包管理器 | pnpm | 11+ |
 

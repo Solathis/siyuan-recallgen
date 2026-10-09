@@ -1,5 +1,5 @@
 import katex from "katex";
-import { marked } from "marked";
+import { marked, type TokenizerAndRendererExtension } from "marked";
 import DOMPurify, { type Config } from "dompurify";
 
 /**
@@ -11,14 +11,13 @@ import DOMPurify, { type Config } from "dompurify";
  *
  * 处理顺序刻意设计为「先净化、后回填 KaTeX」：
  * 净化时数学公式还只是占位符，净化器不会误伤 KaTeX 生成的 MathML 与内联样式。
+ * 把 KaTeX 的产物放行给净化器（放宽到允许 <math> 与 style）会让笔记里的任意
+ * HTML 也一起被放行，那是拿安全换省事，不做。
  */
 
 /** 数学表达式占位符包裹字符（Unicode 私有区，正文不会自然出现） */
 const PH_START = "\uE000";
 const PH_END = "\uE001";
-
-/** 自增序号，配合每次调用的序号保证占位符不会被正文文本意外命中 */
-let phSeq = 0;
 
 /** 净化策略：在 DOMPurify 默认策略之上禁止可注入样式与提交行为的标签/属性 */
 const PURIFY_CONFIG: Config = {
@@ -59,53 +58,78 @@ function renderKatex(math: string, displayMode: boolean): string {
     }
 }
 
-interface ExtractedMath {
-    /** 数学表达式已替换为占位符的文本 */
-    processed: string;
-    /** 按出现顺序排列的渲染结果 */
-    rendered: string[];
-    /** 本次调用的占位符序号 */
+/** 一次渲染过程中收集到的公式；由 renderUncached 在调用 marked.parse 前设置 */
+interface MathBatch {
     nonce: string;
+    rendered: string[];
 }
+
+let batch: MathBatch | null = null;
+let seq = 0;
 
 /**
- * 提取 $...$ 与 $$...$$ 数学表达式并替换为占位符。
- * 转义写法 `\$` 会被跳过，因此正文里的价格等不会被误判为公式。
+ * 公式拆分：marked 的官方行内扩展。
+ *
+ * 为什么不自己扫原文：
+ * 之前是把整段 Markdown 交给一个自写的扫描器找 $...$，它完全不知道「代码区间」
+ * 这回事。于是 `` `5$` `` 与 `` `10$` `` 这两个代码区间里的 $ 会被配成一对，
+ * 把中间的文字整段吃进公式渲染（实测：`用 \`$state\` 与 \`$derived\` 两个 rune`
+ * 会渲染成一段公式 state` 与 `derived），而这正是本项目笔记里最常见的写法。
+ *
+ * 交给 marked 就解决了：扩展只在 marked 的行内 tokenizer 里被调用，
+ * 代码区间由 marked 自己的 codespan / code tokenizer 先整段吃掉，
+ * 里面的 $ 根本送不到这里；`\$` 转义同理由 marked 的 escape tokenizer 处理。
+ * 这是 marked 官方支持的扩展点（v4 起的稳定 API），不是内部实现。
  */
-function extractMath(text: string): ExtractedMath {
-    const nonce = String(phSeq++);
-    const rendered: string[] = [];
-    let processed = "";
-    let i = 0;
-
-    while (i < text.length) {
-        if (text[i] === "\\") {
-            processed += text.slice(i, i + 2);
-            i += 2;
-            continue;
+const mathExtension: TokenizerAndRendererExtension = {
+    name: "rgMath",
+    level: "inline",
+    start(src: string) {
+        const index = src.indexOf("$");
+        return index < 0 ? undefined : index;
+    },
+    tokenizer(src: string) {
+        if (src[0] !== "$" || !batch) return undefined;
+        const display = src.startsWith("$$");
+        const delim = display ? "$$" : "$";
+        const rest = src.slice(delim.length);
+        const end = rest.indexOf(delim);
+        if (end < 0) return undefined;
+        const body = rest.slice(0, end);
+        if (body.trim().length === 0) return undefined;
+        if (!display) {
+            /*
+             * 行内公式采用 Pandoc 的写法约定：开头的 $ 后面不能紧跟空白，
+             * 结尾的 $ 前面也不能是空白。
+             *
+             * 这条规则解决的是「正文里本来就有两个 $」这类真实输入：
+             * 笔记与 AI 解析里常把 rune 名直接写在正文中
+             * （「$derived 与 $effect 的分工」），不设限时任意两个 $ 都会配成一对，
+             * 把中间的文字整段渲染成公式（预览里实测出现过内容为「derived 与」的公式）。
+             * 价格写法（「$5 到 $10」）同理：结尾 $ 前是空白，不会被当成公式。
+             *
+             * 行内公式还不允许跨行，避免把相距很远的两个 $ 之间整段吃掉。
+             */
+            if (/^\s/.test(body) || /\s$/.test(body)) return undefined;
+            if (body.includes("\n")) return undefined;
         }
-        if (text[i] === "$") {
-            const display = text[i + 1] === "$";
-            const delimiter = display ? "$$" : "$";
-            const end = text.indexOf(delimiter, i + delimiter.length);
-            if (end > i) {
-                const body = text.slice(i + delimiter.length, end);
-                // 行内公式不允许跨行，避免把相距很远的两个 $ 之间内容整段吃掉
-                const usable = body.trim().length > 0 && (display || !body.includes("\n"));
-                if (usable) {
-                    rendered.push(renderKatex(body, display));
-                    processed += `${PH_START}${nonce}-${rendered.length - 1}${PH_END}`;
-                    i = end + delimiter.length;
-                    continue;
-                }
-            }
-        }
-        processed += text[i];
-        i++;
-    }
 
-    return { processed, rendered, nonce };
-}
+        batch.rendered.push(renderKatex(body, display));
+        const placeholder = `${PH_START}${batch.nonce}-${batch.rendered.length - 1}${PH_END}`;
+        return {
+            type: "rgMath",
+            raw: delim + body + delim,
+            // tokens: [] 表示不再对这段内容做行内解析（否则公式里的 _ 会被当强调）
+            tokens: [],
+            placeholder,
+        };
+    },
+    renderer(token) {
+        return typeof token.placeholder === "string" ? token.placeholder : (token.raw ?? "");
+    },
+};
+
+marked.use({ extensions: [mathExtension] });
 
 /**
  * 渲染结果缓存。
@@ -120,12 +144,20 @@ const cache = new Map<string, string>();
 
 /** 空输入直接返回空串，不占缓存 */
 function renderUncached(text: string): string {
-    const { processed, rendered, nonce } = extractMath(text);
-    const rawHtml = marked.parse(processed, { breaks: true, gfm: true, async: false }) as string;
+    const current: MathBatch = { nonce: String(seq++), rendered: [] };
+    batch = current;
+    let rawHtml: string;
+    try {
+        rawHtml = marked.parse(text, { breaks: true, gfm: true, async: false }) as string;
+    } finally {
+        // 无论成功失败都要清掉：留着会让下一次 parse（哪怕是别处的调用）往旧批次里塞
+        batch = null;
+    }
+
     let html = DOMPurify.sanitize(rawHtml, PURIFY_CONFIG);
     // 回填 KaTeX：内容由本地 KaTeX 生成，不参与净化，避免 MathML 被裁剪
-    rendered.forEach((katexHtml, index) => {
-        html = html.split(`${PH_START}${nonce}-${index}${PH_END}`).join(katexHtml);
+    current.rendered.forEach((katexHtml, index) => {
+        html = html.split(`${PH_START}${current.nonce}-${index}${PH_END}`).join(katexHtml);
     });
     return html;
 }

@@ -1,5 +1,5 @@
 import { exportMdContent } from "@/api";
-import PromiseLimitPool from "@/libs/promise-pool";
+import pLimit from "p-limit";
 
 /**
  * 单次生成请求允许携带的笔记字符上限。
@@ -17,7 +17,7 @@ export const MAX_CONTENT_CHARS = 200_000;
 export const MAX_DOCS_PER_NOTEBOOK = 200;
 
 /** 并发导出文档的并发度，避免大笔记本一次性打满内核 */
-const EXPORT_CONCURRENCY = 4;
+export const EXPORT_CONCURRENCY = 4;
 
 export interface ExportResult {
     /** 按原顺序拼接的 Markdown 内容 */
@@ -50,17 +50,17 @@ export function clampContent(content: string, maxChars = MAX_CONTENT_CHARS): { c
  * - 超出字符预算的文档整体跳过，但保证至少返回首篇（必要时截断）
  */
 export async function exportDocsMarkdown(docIds: string[], maxChars = MAX_CONTENT_CHARS): Promise<ExportResult> {
-    const pool = new PromiseLimitPool<{ index: number; content: string | null }>(EXPORT_CONCURRENCY);
-
-    for (let index = 0; index < docIds.length; index++) {
-        const id = docIds[index];
-        pool.add(async () => {
-            const exported = await exportMdContent(id).catch(() => null);
-            return { index, content: exported?.content ?? null };
-        });
-    }
-
-    const ordered = (await pool.awaitAll()).sort((a, b) => a.index - b.index);
+    // p-limit 管并发，Promise.all 的返回顺序与传入顺序一致，
+    // 因此不必再自己记 index 再排序
+    const limit = pLimit(EXPORT_CONCURRENCY);
+    const ordered = await Promise.all(
+        docIds.map((id) =>
+            limit(async () => {
+                const exported = await exportMdContent(id).catch(() => null);
+                return { content: exported?.content ?? null };
+            })
+        )
+    );
 
     const parts: string[] = [];
     let failed = 0;
