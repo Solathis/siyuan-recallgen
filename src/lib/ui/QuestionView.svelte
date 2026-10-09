@@ -17,6 +17,8 @@
 
 <script lang="ts">
     import { untrack } from "svelte";
+    import { showMessage } from "siyuan";
+    import { Badge } from "@/lib/components/ui/badge";
     import { Button } from "@/lib/components/ui/button";
     import { Checkbox } from "@/lib/components/ui/checkbox";
     import { Input } from "@/lib/components/ui/input";
@@ -25,8 +27,15 @@
     import { Textarea } from "@/lib/components/ui/textarea";
     import * as Tabs from "@/lib/components/ui/tabs";
     import { cn } from "@/lib/utils";
-    import { CodeEditor } from "../editor/codemirror";
-    import { isRunSupported, resolveEntryPoint, runCodingTests, type RunOutcome } from "../quiz/code-runner";
+    import { CodeEditor, languageLabel } from "../editor/codemirror";
+    import { copyText } from "./clipboard";
+    import {
+        isRunSupported,
+        isRunnableLanguage,
+        resolveEntryPoint,
+        runCodingTests,
+        type RunOutcome,
+    } from "../quiz/code-runner";
     import { t } from "../i18n";
     import { renderMarkdownLatex } from "./latex";
     import type { Question, UserAnswer } from "@/types/quiz";
@@ -166,6 +175,7 @@
         const instance = new CodeEditor(el, coding.language, initial, (doc) => {
             onchange({ type: "coding", value: doc });
         });
+        instance.setWrap(untrack(() => wrap));
         editor = instance;
         editorReady = false;
         void instance.mount().then(() => {
@@ -185,6 +195,29 @@
 
     let running = $state(false);
     let runOutcome = $state<RunOutcome | null>(null);
+    /** 当前代码是否软换行；长行折行还是横向滚动由用户自己定 */
+    let wrap = $state(false);
+
+    /** 这门语言能不能直接跑：只有 JS 有执行环境，其余语言不该给运行按钮 */
+    const runnable = $derived(question.type === "coding" && isRunnableLanguage(question.language));
+
+    function setWrap(on: boolean) {
+        wrap = on;
+        editor?.setWrap(on);
+    }
+
+    async function copyCode() {
+        const text = editor?.getValue() ?? codingValue ?? "";
+        const ok = await copyText(text);
+        showMessage(ok ? t("code.copied") : t("code.copyFailed"), ok ? 2000 : 6000, ok ? "info" : "error");
+    }
+
+    function resetCode() {
+        if (question.type !== "coding") return;
+        const starter = question.starter_code ?? "";
+        editor?.setValue(starter);
+        onchange({ type: "coding", value: starter });
+    }
 
     /**
      * 用当前编辑器内容跑一遍测试用例。
@@ -366,32 +399,86 @@
         </Tabs.Root>
     {:else if question.type === "coding"}
         <div class="flex flex-col gap-2">
+            <!--
+                编辑器外壳。
+                工具栏放「语言 / 用例数」与「运行、换行、复制、重置」：
+                原先只有一行语言与用例数，改错了代码也没法退回初始代码，
+                长行只能靠横向滚动，想看代码长度就得拖来拖去。
+            -->
             <div class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-                <span class="bg-muted rounded-sm px-1.5 py-0.5 font-mono">{question.language}</span>
+                <span class="bg-muted rounded-sm px-1.5 py-0.5 font-mono">{languageLabel(question.language)}</span>
                 {#if question.test_cases?.length}
                     <span>{t("question.testCaseCount", String(question.test_cases.length))}</span>
-                    <Button size="xs" variant="outline" onclick={() => void runTests()} disabled={running}>
-                        {running ? t("question.running") : t("question.runTests")}
-                    </Button>
                 {/if}
+                <div class="ml-auto flex flex-wrap items-center gap-1">
+                    {#if runnable && question.test_cases?.length}
+                        <Button size="xs" variant="outline" onclick={() => void runTests()} disabled={running}>
+                            {running ? t("question.running") : t("question.runTests")}
+                        </Button>
+                    {:else if question.test_cases?.length}
+                        <!-- 不可执行的语言直接说明原因，而不是让人点一下才知道 -->
+                        <span class="text-2xs">{t("runtime.onlyJs", languageLabel(question.language))}</span>
+                    {/if}
+                    <Button
+                        size="xs"
+                        variant="ghost"
+                        aria-pressed={wrap}
+                        class={cn(wrap && "bg-accent text-accent-foreground")}
+                        onclick={() => setWrap(!wrap)}
+                        title={t("code.wrap")}
+                    >
+                        {t("code.wrap")}
+                    </Button>
+                    <Button
+                        size="xs"
+                        variant="ghost"
+                        disabled={!editorReady}
+                        onclick={() => void copyCode()}
+                        title={t("code.copy")}
+                    >
+                        {t("code.copy")}
+                    </Button>
+                    <Button
+                        size="xs"
+                        variant="ghost"
+                        disabled={!editorReady || !question.starter_code}
+                        onclick={resetCode}
+                        title={t("code.reset")}
+                    >
+                        {t("code.reset")}
+                    </Button>
+                </div>
             </div>
-            <div class="border-border min-h-[80px] overflow-hidden rounded-md border" bind:this={editorEl}></div>
+            <!--
+                容器只画边框、不裁剪：高度上限交给编辑器的 .cm-scroller（见 codemirror.ts），
+                外层一旦带 overflow，补全弹层就会被切掉一半。
+                min-h 让空代码时也有个像输入框的高度。
+            -->
+            <div
+                class="border-border min-h-40 rounded-md border"
+                style="--rg-code-max-h: 24rem"
+                bind:this={editorEl}
+            ></div>
 
             {#if runCases}
                 <div class="bg-muted/50 flex flex-col gap-1.5 rounded-md p-2 text-xs">
-                    <span class="font-semibold">
-                        {t("question.runSummary", String(passedCount), String(runCases.length))}
-                    </span>
-                    {#if runLoadError}
-                        <span class="text-destructive font-mono break-all">
-                            {t("question.runLoadFailed", runLoadError)}
-                        </span>
-                    {/if}
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Badge variant={passedCount === runCases.length ? "success" : "warning"}>
+                            {t("question.runSummary", String(passedCount), String(runCases.length))}
+                        </Badge>
+                        {#if runLoadError}
+                            <span class="text-destructive text-2xs">{t("question.runLoadFailed", runLoadError)}</span>
+                        {/if}
+                    </div>
                     {#each runCases as outcome (outcome.index)}
                         <div class="flex flex-col gap-0.5">
-                            <span class={outcome.passed ? "text-success" : "text-destructive"}>
-                                {outcome.passed ? "✓" : "✗"}
-                                {t("question.caseLabel", String(outcome.index + 1))}
+                            <span class="flex items-center gap-1.5">
+                                <Badge variant={outcome.passed ? "success" : "destructive"}>
+                                    {outcome.passed ? t("question.casePassed") : t("question.caseFailed")}
+                                </Badge>
+                                <span class="text-muted-foreground"
+                                    >{t("question.caseLabel", String(outcome.index + 1))}</span
+                                >
                             </span>
                             {#if outcome.error}
                                 <span class="text-destructive font-mono break-all">{outcome.error}</span>

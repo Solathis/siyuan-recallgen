@@ -6,6 +6,7 @@
     import * as Empty from "@/lib/components/ui/empty";
     import { Spinner } from "@/lib/components/ui/spinner";
     import { Textarea } from "@/lib/components/ui/textarea";
+    import CodeBlock from "../editor/CodeBlock.svelte";
     import * as Tabs from "@/lib/components/ui/tabs";
     import * as ToggleGroup from "@/lib/components/ui/toggle-group";
     import { Progress } from "@/lib/components/ui/progress";
@@ -546,6 +547,25 @@
                                         </div>
                                     {/if}
                                 </div>
+
+                                {#if activeQuestion.type === "coding"}
+                                    <!--
+                                        编程题的参考答案是一段代码，原先只显示「见答案」而没有任何地方能看到它——
+                                        数据里本来就有 answer 字段，这里用只读高亮视图展示出来。
+                                    -->
+                                    <div class="flex flex-col gap-1">
+                                        <span class="text-muted-foreground text-xs">{t("result.correctAnswer")}</span>
+                                        {#if activeQuestion.answer?.trim()}
+                                            <CodeBlock
+                                                code={activeQuestion.answer}
+                                                language={activeQuestion.language}
+                                                title={t("code.reference")}
+                                            />
+                                        {:else}
+                                            <p class="text-muted-foreground text-xs">{t("result.noReference")}</p>
+                                        {/if}
+                                    </div>
+                                {/if}
 
                                 {#if activeQuestion.explanation}
                                     <div class="border-border border-t pt-2">
