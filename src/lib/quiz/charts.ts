@@ -1,3 +1,4 @@
+import { differenceInCalendarDays, parseISO, startOfDay } from "date-fns";
 import type { Difficulty, QuestionType, ScoreIndexEntry } from "@/types/quiz";
 import { scorePercent } from "./stats";
 
@@ -131,32 +132,38 @@ function weightPerQuestion(entries: ScoreIndexEntry[]): number {
     return Math.round((seconds / questions) * 10) / 10;
 }
 
-/** 由有序日期集合计算当前/最长连续天数 */
+/** 'YYYY-MM-DD' 解析成本地当天零点 */
+function dayStart(day: string): Date {
+    // parseISO 对待「只有日期」的字符串时按本地时间解析，与 dayKey 的口径一致
+    return startOfDay(parseISO(day));
+}
+
+/**
+ * 由有序日期集合计算当前/最长连续天数。
+ *
+ * 相邻天数用 date-fns 的 differenceInCalendarDays 判断，而不是
+ * (a - b) / 86400000 再四舍五入：夏令时切换那天是 23 或 25 小时，
+ * 自己除毫秒只是在「恰好差一小时」时侥幸对得上（半小时时差、
+ * 历史时区变更都会直接判错），而日历天差是这件事本来的定义。
+ */
 export function streaks(days: string[], now = Date.now()): { current: number; longest: number } {
     if (days.length === 0) return { current: 0, longest: 0 };
 
     let longest = 1;
     let run = 1;
     for (let i = 1; i < days.length; i++) {
-        const prev = new Date(`${days[i - 1]}T00:00:00`).getTime();
-        const cur = new Date(`${days[i]}T00:00:00`).getTime();
-        const diffDays = Math.round((cur - prev) / 86_400_000);
+        const diffDays = differenceInCalendarDays(dayStart(days[i]), dayStart(days[i - 1]));
         run = diffDays === 1 ? run + 1 : 1;
         longest = Math.max(longest, run);
     }
 
     // 当前连续：从今天（或昨天，容忍今天还没答题）向前数
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
-    const last = new Date(`${days[days.length - 1]}T00:00:00`).getTime();
-    const gapFromToday = Math.round((today.getTime() - last) / 86_400_000);
+    const gapFromToday = differenceInCalendarDays(startOfDay(new Date(now)), dayStart(days[days.length - 1]));
     if (gapFromToday > 1) return { current: 0, longest };
 
     let current = 1;
     for (let i = days.length - 1; i > 0; i--) {
-        const prev = new Date(`${days[i - 1]}T00:00:00`).getTime();
-        const cur = new Date(`${days[i]}T00:00:00`).getTime();
-        if (Math.round((cur - prev) / 86_400_000) === 1) current++;
+        if (differenceInCalendarDays(dayStart(days[i]), dayStart(days[i - 1])) === 1) current++;
         else break;
     }
     return { current, longest: Math.max(longest, current) };

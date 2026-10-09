@@ -1,3 +1,4 @@
+import { differenceInCalendarDays } from "date-fns";
 import type { ScoreIndexEntry } from "@/types/quiz";
 
 /**
@@ -21,6 +22,31 @@ export function startOfDay(date: Date): Date {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     return d;
+}
+
+/**
+ * 两个日期相差几个「日历天」，与夏令时无关。
+ *
+ * 不能用 (a - b) / 86400000 再取整：夏令时切换那天只有 23 小时或 25 小时，
+ * 于是同一个星期的列号会整体偏一格——在观测夏令时的时区里
+ * （America/New_York 实测 3 月切换后 col 8 应为 9），热力图从 3 月到 11 月
+ * 全部画早了一周，格子互相压在一起。中国无夏令时所以本地看不出来，
+ * 这正是它一直没被发现的原因。
+ * date-fns 的 differenceInCalendarDays 按本地日历日归一后相减，
+ * 是这件事的成熟实现，不必自己拿毫秒除以天数。
+ */
+export function calendarDaysBetween(later: Date, earlier: Date): number {
+    return differenceInCalendarDays(later, earlier);
+}
+
+/**
+ * 某天落在第几周列。
+ *
+ * 窗口起点恒为周一（见 windowBounds），因此「日历天差 / 7 取整」正好是列号，
+ * 不需要再补星期的偏移。
+ */
+export function weekColumn(day: Date, windowStart: Date): number {
+    return Math.floor(calendarDaysBetween(startOfDay(day), startOfDay(windowStart)) / 7);
 }
 
 /**

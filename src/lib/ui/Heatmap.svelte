@@ -63,7 +63,7 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { isSafeCssColor, type HeatmapConfig, type ScoreIndexEntry } from "@/types/quiz";
-    import { rangeYears, startOfDay, windowBounds, type HeatmapRange } from "./heatmap-range";
+    import { rangeYears, startOfDay, weekColumn, windowBounds, type HeatmapRange } from "./heatmap-range";
 
     type HMConfig = HeatmapConfig;
 
@@ -85,8 +85,6 @@
         /** 点击某个有记录的日期时触发（用于跳转到当天的成绩记录） */
         onDayClick?: (date: string) => void;
     } = $props();
-
-    const DAY_MS = 86_400_000;
 
     const today = startOfDay(new Date());
     const years = $derived(rangeYears(records, today));
@@ -117,7 +115,6 @@
     });
 
     const bounds = $derived(windowBounds(range, today));
-    const startMs = $derived(startOfDay(bounds.start).getTime());
 
     /** 窗口内每一天（含无记录的日子），顺序即日历顺序 */
     const days = $derived.by<Day[]>(() => {
@@ -175,7 +172,9 @@
      * row 取 getDay()（0=周日），与图表库 y = getDay() * 行高 的口径一致。
      */
     function colOf(day: Day): number {
-        return Math.floor((startOfDay(day.date).getTime() - startMs) / (7 * DAY_MS));
+        // 走日历天（见 heatmap-range.ts 的 weekColumn）：毫秒除以 7 天会在
+        // 夏今时切换后整体偏一列，观测夏今时的时区里整张图会错位八个月
+        return weekColumn(day.date, bounds.start);
     }
 
     function indexOf(day: Day, col: number): number {

@@ -61,11 +61,13 @@
     "bits-ui": "^2.19.2",
     "clsx": "^2.1.1",
     "d3-scale": "^4.0.2",
+    "date-fns": "^4.4.0",
     "dompurify": "^3.4.15",
     "jsonrepair": "^3.15.0",
     "katex": "^0.18.1",
     "layerchart": "^2.5.2",
     "marked": "^18.0.9",
+    "p-limit": "^7.3.3",
     "tailwind-merge": "^3.7.0",
     "tailwind-variants": "^3.3.1",
     "ts-fsrs": "^5.4.2"
