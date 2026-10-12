@@ -612,15 +612,15 @@
 
             <div class="flex flex-wrap justify-end gap-2">
                 {#if belowPass > 0}
-                    <Button variant="secondary" size="sm" onclick={() => onretrywrong()}
+                    <Button variant="secondary" size="sm" data-tap onclick={() => onretrywrong()}
                         >{t("result.retryWrong")}</Button
                     >
                 {/if}
-                <Button variant="ghost" size="sm" onclick={() => ondiscard()}>{t("result.discard")}</Button>
-                <Button variant="outline" size="sm" disabled={savingDoc} onclick={() => onsavewrong()}
+                <Button variant="ghost" size="sm" data-tap onclick={() => ondiscard()}>{t("result.discard")}</Button>
+                <Button variant="outline" size="sm" data-tap disabled={savingDoc} onclick={() => onsavewrong()}
                     >{t("result.saveWrong")}</Button
                 >
-                <Button size="sm" disabled={savingDoc} onclick={() => onsave()}>{t("result.save")}</Button>
+                <Button size="sm" data-tap disabled={savingDoc} onclick={() => onsave()}>{t("result.save")}</Button>
             </div>
         </Tabs.Content>
 

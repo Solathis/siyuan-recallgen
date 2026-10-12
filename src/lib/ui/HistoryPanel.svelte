@@ -281,13 +281,19 @@
                     <p class="text-muted-foreground text-sm">{t("history.pageDesc")}</p>
                 </div>
                 <div class="flex items-center gap-1.5">
-                    <Button variant="ghost" size="sm" onclick={() => void load()} disabled={loading}>
+                    <Button variant="ghost" size="sm" data-tap onclick={() => void load()} disabled={loading}>
                         {t("common.refresh")}
                     </Button>
                     <DropdownMenu.Root>
                         <DropdownMenu.Trigger>
                             {#snippet child({ props })}
-                                <Button {...props} variant="outline" size="sm" disabled={filtered.length === 0}>
+                                <Button
+                                    {...props}
+                                    variant="outline"
+                                    size="sm"
+                                    data-tap
+                                    disabled={filtered.length === 0}
+                                >
                                     {t("history.export")}
                                 </Button>
                             {/snippet}
