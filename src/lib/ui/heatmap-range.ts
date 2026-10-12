@@ -35,7 +35,7 @@ export function startOfDay(date: Date): Date {
  * date-fns 的 differenceInCalendarDays 按本地日历日归一后相减，
  * 是这件事的成熟实现，不必自己拿毫秒除以天数。
  */
-export function calendarDaysBetween(later: Date, earlier: Date): number {
+function calendarDaysBetween(later: Date, earlier: Date): number {
     return differenceInCalendarDays(later, earlier);
 }
 
