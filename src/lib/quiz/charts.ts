@@ -20,7 +20,7 @@ export const TYPE_ORDER: QuestionType[] = [
 ];
 
 /** 难度固定展示顺序 */
-export const DIFFICULTY_ORDER: Difficulty[] = ["easy", "medium", "hard"];
+const DIFFICULTY_ORDER: Difficulty[] = ["easy", "medium", "hard"];
 
 /** UI 提供的时间范围选项（天），0 表示全部 */
 export type RangeDays = 7 | 30 | 90 | 0;

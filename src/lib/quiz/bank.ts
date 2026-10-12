@@ -129,7 +129,7 @@ const CARD_STATES: readonly State[] = [State.New, State.Learning, State.Review, 
  * ts-fsrs 的 fixDate/fixState 只做类型归一（字符串写法、时间戳），
  * 遇到真正非法的值会抛错，所以必须兜住。
  */
-export function normalizeCardState(raw: unknown, fallbackNow = Date.now()): BankCardState {
+function normalizeCardState(raw: unknown, fallbackNow = Date.now()): BankCardState {
     const base = newCardState(fallbackNow);
     const card = raw as Partial<BankCardState> | null | undefined;
     if (!card || typeof card !== "object") return base;
