@@ -32,17 +32,3 @@ export function useTouchLayout(): boolean {
     if (forcedMobile !== null) return forcedMobile;
     return matches("(pointer: coarse)");
 }
-
-/** 是否按移动端渲染。仅用于少数「容器宽度也判断不出」的路径 */
-export function useMobileLayout(): boolean {
-    if (forcedMobile !== null) return forcedMobile;
-    return matches("(pointer: coarse)") || matches("(max-width: 640px)");
-}
-
-/**
- * 系统是否要求减少动态效果。
- * 纯 CSS 的动画由 app.css 里的 media 查询处理，这里给需要改判断逻辑的地方用。
- */
-export function useReducedMotion(): boolean {
-    return matches("(prefers-reduced-motion: reduce)");
-}
