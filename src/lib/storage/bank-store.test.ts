@@ -558,6 +558,40 @@ describe("list() 的缓存与失效", () => {
         expect(await store.list()).toHaveLength(0);
     });
 
+    it("读取期间发生写入后,后续 list() 能看到新条目(行为守卫,不单独证明竞态修复)", async () => {
+        const disk: Record<string, unknown> = {};
+        let armed = false;
+        let pending: Promise<void> | null = null;
+        let store!: BankStore;
+        const plugin: StoragePlugin = {
+            loadData: async (name) => {
+                // 只在 list() 读分片时注入一次写入,与 list() 共用同一个 store 实例
+                if (armed && name.startsWith("recallgen-bank-2")) {
+                    armed = false;
+                    pending = store.upsert(item("乙"));
+                }
+                return name in disk ? disk[name] : null;
+            },
+            saveData: async (name, content) => {
+                disk[name] = content;
+            },
+            removeData: async (name) => {
+                delete disk[name];
+            },
+        };
+        store = new BankStore(plugin);
+        await store.upsert(item("甲"));
+        // 清掉内存缓存,让 list() 真正读盘
+        (store as unknown as { shards: Map<string, unknown> }).shards.clear();
+        (store as unknown as { index: { loaded: boolean } }).index.loaded = false;
+
+        armed = true;
+        await store.list();
+        await pending;
+        const after = await store.list();
+        expect(after.map((i) => i.question.question).sort()).toEqual(["乙", "甲"]);
+    });
+
     it("返回的是浅拷贝，调用方改动不会污染缓存", async () => {
         const { plugin } = memoryPlugin();
         const store = new BankStore(plugin);
@@ -565,6 +599,15 @@ describe("list() 的缓存与失效", () => {
         const first = await store.list();
         first.pop();
         expect(await store.list()).toHaveLength(1);
+    });
+
+    it("list() 的条目与缓存共享对象:需要改动的调用方必须先克隆(标签操作失败后界面与磁盘不一致的根因)", async () => {
+        const { plugin } = memoryPlugin();
+        const store = new BankStore(plugin);
+        await store.upsert(item("甲"));
+        const cloned = (await store.list()).map((i) => structuredClone(i));
+        cloned[0].question.question = "被改了";
+        expect((await store.list())[0].question.question).toBe("甲");
     });
 
     it("裁剪掉条目后缓存失效", async () => {

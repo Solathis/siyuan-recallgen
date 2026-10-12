@@ -206,6 +206,21 @@ describe("AsyncStore.write", () => {
         expect(await store.readData(null)).toEqual({ a: 1 });
     });
 
+    it("落盘失败后读取仍是上一次成功落盘的值(回归:缓存不能先于磁盘更新)", async () => {
+        let failing = false;
+        const plugin: StoragePlugin = {
+            loadData: async () => null,
+            saveData: async () => {
+                if (failing) throw new Error("磁盘满了");
+            },
+        };
+        const store = new TestStore(plugin);
+        await store.writeData({ v: 1 });
+        failing = true;
+        await expect(store.writeData({ v: 2 })).rejects.toBeInstanceOf(StorageError);
+        expect(await store.readData(null)).toEqual({ v: 1 });
+    });
+
     it("flush 等待排队中的写入完成", async () => {
         let done = false;
         const plugin: StoragePlugin = {

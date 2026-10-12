@@ -96,6 +96,8 @@ export class BankStore {
     private readonly shards = new Map<string, BankShardStore>();
     /** list() 的结果缓存，写入后失效 */
     private listCache: BankItem[] | null = null;
+    /** 每次写入失效时递增;读取期间代数变了,说明快照已过时,不能回填缓存 */
+    private listGeneration = 0;
 
     constructor(protected readonly plugin: StoragePlugin) {
         this.index = new BankIndexStore(plugin);
@@ -119,17 +121,19 @@ export class BankStore {
      */
     async list(): Promise<BankItem[]> {
         if (this.listCache) return [...this.listCache];
+        const generation = this.listGeneration;
         const file = await this.index.readAll();
         const out: BankItem[] = [];
         for (const month of Object.keys(file.months)) {
             out.push(...Object.values(await this.shard(month).readAll()));
         }
-        this.listCache = out;
+        if (generation === this.listGeneration) this.listCache = out;
         return [...out];
     }
 
     /** 任何写入之后都必须让 list() 的缓存失效 */
     private invalidateList(): void {
+        this.listGeneration++;
         this.listCache = null;
     }
 
