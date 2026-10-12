@@ -5,6 +5,7 @@ import "./app.css";
 
 import QuizPanel from "@/lib/ui/QuizPanel.svelte";
 import FlashcardPanel from "@/lib/ui/FlashcardPanel.svelte";
+import { gradesToResults } from "@/lib/ui/flashcard-grades";
 import HistoryPanel from "@/lib/ui/HistoryPanel.svelte";
 import SettingPanel from "@/lib/ui/SettingPanel.svelte";
 import { lsNotebooks } from "@/api";
@@ -154,25 +155,11 @@ export default class RecallGenPlugin extends Plugin {
                             items: flashItems,
                             onDone: (grades: Array<{ id: string; percent: number }>) => {
                                 // 把自评结果写回题库推进 FSRS 排程
+                                const rated = flashItems.filter((fi) => grades.some((g) => g.id === fi.id));
                                 void self.buildService().recordBankOutcomes(
-                                    flashItems
-                                        .filter((fi) => grades.some((g) => g.id === fi.id))
-                                        .map((fi) => fi.question),
+                                    rated.map((fi) => fi.question),
                                     { sourceDocId: "", sourceTitle: t("flash.title") },
-                                    flashItems
-                                        .filter((fi) => grades.some((g) => g.id === fi.id))
-                                        .map((fi) => {
-                                            const g = grades.find((gr) => gr.id === fi.id)!;
-                                            return {
-                                                questionId: fi.id,
-                                                type: fi.question.type,
-                                                method: "local" as const,
-                                                correct: g.percent >= 60,
-                                                score: g.percent,
-                                                maxScore: 100,
-                                                // 闪卡没有传统作答，userAnswer 省略
-                                            };
-                                        })
+                                    gradesToResults(rated, grades)
                                 );
                             },
                         },
