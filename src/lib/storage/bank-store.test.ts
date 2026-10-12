@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StoragePlugin } from "./store";
 import type { BankItem } from "@/lib/quiz/bank";
-import { applyResult, createBankItem, MAX_BANK_HISTORY } from "@/lib/quiz/bank";
+import { applyResult, createBankItem, MAX_BANK_HISTORY, questionFingerprint } from "@/lib/quiz/bank";
 import { monthKey } from "@/lib/quiz/stats";
 import type { Question } from "@/types/quiz";
 import { BankStore, BANK_MASTERED_AT, BANK_PRUNE_AFTER_MS } from "./bank";
@@ -504,6 +504,37 @@ describe("题库索引对账（写入中断后的恢复）", () => {
     it("空题库不需要对账", async () => {
         const { plugin } = memoryPlugin();
         expect(await new BankStore(plugin).reconcile()).toBe(0);
+    });
+});
+
+describe("旧版指纹的条目读取时重新计算 id", () => {
+    it("按旧指纹存的条目读出后只出现一次,id 改为新指纹,历史与排程保留", async () => {
+        const q = {
+            ...question("下列说法正确的是?"),
+            type: "single_choice",
+            options: ["A 选项", "B 选项"],
+            answer: [0],
+        } as unknown as Question;
+        const fresh = createBankItem(q, { sourceDocId: "doc-1", sourceTitle: "笔记" }, NOW);
+        const legacyId = `single_choice:${fresh.question.question.length}:legacy`;
+        const legacy = { ...fresh, id: legacyId, timesSeen: 2, history: [{ at: NOW, percent: 80 }] };
+        const shard = `recallgen-bank-${monthKey(NOW)}.json`;
+        const { plugin, disk } = memoryPlugin({
+            [shard]: { [legacyId]: legacy },
+            [INDEX]: { version: 1, months: { [monthKey(NOW)]: [legacyId] } },
+        });
+
+        const store = new BankStore(plugin);
+        const items = await store.list();
+        expect(items).toHaveLength(1);
+        expect(items[0].id).toBe(questionFingerprint(q));
+        expect(items[0].history).toEqual([{ at: NOW, percent: 80 }]);
+        expect(items[0].timesSeen).toBe(2);
+
+        // 旧数据在下一次写入时才落盘为新 key:写入后磁盘上只剩新 id,旧 id 不再残留
+        await store.upsert(fresh);
+        const onDisk = disk[shard] as Record<string, BankItem>;
+        expect(Object.keys(onDisk)).toEqual([questionFingerprint(q)]);
     });
 });
 

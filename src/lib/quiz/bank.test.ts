@@ -101,6 +101,14 @@ describe("questionFingerprint", () => {
         expect(questionFingerprint(question("甲"))).not.toBe(questionFingerprint(question("乙")));
     });
 
+    it("题干相同但选项不同则指纹不同(回归:同题干不同选项被合并为同一道题)", () => {
+        const withOptions = (options: string[], answer: number[]) =>
+            ({ ...question("下列说法正确的是?", "single_choice"), options, answer }) as Question;
+        expect(questionFingerprint(withOptions(["A 选项", "B 选项"], [0]))).not.toBe(
+            questionFingerprint(withOptions(["X 选项", "Y 选项"], [1]))
+        );
+    });
+
     it("指纹带题型前缀，便于排查", () => {
         expect(questionFingerprint(question("x", "fill_blank"))).toMatch(/^fill_blank:/);
     });
