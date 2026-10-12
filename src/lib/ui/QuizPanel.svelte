@@ -1429,6 +1429,7 @@
                             <Button
                                 variant="ghost"
                                 size="icon-sm"
+                                data-tap="icon"
                                 disabled={activeIndex <= 0}
                                 onclick={() => goToQuestion(activeIndex - 1)}
                                 aria-label={t("quiz.prevQuestion")}
@@ -1445,6 +1446,7 @@
                             <Button
                                 variant="ghost"
                                 size="icon-sm"
+                                data-tap="icon"
                                 disabled={activeIndex >= questions.length - 1}
                                 onclick={() => goToQuestion(activeIndex + 1)}
                                 aria-label={t("quiz.nextQuestion")}
@@ -1474,6 +1476,7 @@
                                 <Button
                                     variant="outline"
                                     size="sm"
+                                    data-tap
                                     onclick={goToNextUnanswered}
                                     title={t("quiz.nextUnansweredHint")}
                                 >
@@ -1484,13 +1487,16 @@
                                 <Button
                                     variant="outline"
                                     size="sm"
+                                    data-tap
                                     onclick={goToNextFlagged}
                                     title={t("quiz.nextFlaggedHint")}
                                 >
                                     {t("quiz.nextFlagged")}
                                 </Button>
                             {/if}
-                            <Button variant="ghost" size="sm" onclick={askRegenerate}>{t("quiz.regenerate")}</Button>
+                            <Button variant="ghost" size="sm" data-tap onclick={askRegenerate}>
+                                {t("quiz.regenerate")}
+                            </Button>
                         </div>
                     </div>
 
@@ -1633,7 +1639,7 @@
                                 {t("quiz.nextQuestion")}
                             </Button>
                         {/if}
-                        <Button variant="destructive" size="sm" onclick={askSubmit}>{t("quiz.submit")}</Button>
+                        <Button variant="destructive" size="sm" data-tap onclick={askSubmit}>{t("quiz.submit")}</Button>
                     </div>
                 </div>
             {/if}
