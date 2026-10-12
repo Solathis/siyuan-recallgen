@@ -53,6 +53,11 @@
                 return null;
         }
     }
+
+    /** 与鼠标点击等价的激活键:Enter 与空格 */
+    export function isActivationKey(key: string): boolean {
+        return key === "Enter" || key === " ";
+    }
 </script>
 
 <script lang="ts">
@@ -203,7 +208,18 @@
     /** 键盘移动后要把 DOM 焦点移过去，用元素引用直接对应下标 */
     let cellRefs = new Map<number, SVGRectElement>();
 
+    /** 点击与键盘激活共用:只在当天有记录时才跳转,空的日期点进去是一份空列表 */
+    function openDay(day: Day): void {
+        active = day;
+        if (onDayClick && day.count > 0) onDayClick(fmtDay(day.date));
+    }
+
     function onCellKeydown(event: KeyboardEvent, day: Day): void {
+        if (isActivationKey(event.key)) {
+            event.preventDefault();
+            openDay(day);
+            return;
+        }
         const next = nextFocusCell(focusCells, { col: colOf(day), row: day.date.getDay() }, event.key);
         if (!next) return;
         event.preventDefault();
@@ -309,6 +325,7 @@
                                         tabindex={index === focused ? 0 : -1}
                                         class={cn("rg-heat-cell", safe === null && "fill-muted")}
                                         fill={safe ?? "var(--color-muted)"}
+                                        role="button"
                                         aria-label={fmtTip(day)}
                                         onmouseenter={() => (active = day)}
                                         onmouseleave={() => (active = null)}
@@ -317,11 +334,7 @@
                                             active = day;
                                         }}
                                         onblur={() => (active = null)}
-                                        onclick={() => {
-                                            active = day;
-                                            // 只在当天有记录时才跳转：空的日期点进去是一份空列表
-                                            if (onDayClick && day.count > 0) onDayClick(fmtDay(day.date));
-                                        }}
+                                        onclick={() => openDay(day)}
                                         onkeydown={(event: KeyboardEvent) => onCellKeydown(event, day)}
                                     ></Rect>
                                 {/each}

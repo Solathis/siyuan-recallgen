@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextFocusCell, type FocusCell } from "./Heatmap.svelte";
+import { isActivationKey, nextFocusCell, type FocusCell } from "./Heatmap.svelte";
 
 /** 构造一个 3 列 × 7 行的完整网格 */
 const dense = (): FocusCell[] => {
@@ -60,5 +60,18 @@ describe("nextFocusCell", () => {
         expect(nextFocusCell(dense(), { col: 0, row: 0 }, "Enter")).toBeNull();
         expect(nextFocusCell(dense(), { col: 0, row: 0 }, "Tab")).toBeNull();
         expect(nextFocusCell([], { col: 0, row: 0 }, "ArrowDown")).toBeNull();
+    });
+});
+
+describe("isActivationKey", () => {
+    it("Enter 与空格都视为激活格子(与鼠标点击等价)", () => {
+        expect(isActivationKey("Enter")).toBe(true);
+        expect(isActivationKey(" ")).toBe(true);
+    });
+
+    it("方向键、Tab 等不激活,避免键盘漫游时误打开记录", () => {
+        expect(isActivationKey("ArrowDown")).toBe(false);
+        expect(isActivationKey("Tab")).toBe(false);
+        expect(isActivationKey("a")).toBe(false);
     });
 });
