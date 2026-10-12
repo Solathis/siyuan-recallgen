@@ -107,6 +107,11 @@ describe("scoreMultipleChoice", () => {
         expect(scoreMultipleChoice([0], [1, 2, 3])).toBe(0);
     });
 
+    it("重复选中同一项只计一次(回归:重复选择把部分分刷到满分)", () => {
+        // 正确项 [0,1];选了 0 三次只算命中 1 项:(1-0)/2 = 50,而不是 (3-0)/2 被夹到 100
+        expect(scoreMultipleChoice([0, 1], [0, 0, 0])).toBe(50);
+    });
+
     it("一个都没选得 0 分", () => {
         expect(scoreMultipleChoice([0, 1], [])).toBe(0);
     });
@@ -277,6 +282,10 @@ describe("多选题计分策略", () => {
         expect(isExactlyCorrect([0, 2], [0])).toBe(false);
         expect(isExactlyCorrect([0], [0, 1])).toBe(false);
         expect(isExactlyCorrect([], [])).toBe(true);
+    });
+
+    it("完全选对的判断不会被重复选择骗过(回归:[0,1] 选成 [0,0] 判为正确)", () => {
+        expect(isExactlyCorrect([0, 1], [0, 0])).toBe(false);
     });
 
     it("其他题型的计分不受策略影响", () => {

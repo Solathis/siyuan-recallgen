@@ -427,13 +427,14 @@ export default class RecallGenPlugin extends Plugin {
             recordBankOutcomes: async (questions, source, results) => {
                 const scoreById = new Map(results.map((r) => [r.questionId, r.score]));
                 const existing = await this.bankStore.findMany(questions.map((q) => questionFingerprint(q)));
+                // 复用口径取写入前的库存状态:applyResult 会先把 timesSeen 加一,不能拿它判断
+                const reused = questions.filter((question) => existing.has(questionFingerprint(question))).length;
                 const toWrite = questions.map((question) => {
                     const fingerprint = questionFingerprint(question);
                     const percent = scoreById.get(question.id) ?? 0;
                     const item = existing.get(fingerprint) ?? createBankItem(question, source);
                     return applyResult(item, percent);
                 });
-                const reused = toWrite.filter((item) => item.timesSeen > 1).length;
                 await this.bankStore.upsertMany(toWrite);
                 return { added: toWrite.length - reused, reused };
             },

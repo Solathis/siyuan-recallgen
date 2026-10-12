@@ -163,9 +163,10 @@ export function scoreObjective(q: Question, ua: UserAnswer, policy: MultipleChoi
 
 /** 多选题是否完全选对（顺序无关，不多不少） */
 export function isExactlyCorrect(correct: number[], selected: number[]): boolean {
-    if (correct.length !== selected.length) return false;
+    const picked = new Set(selected);
+    if (correct.length !== picked.size) return false;
     const set = new Set(correct);
-    return selected.every((index) => set.has(index));
+    return [...picked].every((index) => set.has(index));
 }
 
 /**
@@ -175,8 +176,9 @@ export function isExactlyCorrect(correct: number[], selected: number[]): boolean
 export function scoreMultipleChoice(correct: number[], selected: number[]): number {
     if (correct.length === 0) return 0;
     const correctSet = new Set(correct);
-    const hits = selected.filter((i) => correctSet.has(i)).length;
-    const wrong = selected.length - hits;
+    const picked = new Set(selected);
+    const hits = [...picked].filter((i) => correctSet.has(i)).length;
+    const wrong = picked.size - hits;
     const ratio = (hits - wrong) / correct.length;
     return Math.round(Math.max(0, Math.min(1, ratio)) * 100);
 }
