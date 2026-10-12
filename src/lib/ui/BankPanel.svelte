@@ -428,7 +428,7 @@
                     class="bg-primary/5 border-primary/20 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2"
                 >
                     <span class="text-xs">{t("bank.dueLine", String(counts.due), String(counts.total))}</span>
-                    <Button size="sm" onclick={() => onStartReview({})}>{t("bank.reviewDue")}</Button>
+                    <Button size="sm" data-tap onclick={() => onStartReview({})}>{t("bank.reviewDue")}</Button>
                 </div>
             {/if}
         </Card.Content>
@@ -439,6 +439,7 @@
         <Collapsible.Root bind:open={showTagManage} class="border-border rounded-lg border">
             <!-- 同样补一个会翻转的箭头：只有一行灰字时看不出这块能展开 -->
             <Collapsible.Trigger
+                data-tap
                 class="text-muted-foreground flex w-full items-center gap-1.5 p-3 text-left text-xs font-medium"
             >
                 <ChevronDownIcon
@@ -614,6 +615,7 @@
                                                 {...props}
                                                 variant="ghost"
                                                 size="icon-xs"
+                                                data-tap="icon"
                                                 disabled={deleting === item.id}
                                                 aria-label={t("common.delete")}
                                                 title={t("common.delete")}
