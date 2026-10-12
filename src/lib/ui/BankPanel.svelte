@@ -289,6 +289,7 @@
             <Button
                 variant="outline"
                 size="sm"
+                data-tap
                 disabled={loading || items.length === 0}
                 onclick={() =>
                     downloadText(
@@ -299,7 +300,7 @@
             >
                 {t("bank.ankiExport")}
             </Button>
-            <Button variant="ghost" size="sm" onclick={() => void load()} disabled={loading}>
+            <Button variant="ghost" size="sm" data-tap onclick={() => void load()} disabled={loading}>
                 {t("common.refresh")}
             </Button>
         </div>
