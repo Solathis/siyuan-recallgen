@@ -26,6 +26,14 @@ function mountSettings(config: RecallGenConfig, onsave: (c: RecallGenConfig) => 
     };
 }
 
+it("连接测试的结果区域是 live region,读屏能播报成功或失败(回归:结果出现时无声)", { timeout: MOUNT_TIMEOUT }, () => {
+    const { host, destroy } = mountSettings(getDefaultConfig(), () => {});
+    const status = host.querySelector<HTMLElement>('[role="status"][aria-live="polite"]');
+    expect(status, "连接测试的状态行应为 role=status 且 aria-live=polite").toBeTruthy();
+    expect(status!.querySelector("button")).toBeTruthy();
+    destroy();
+});
+
 function switchEl(host: HTMLElement): HTMLElement {
     const el = host.querySelector<HTMLElement>('[role="switch"]');
     if (!el) throw new Error("没找到结构化输出约束开关（role=switch）");
