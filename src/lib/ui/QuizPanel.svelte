@@ -52,8 +52,6 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
     import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-    import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
-    import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
     import FlagIcon from "@lucide/svelte/icons/flag";
     import { showMessage } from "siyuan";
     import * as AlertDialog from "@/lib/components/ui/alert-dialog";
@@ -1425,36 +1423,9 @@
                 -->
                 <header class="border-border flex shrink-0 flex-col gap-2 border-b py-2">
                     <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                        <div class="border-border flex items-center gap-0.5 rounded-md border p-0.5">
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                data-tap="icon"
-                                disabled={activeIndex <= 0}
-                                onclick={() => goToQuestion(activeIndex - 1)}
-                                aria-label={t("quiz.prevQuestion")}
-                                title={t("quiz.prevQuestion")}
-                            >
-                                <ChevronLeftIcon />
-                            </Button>
-                            <span
-                                class="text-muted-foreground min-w-11 text-center text-xs tabular-nums"
-                                aria-live="polite"
-                            >
-                                {activeIndex + 1}/{questions.length}
-                            </span>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                data-tap="icon"
-                                disabled={activeIndex >= questions.length - 1}
-                                onclick={() => goToQuestion(activeIndex + 1)}
-                                aria-label={t("quiz.nextQuestion")}
-                                title={t("quiz.nextQuestion")}
-                            >
-                                <ChevronRightIcon />
-                            </Button>
-                        </div>
+                        <span class="text-muted-foreground min-w-11 text-xs tabular-nums" aria-live="polite">
+                            {activeIndex + 1}/{questions.length}
+                        </span>
 
                         {#if countdownEnabled}
                             <Badge
@@ -1618,27 +1589,25 @@
                         <span>{t("quiz.elapsed", formatClock(answerElapsed))}</span>
                     </div>
                     <div class="flex items-center gap-1.5">
-                        {#if narrow}
-                            <!-- 窄容器下拇指在屏幕下方，翻页放在底栏比回到顶部的题号条近 -->
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                data-tap
-                                disabled={activeIndex <= 0}
-                                onclick={() => goToQuestion(activeIndex - 1)}
-                            >
-                                {t("quiz.prevQuestion")}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                data-tap
-                                disabled={activeIndex >= questions.length - 1}
-                                onclick={() => goToQuestion(activeIndex + 1)}
-                            >
-                                {t("quiz.nextQuestion")}
-                            </Button>
-                        {/if}
+                        <!-- 翻页只保留底栏这一套:拇指在屏幕下方,比回到顶部的题号条近,宽屏同样适用 -->
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            data-tap
+                            disabled={activeIndex <= 0}
+                            onclick={() => goToQuestion(activeIndex - 1)}
+                        >
+                            {t("quiz.prevQuestion")}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            data-tap
+                            disabled={activeIndex >= questions.length - 1}
+                            onclick={() => goToQuestion(activeIndex + 1)}
+                        >
+                            {t("quiz.nextQuestion")}
+                        </Button>
                         <Button variant="destructive" size="sm" data-tap onclick={askSubmit}>{t("quiz.submit")}</Button>
                     </div>
                 </div>
