@@ -841,6 +841,8 @@
             submitError = null;
             panelState = "result";
         } catch (e) {
+            // 用户主动取消(关闭标签页等)不是失败:不展示错误,也不写入成绩
+            if (cancelled || isAbortError(e)) return;
             error = describeError(e);
             // 判分成功后的失败（成绩落盘等）不应让结果不可见——用户已经答完了。
             // 但必须明确告知保存没有成功，否则用户以为一切正常，成绩记录其实丢了。
