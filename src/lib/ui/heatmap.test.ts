@@ -124,8 +124,38 @@ describe("热力图", () => {
 
         clickCell(empty!);
         flushSync();
-        // 点空白日期进去是一份空列表，用户还得再清一次筛选，因此不跳转
+        // 点空白日期进去是一份空列表,用户还得再清一次筛选,因此不跳转
         expect(clicked).toHaveLength(1);
+    });
+
+    it("键盘 Enter / 空格与点击等价:有记录的日期跳转,空白日期不跳转", { timeout: MOUNT_TIMEOUT }, async () => {
+        const clicked: string[] = [];
+        const host = mountHeatmap((date) => clicked.push(date));
+        const all = cells(host);
+
+        const withRecord = all.find((c) => !tipOf(c).includes("无记录"));
+        const empty = all.find((c) => tipOf(c).includes("无记录"));
+        expect(withRecord, "夹具里应有带记录的日期").toBeTruthy();
+        expect(empty, "夹具里应有空白日期").toBeTruthy();
+
+        withRecord!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+        flushSync();
+        expect(clicked).toHaveLength(1);
+
+        withRecord!.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+        flushSync();
+        expect(clicked).toHaveLength(2);
+
+        empty!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+        flushSync();
+        expect(clicked).toHaveLength(2);
+    });
+
+    it("格子带 role=button,屏幕阅读器能识别为可操作控件", { timeout: MOUNT_TIMEOUT }, async () => {
+        const host = mountHeatmap();
+        const first = cells(host)[0];
+        expect(first.getAttribute("role")).toBe("button");
+        expect(first.getAttribute("aria-label")).toBeTruthy();
     });
 
     it("详情行默认显示记录条数，悬停某天时显示当天得分", { timeout: MOUNT_TIMEOUT }, async () => {
