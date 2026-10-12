@@ -12,11 +12,26 @@ import type { Difficulty, Question, QuestionType } from "@/types/quiz";
  * - 本模块全部为纯函数，不接触存储与 UI，便于单测
  */
 
-/** 题目指纹：归一化题干 + 题型，用于去重 */
+/**
+ * 题目指纹:题型 + 归一化题干 + 归一化选项与答案,用于去重。
+ * 只看题干时,同一题干、选项不同的单选题会被合并成同一道题。
+ */
 export function questionFingerprint(question: Question): string {
     const normalized = normalizeText(question.question);
-    // 把题型与长度一起纳入，降低哈希碰撞概率
-    return `${question.type}:${normalized.length}:${hash32(`${question.type}|${normalized}`)}`;
+    const body = `${normalized}|${canonicalDetail(question)}`;
+    // 把题型与长度一起纳入,降低哈希碰撞概率
+    return `${question.type}:${normalized.length}:${hash32(`${question.type}|${body}`)}`;
+}
+
+/** 选项与答案的稳定形式:字符串统一归一化,结构保持原样(选项顺序有意义) */
+function canonicalDetail(question: Question): string {
+    const q = question as unknown as { options?: unknown; answer?: unknown; reference_answer?: unknown };
+    const canon = (value: unknown): unknown => {
+        if (typeof value === "string") return normalizeText(value);
+        if (Array.isArray(value)) return value.map(canon);
+        return value ?? null;
+    };
+    return JSON.stringify([canon(q.options), canon(q.answer), canon(q.reference_answer)]);
 }
 
 /**

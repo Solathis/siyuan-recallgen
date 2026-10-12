@@ -1,6 +1,6 @@
 import type { StoragePlugin } from "./store";
 import type { BankItem, BankSummary } from "@/lib/quiz/bank";
-import { masteryScore, normalizeBankItem, summarizeBank } from "@/lib/quiz/bank";
+import { masteryScore, normalizeBankItem, questionFingerprint, summarizeBank } from "@/lib/quiz/bank";
 import { monthKey } from "@/lib/quiz/stats";
 import { AsyncStore } from "./store";
 
@@ -67,9 +67,12 @@ class BankShardStore extends AsyncStore {
         const data = await this.read<Record<string, BankItem>>({});
         if (!data || typeof data !== "object" || Array.isArray(data)) return {};
         const out: Record<string, BankItem> = {};
-        for (const [id, item] of Object.entries(data)) {
+        for (const item of Object.values(data)) {
             if (!item || typeof item !== "object") continue;
-            out[id] = normalizeBankItem(item);
+            const normalized = normalizeBankItem(item);
+            // 指纹改版前存的 id 不再与题目对应:按题目重新计算,键与 id 一起更新
+            const key = questionFingerprint(normalized.question);
+            out[key] = { ...normalized, id: key };
         }
         return out;
     }
