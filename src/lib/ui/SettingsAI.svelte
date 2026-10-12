@@ -197,7 +197,7 @@
                         placeholder={t("settings.ai.endpointName")}
                         oninput={(e) => patchEndpoint(endpoint.id, { name: e.currentTarget.value })}
                     />
-                    <Button variant="ghost" size="sm" onclick={() => removeEndpoint(endpoint.id)}>
+                    <Button variant="ghost" size="sm" data-tap onclick={() => removeEndpoint(endpoint.id)}>
                         {t("settings.ai.deleteEndpoint")}
                     </Button>
                 </div>
@@ -275,6 +275,7 @@
                         <Button
                             variant="outline"
                             size="sm"
+                            data-tap
                             onclick={() => (showKeys[endpoint.id] = !showKeys[endpoint.id])}
                         >
                             {showKeys[endpoint.id] ? t("settings.ai.hideKey") : t("settings.ai.showKey")}
@@ -287,7 +288,7 @@
                 <div class="flex flex-col gap-2">
                     <div class="flex items-center justify-between">
                         <span class="text-muted-foreground text-xs font-semibold">{t("settings.ai.models")}</span>
-                        <Button variant="outline" size="sm" onclick={() => addModel(endpoint.id)}>
+                        <Button variant="outline" size="sm" data-tap onclick={() => addModel(endpoint.id)}>
                             {t("settings.ai.addModel")}
                         </Button>
                     </div>
@@ -347,7 +348,7 @@
                                         patchModel(model.id, { maxTokens: parseInt(e.currentTarget.value, 10) || 0 })}
                                 />
                             {/if}
-                            <Button variant="ghost" size="sm" onclick={() => removeModel(model.id)}>
+                            <Button variant="ghost" size="sm" data-tap onclick={() => removeModel(model.id)}>
                                 {t("common.delete")}
                             </Button>
                         </div>
@@ -360,7 +361,9 @@
             <span class="text-muted-foreground text-xs">{t("settings.ai.noEndpoints")}</span>
         {/each}
 
-        <Button variant="outline" onclick={addEndpoint} class="self-start">{t("settings.ai.addEndpoint")}</Button>
+        <Button variant="outline" data-tap onclick={addEndpoint} class="self-start">
+            {t("settings.ai.addEndpoint")}
+        </Button>
 
         <Separator />
         <span class="text-sm font-semibold">{t("settings.ai.testConn")}</span>
@@ -402,7 +405,13 @@
             </Field>
 
             <div class="flex flex-wrap items-center gap-3" role="status" aria-live="polite">
-                <Button variant="outline" size="sm" onclick={() => void testConn()} disabled={connState === "testing"}>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    data-tap
+                    onclick={() => void testConn()}
+                    disabled={connState === "testing"}
+                >
                     {connState === "testing" ? t("settings.ai.testing") : t("settings.ai.testConn")}
                 </Button>
                 {#if connState === "ok"}
