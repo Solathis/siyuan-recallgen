@@ -117,6 +117,7 @@
             {#each SECTIONS as section (section.key)}
                 <Button
                     variant="ghost"
+                    data-tap
                     class={cn(
                         "h-9 shrink-0 justify-start gap-2 rounded-md border-l-2 px-3 text-left text-sm whitespace-nowrap",
                         active === section.key
