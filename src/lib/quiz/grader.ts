@@ -1,6 +1,6 @@
 import { t } from "@/lib/i18n";
 import pLimit from "p-limit";
-import { callLLM, resolveAI, AIError, type ChatMessage } from "../ai/client";
+import { callLLM, isAbortError, resolveAI, AIError, type ChatMessage } from "../ai/client";
 import { activePrompts, buildGradeSubjectiveMessages } from "../ai/prompts";
 import {
     GRADING_SCHEMA,
@@ -55,16 +55,20 @@ export async function gradeAll(
         } else {
             tasks.push(
                 limit(async () => {
-                    const r = await gradeAI(config, q, ua, signal).catch((e): GradingResult => ({
-                        questionId: q.id,
-                        type: q.type,
-                        method: "ai",
-                        correct: null,
-                        score: 0,
-                        maxScore: 100,
-                        comment: t("grade.failed", (e as Error).message),
-                        userAnswer: ua,
-                    }));
+                    const r = await gradeAI(config, q, ua, signal).catch((e): GradingResult => {
+                        // 取消不是判分失败:继续抛出,由调用方决定不保存本轮成绩
+                        if (isAbortError(e)) throw e;
+                        return {
+                            questionId: q.id,
+                            type: q.type,
+                            method: "ai",
+                            correct: null,
+                            score: 0,
+                            maxScore: 100,
+                            comment: t("grade.failed", (e as Error).message),
+                            userAnswer: ua,
+                        };
+                    });
                     results.push(withSeconds(r, secondsByQuestion));
                     done++;
                     onProgress?.(done, total);
