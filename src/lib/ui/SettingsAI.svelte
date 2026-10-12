@@ -401,7 +401,7 @@
                 />
             </Field>
 
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3" role="status" aria-live="polite">
                 <Button variant="outline" size="sm" onclick={() => void testConn()} disabled={connState === "testing"}>
                     {connState === "testing" ? t("settings.ai.testing") : t("settings.ai.testConn")}
                 </Button>
@@ -415,6 +415,7 @@
 
             {#if connState === "fail" && connError}
                 <pre
+                    role="alert"
                     class="bg-destructive/10 text-destructive max-h-20 overflow-auto rounded-md p-2 text-xs">{connError}</pre>
             {/if}
             {#if connResult}
