@@ -119,11 +119,13 @@ export class AsyncStore {
      * 返回的 Promise 在本次写入落盘后 resolve；失败时 reject。
      */
     protected write(data: unknown): Promise<void> {
-        this.cache = data;
-        this.loaded = true;
         this.version++;
 
-        const next = this.writeChain.then(() => this.persist(data));
+        const next = this.writeChain.then(async () => {
+            await this.persist(data);
+            this.cache = data;
+            this.loaded = true;
+        });
         // 写失败不阻断后续写链，但错误仍会传给本次调用的等待者
         this.writeChain = next.catch(() => undefined);
         return next;
@@ -147,10 +149,10 @@ export class AsyncStore {
             const current = await read();
             const value = mutate(current);
             if (value === null) return;
-            this.cache = value;
-            this.loaded = true;
             this.version++;
             await this.persist(value);
+            this.cache = value;
+            this.loaded = true;
         });
         this.writeChain = next.catch(() => undefined);
         return next;

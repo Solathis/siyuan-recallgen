@@ -408,13 +408,14 @@ export default class RecallGenPlugin extends Plugin {
             },
             bankSummary: () => this.bankStore.summary(),
             renameBankTag: async (oldTag, newTag) => {
-                const items = await this.bankStore.list();
+                // 克隆后再改:list() 返回的对象与缓存共享,直接改会在写盘失败时让界面与磁盘不一致
+                const items = (await this.bankStore.list()).map((item) => structuredClone(item));
                 const count = renameTag(items, oldTag, newTag);
                 if (count > 0) await this.bankStore.upsertMany(items);
                 return count;
             },
             deleteBankTag: async (tag) => {
-                const items = await this.bankStore.list();
+                const items = (await this.bankStore.list()).map((item) => structuredClone(item));
                 const count = deleteTag(items, tag);
                 if (count > 0) await this.bankStore.upsertMany(items);
                 return count;
