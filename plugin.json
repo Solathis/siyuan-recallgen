@@ -2,7 +2,7 @@
   "name": "siyuan-recallgen",
   "author": "Solathis",
   "url": "https://github.com/Solathis/siyuan-recallgen",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "3.7.0",
   "backends": ["windows", "linux", "darwin", "ios", "android", "harmony", "docker"],
   "frontends": ["desktop", "mobile", "browser-desktop", "browser-mobile", "desktop-window"],
