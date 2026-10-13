@@ -327,6 +327,7 @@
                                             <Button
                                                 variant="link"
                                                 size="xs"
+                                                data-tap
                                                 class="h-auto shrink-0 px-0 text-2xs"
                                                 title={section.hint(group.key)}
                                                 onclick={() => section.action(group.key)}
