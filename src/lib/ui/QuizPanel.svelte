@@ -1230,8 +1230,8 @@
                         </div>
                     </Card.Content>
                     <Card.Footer class="flex gap-2">
-                        <Button onclick={startDateGenerate}>{t("quiz.dateGenerate")}</Button>
-                        <Button variant="ghost" onclick={closeTab}>{t("common.cancel")}</Button>
+                        <Button data-tap onclick={startDateGenerate}>{t("quiz.dateGenerate")}</Button>
+                        <Button variant="ghost" data-tap onclick={closeTab}>{t("common.cancel")}</Button>
                     </Card.Footer>
                 </Card.Root>
             </div>

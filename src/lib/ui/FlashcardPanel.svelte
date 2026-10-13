@@ -283,7 +283,7 @@
 
                             {#if !revealed}
                                 <div class="mx-auto w-full max-w-prose">
-                                    <Button onclick={reveal} class="w-full" size="lg">
+                                    <Button onclick={reveal} class="w-full" size="lg" data-tap>
                                         {t("flash.showAnswer")}
                                     </Button>
                                     <p class="text-muted-foreground mt-2 text-center text-2xs">

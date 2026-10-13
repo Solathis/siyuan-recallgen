@@ -93,9 +93,10 @@
             </Field>
         </Card.Content>
         <Card.Footer class="flex flex-wrap items-center gap-2">
-            <Button disabled={!canGenerate} onclick={submit}>{t("compose.generate")}</Button>
+            <Button disabled={!canGenerate} data-tap onclick={submit}>{t("compose.generate")}</Button>
             <Button
                 variant="ghost"
+                data-tap
                 disabled={content.length === 0}
                 onclick={() => {
                     content = "";
@@ -104,7 +105,7 @@
             >
                 {t("compose.clear")}
             </Button>
-            <Button variant="ghost" onclick={oncancel}>{t("common.cancel")}</Button>
+            <Button variant="ghost" data-tap onclick={oncancel}>{t("common.cancel")}</Button>
         </Card.Footer>
     </Card.Root>
 </div>
