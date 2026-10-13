@@ -234,12 +234,13 @@
                     <div class="flex flex-wrap items-center gap-2">
                         <Button
                             variant="outline"
+                            data-tap
                             onclick={() => void exportBackup()}
                             disabled={backupBusy || scoreCount === 0}
                         >
                             {t("settings.data.backupExport")}
                         </Button>
-                        <Button variant="outline" onclick={() => backupInput?.click()} disabled={backupBusy}>
+                        <Button variant="outline" data-tap onclick={() => backupInput?.click()} disabled={backupBusy}>
                             {t("settings.data.backupImport")}
                         </Button>
                         <!-- 隐藏在按钮背后的文件选择器：没有可见外观，保留原生 input 即可 -->
@@ -268,10 +269,10 @@
                         </Label>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                        <Button variant="outline" onclick={exportConfig} disabled={!config}>
+                        <Button variant="outline" data-tap onclick={exportConfig} disabled={!config}>
                             {t("settings.data.configExport")}
                         </Button>
-                        <Button variant="outline" onclick={() => fileInput?.click()} disabled={!config}>
+                        <Button variant="outline" data-tap onclick={() => fileInput?.click()} disabled={!config}>
                             {t("settings.data.configImport")}
                         </Button>
                         <!-- 隐藏的文件选择器：思源环境没有可用的原生文件对话框 API -->
@@ -296,12 +297,13 @@
                     <div class="flex flex-wrap items-center gap-2">
                         <Button
                             variant="outline"
+                            data-tap
                             onclick={() => void exportBank()}
                             disabled={bankBusy || bankSize === 0}
                         >
                             {t("settings.data.bankExport")}
                         </Button>
-                        <Button variant="outline" onclick={() => bankInput?.click()} disabled={bankBusy}>
+                        <Button variant="outline" data-tap onclick={() => bankInput?.click()} disabled={bankBusy}>
                             {t("settings.data.bankImport")}
                         </Button>
                         <Input
@@ -334,7 +336,7 @@
                         <AlertDialog.Root>
                             <AlertDialog.Trigger>
                                 {#snippet child({ props })}
-                                    <Button {...props} variant="outline" disabled={busy !== null}>
+                                    <Button {...props} variant="outline" data-tap disabled={busy !== null}>
                                         {t("settings.data.clearScores")}
                                     </Button>
                                 {/snippet}
@@ -369,7 +371,7 @@
                         <AlertDialog.Root>
                             <AlertDialog.Trigger>
                                 {#snippet child({ props })}
-                                    <Button {...props} variant="outline" disabled={busy !== null}>
+                                    <Button {...props} variant="outline" data-tap disabled={busy !== null}>
                                         {t("settings.data.clearProgress")}
                                     </Button>
                                 {/snippet}
@@ -407,7 +409,12 @@
                         <AlertDialog.Root>
                             <AlertDialog.Trigger>
                                 {#snippet child({ props })}
-                                    <Button {...props} variant="outline" disabled={busy !== null || bankSize === 0}>
+                                    <Button
+                                        {...props}
+                                        variant="outline"
+                                        data-tap
+                                        disabled={busy !== null || bankSize === 0}
+                                    >
                                         {t("settings.data.clearBank")}
                                     </Button>
                                 {/snippet}

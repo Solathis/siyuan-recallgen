@@ -37,7 +37,7 @@
                 <Card.Title>{t("settings.prompts.title")}</Card.Title>
                 <Card.Description>{t("settings.prompts.desc")}</Card.Description>
             </div>
-            <Button variant="outline" size="sm" onclick={resetAll}>{t("settings.prompts.resetAll")}</Button>
+            <Button variant="outline" size="sm" data-tap onclick={resetAll}>{t("settings.prompts.resetAll")}</Button>
         </div>
     </Card.Header>
     <Card.Content class="flex flex-col gap-4">
@@ -45,7 +45,7 @@
             <Field>
                 <div class="flex items-center justify-between">
                     <FieldLegend variant="label">{labelOf(key)}</FieldLegend>
-                    <Button variant="ghost" size="sm" onclick={() => resetPrompt(key)}>
+                    <Button variant="ghost" size="sm" data-tap onclick={() => resetPrompt(key)}>
                         {t("settings.prompts.reset")}
                     </Button>
                 </div>
