@@ -60,11 +60,13 @@
     import { Input } from "@/lib/components/ui/input";
     import { Label } from "@/lib/components/ui/label";
     import { Slider } from "@/lib/components/ui/slider";
+    import * as ToggleGroup from "@/lib/components/ui/toggle-group";
     import * as Card from "@/lib/components/ui/card";
     import * as Empty from "@/lib/components/ui/empty";
     import { Separator } from "@/lib/components/ui/separator";
     import * as Collapsible from "@/lib/components/ui/collapsible";
     import ComposeView from "./ComposeView.svelte";
+    import GenActionBar from "./GenActionBar.svelte";
     import { GEN_STEPS, stepStates } from "../quiz/gen-progress";
     import { describeError, type ErrorDescription } from "../ai/errors";
     import { isAbortError } from "../ai/client";
@@ -75,6 +77,7 @@
     import { t } from "../i18n";
     import { hasAnswer } from "@/types/quiz";
     import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
+    import { applyScope, scopeOf, type DateRange, type DateScope } from "../quiz/dateRange";
     import { planBatches } from "../quiz/batching";
     import { sumTimings } from "../quiz/timings";
     import type { GenPhase, GenStats } from "../quiz/generator";
@@ -251,6 +254,38 @@
     /* ── 日期范围配置 ────────────────────────────────────────────── */
 
     let dateCfg = $state<DateGenConfig>({ days: 7, baseHour: 0, baseMinute: 0 });
+
+    /**
+     * 页面上可直接切换的出题范围。
+     *
+     * 原先范围由打开的菜单项定死(今日出题 / 往日出题),进了页面就改不了——
+     * 想从「今天」换成「最近 30 天」得关掉标签页重新打开。初值在 init() 里从入口取,
+     * 之后一律以页面选择为准。「全部」沿用 beforeToday + days=0 的既有语义,不另造第三种 range。
+     */
+    let dateRange = $state<DateRange>("beforeToday");
+    /**
+     * 「最近 N 天」的天数记忆。
+     *
+     * 切到「全部」会把 dateCfg.days 清零,标签若直接读 days 就会从「最近 7 天」
+     * 变成「最近 1 天」,选项文字与用户设过的值脱节;这里单独记住,切回「最近」时恢复。
+     */
+    let recentDays = $state(7);
+    const dateScope = $derived(scopeOf(dateRange, dateCfg.days));
+
+    function onScopeChange(next: string): void {
+        if (!next) return;
+        const applied = applyScope(next as DateScope, recentDays);
+        dateRange = applied.range;
+        dateCfg = { ...dateCfg, days: applied.days };
+    }
+
+    /** 范围选项。「最近」的标签跟着天数走,不必先看选项再去找数字 */
+    const scopeItems = $derived([
+        { value: "today", label: t("quiz.scopeToday") },
+        { value: "recent", label: t("quiz.scopeRecent", String(recentDays)) },
+        { value: "all", label: t("quiz.scopeAll") },
+    ]);
+
     /** 时间输入需要可写状态；dateCfg 才是真正的配置来源 */
     function fmtBaseTime(cfg: DateGenConfig): string {
         return `${String(cfg.baseHour).padStart(2, "0")}:${String(cfg.baseMinute).padStart(2, "0")}`;
@@ -263,6 +298,61 @@
         const { hour, minute } = parseTimeInput(value);
         dateCfg = { ...dateCfg, baseHour: hour, baseMinute: minute };
     }
+
+    /* ── 取材预估与吸底栏提示 ────────────────────────────────────── */
+
+    /**
+     * 当前范围下的笔记数；null 表示还没查到（或范围刚变）。
+     * 只是量级参考：查询失败就静默不显示，不打断出题。
+     */
+    let noteEstimate = $state<{ count: number; capped: boolean } | null>(null);
+    let estimateFailed = $state(false);
+    /** 只认最新一次查询:连着调范围时旧请求可能后到,会把新范围的数字盖掉 */
+    let estimateSeq = 0;
+
+    $effect(() => {
+        if (panelState !== "configuring") return;
+        const range = dateRange;
+        const cfg = { ...dateCfg };
+        const notebookId = tabData.notebookId;
+        const seq = ++estimateSeq;
+        noteEstimate = null;
+        estimateFailed = false;
+        const timer = setTimeout(() => {
+            void service
+                .countDateRangeNotes(cfg, range, notebookId)
+                .then((res) => {
+                    if (seq === estimateSeq) noteEstimate = res;
+                })
+                .catch(() => {
+                    if (seq === estimateSeq) estimateFailed = true;
+                });
+        }, 300);
+        return () => clearTimeout(timer);
+    });
+
+    /** 两个出题入口共用的生成前置条件：缺 AI 配置时按钮置灰并把原因写进吸底栏 */
+    const genProblem = $derived(panelState === "configuring" || panelState === "composing" ? aiConfigProblem() : null);
+    const configureHint = $derived(
+        genProblem ? genProblem.detail : error ? error.detail : estimateFailed ? t("quiz.estimateFailed") : ""
+    );
+    const configureHintTone = $derived<"muted" | "warning" | "destructive">(
+        genProblem || error ? "destructive" : estimateFailed ? "warning" : "muted"
+    );
+
+    /** 范围的这一句说明跟着所选走,免得三处文案打架 */
+    const scopeDesc = $derived(
+        dateScope === "today"
+            ? t("quiz.dateConfigTodayDesc")
+            : dateScope === "recent"
+              ? t("quiz.dateConfigBeforeDesc")
+              : t("quiz.scopeAllDesc")
+    );
+    /** 出题计划默认折叠,标题位放一行摘要 */
+    let planOpen = $state(false);
+    const planSummary = $derived(
+        `${t("gen.plan.total")} ${config.general.difficulty.total} · ${t("gen.plan.batchesValue", String(plannedBatches))} · ${genModelName || "—"}`
+    );
 
     /* ── 倒计时 ──────────────────────────────────────────────────── */
 
@@ -369,6 +459,8 @@
     });
 
     async function init() {
+        // 打开入口(今日出题 / 往日出题)只决定范围的初值,进了页面就归页面管
+        dateRange = tabData.dateRange ?? "beforeToday";
         if (tabData.mode === "resume" && tabData.quizId) {
             await resume();
         } else if (tabData.mode === "generate") {
@@ -527,24 +619,30 @@
 
     /* ── 生成 ────────────────────────────────────────────────────── */
 
-    function checkAiConfig(): boolean {
+    /** AI 配置缺失的原因；null 表示配置完整。出题页用它把提示放进操作栏，而不是跳到错误页 */
+    function aiConfigProblem(): ErrorDescription | null {
         const ai = config.ai;
         if (!ai.models || ai.models.length === 0) {
-            error = { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoModel") };
-            return false;
+            return { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoModel") };
         }
         const genModel = ai.models.find((m) => m.id === ai.roles.generator);
         if (!genModel) {
-            error = { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoGenModel") };
-            return false;
+            return { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoGenModel") };
         }
         const ep = ai.endpoints.find((e) => e.id === genModel.endpointId);
         if (!ep) {
-            error = { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoEndpoint") };
-            return false;
+            return { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoEndpoint") };
         }
         if (ep.provider !== "ollama" && !ep.apiKey) {
-            error = { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoApiKey") };
+            return { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoApiKey") };
+        }
+        return null;
+    }
+
+    function checkAiConfig(): boolean {
+        const problem = aiConfigProblem();
+        if (problem) {
+            error = problem;
             return false;
         }
         return true;
@@ -553,20 +651,13 @@
     async function startDateGenerate() {
         error = null;
         beginRun();
-        if (!checkAiConfig()) {
-            panelState = "answering";
-            return;
-        }
+        if (!checkAiConfig()) return; // 留在本页,原因由吸底栏提示;不跳到答题页显示错误块
         panelState = "loading_generating";
         progressValue = null;
         progressLabel = t("quiz.loadingNotes");
         beginGenTimer();
         try {
-            const loaded = await service.loadDateRangeContent(
-                dateCfg,
-                tabData.dateRange ?? "beforeToday",
-                tabData.notebookId
-            );
+            const loaded = await service.loadDateRangeContent(dateCfg, dateRange, tabData.notebookId);
             if (cancelled) return;
             warnPartialScope(loaded);
             tabData.content = loaded.content;
@@ -606,10 +697,7 @@
     async function startGenerate() {
         error = null;
         const signal = beginRun();
-        if (!checkAiConfig()) {
-            panelState = "answering";
-            return;
-        }
+        if (!checkAiConfig()) return; // 留在本页,原因由吸底栏提示;不跳到答题页显示错误块
         panelState = "loading_generating";
         progressValue = null;
         progressLabel = t("quiz.generating");
@@ -1154,65 +1242,74 @@
                     void startGenerate();
                 }}
                 oncancel={closeTab}
+                aiHint={genProblem?.detail ?? ""}
+                aiBlocked={Boolean(genProblem)}
             />
         {:else if panelState === "configuring"}
             <!--
-                配置页自适应。
-                原实现是一张 max-w-xl（576px）的卡居中，宽面板下左右各空出四百像素；
-                现在放宽到 64rem，并在容器够宽时把「出题计划」与「参数」并排两栏——
-                前者是只读概览、后者是要调的东西，分开之后一眼能看出「改哪儿、影响什么」。
+                出题配置页重排:单列、先设置后确认、操作吸底。
+                原实现「出题计划」占左栏(阅读起点),要改的范围/天数在右栏,
+                生成按钮还跟在长卡末尾——窄容器里得滚过一屏只读信息才够到控件。
             -->
-            <div class="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-2 py-6">
-                <Card.Root class="h-fit w-full max-w-4xl">
-                    <Card.Header>
-                        <Card.Title>{t("quiz.dateConfigTitle")}</Card.Title>
-                        <Card.Description>
-                            {tabData.dateRange === "today"
-                                ? t("quiz.dateConfigTodayDesc")
-                                : t("quiz.dateConfigBeforeDesc")}
-                        </Card.Description>
-                    </Card.Header>
-                    <Card.Content class="grid grid-cols-1 items-start gap-5 @3xl:grid-cols-2">
-                        <!-- 出题计划：让用户在生成前确认题型/难度/模型/结构化输出 -->
-                        <GenPlan
-                            sourceTitle={tabData.sourceTitle}
-                            difficulty={config.general.difficulty}
-                            types={config.general.allowedTypes}
-                            batches={plannedBatches}
-                            modelName={genModelName}
-                            protocol={genProtocol}
-                            structured={config.ai.jsonSchemaEnabled}
-                            reviewer={reviewerName}
-                        />
+            <div class="flex min-h-0 flex-1 flex-col">
+                <div class="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+                    <div class="mx-auto flex w-full max-w-2xl flex-col gap-6">
+                        <header class="flex flex-col gap-1">
+                            <h2 class="text-lg font-semibold">{t("quiz.configSummary")}</h2>
+                            <p class="text-muted-foreground text-sm">{t("gen.plan.editHint")}</p>
+                        </header>
 
-                        <!-- 右栏与左侧的出题计划用同一种面板底，两栏才读得出是并列关系 -->
-                        <div class="bg-muted/40 flex flex-col gap-5 rounded-md border p-3">
-                            <!-- 日期范围 -->
-                            {#if tabData.dateRange === "beforeToday"}
+                        <!-- 取材范围:从上到下就是「范围 → 天数 → 基点」,读完即可生成 -->
+                        <section class="flex flex-col gap-3" aria-label={t("quiz.scopeLabel")}>
+                            <h3 class="text-sm font-semibold">{t("quiz.scopeLabel")}</h3>
+                            <ToggleGroup.Root
+                                type="single"
+                                value={dateScope}
+                                variant="outline"
+                                size="sm"
+                                spacing={2}
+                                class="grid w-full grid-cols-3"
+                                aria-label={t("quiz.scopeLabel")}
+                                onValueChange={onScopeChange}
+                            >
+                                {#each scopeItems as item (item.value)}
+                                    <!-- 选中项补强调色填充,否则描边变体只有一层浅灰底,看不出选了哪个 -->
+                                    <ToggleGroup.Item
+                                        value={item.value}
+                                        class="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground justify-center"
+                                        >{item.label}</ToggleGroup.Item
+                                    >
+                                {/each}
+                            </ToggleGroup.Root>
+                            <p class="text-muted-foreground text-xs">{scopeDesc}</p>
+
+                            <!-- 天数只在「最近」下可调;「全部」就是不限天数,不必再拖滑块 -->
+                            {#if dateScope === "recent"}
                                 <div class="flex flex-col gap-2">
                                     <div class="flex items-center justify-between">
                                         <Label class="text-sm font-medium" for="rg-date-days"
                                             >{t("quiz.dateDaysLabel")}</Label
                                         >
                                         <span class="text-rg-accent text-sm font-semibold tabular-nums">
-                                            {dateCfg.days === 0
-                                                ? t("quiz.dateDaysAll")
-                                                : t("quiz.dateDaysVal", String(dateCfg.days))}
+                                            {t("quiz.dateDaysVal", String(recentDays))}
                                         </span>
                                     </div>
                                     <Slider
                                         id="rg-date-days"
                                         type="single"
-                                        min={0}
+                                        min={1}
                                         max={90}
                                         step={1}
-                                        value={dateCfg.days}
-                                        onValueChange={(v) => (dateCfg = { ...dateCfg, days: v })}
+                                        value={recentDays}
+                                        onValueChange={(v) => {
+                                            recentDays = v;
+                                            dateCfg = { ...dateCfg, days: v };
+                                        }}
                                         aria-label={t("quiz.dateDaysLabel")}
                                     />
-                                    <p class="text-muted-foreground text-xs">{t("quiz.dateDaysHint")}</p>
                                 </div>
                             {/if}
+
                             <div class="flex items-center justify-between gap-3">
                                 <Label class="text-sm font-medium" for="rg-date-base">{t("quiz.dateBaseLabel")}</Label>
                                 <Input
@@ -1220,20 +1317,58 @@
                                     class="w-32"
                                     type="time"
                                     value={dateBaseTime}
+                                    title={t("quiz.dateBaseHint")}
                                     onchange={onBaseTimeChange}
                                 />
                             </div>
                             <p class="text-muted-foreground text-xs">{t("quiz.dateBaseHint")}</p>
-                            {#if error}
-                                <p class="text-destructive text-sm">{error.detail}</p>
-                            {/if}
-                        </div>
-                    </Card.Content>
-                    <Card.Footer class="flex gap-2">
-                        <Button data-tap onclick={startDateGenerate}>{t("quiz.dateGenerate")}</Button>
-                        <Button variant="ghost" data-tap onclick={closeTab}>{t("common.cancel")}</Button>
-                    </Card.Footer>
-                </Card.Root>
+
+                            <!-- 取材预估:只作量级参考,失败时静默不显示 -->
+                            <p class="text-muted-foreground text-xs" role="status" aria-live="polite">
+                                {#if noteEstimate}
+                                    {t("quiz.estimate", noteEstimate.count.toLocaleString())}{noteEstimate.capped
+                                        ? ` · ${t("quiz.estimateCapped")}`
+                                        : ""}
+                                {/if}
+                            </p>
+                        </section>
+
+                        <!-- 出题计划默认折叠:大多数时候只需知道题量/批次/模型,展开再看题型与难度 -->
+                        <Collapsible.Root open={planOpen} onOpenChange={(v) => (planOpen = v)}>
+                            <Collapsible.Trigger
+                                data-tap
+                                class="text-muted-foreground flex w-full items-center gap-1.5 p-2 text-left text-xs font-medium"
+                            >
+                                <ChevronDownIcon
+                                    class={cn("size-3.5 shrink-0 transition-transform", planOpen && "rotate-180")}
+                                    aria-hidden="true"
+                                />
+                                <span class="truncate">{planSummary}</span>
+                            </Collapsible.Trigger>
+                            <Collapsible.Content>
+                                <GenPlan
+                                    sourceTitle={tabData.sourceTitle}
+                                    difficulty={config.general.difficulty}
+                                    types={config.general.allowedTypes}
+                                    batches={plannedBatches}
+                                    modelName={genModelName}
+                                    protocol={genProtocol}
+                                    structured={config.ai.jsonSchemaEnabled}
+                                    reviewer={reviewerName}
+                                />
+                            </Collapsible.Content>
+                        </Collapsible.Root>
+                    </div>
+                </div>
+
+                <GenActionBar
+                    hint={configureHint}
+                    hintTone={configureHintTone}
+                    primaryLabel={t("quiz.dateGenerate")}
+                    onprimary={startDateGenerate}
+                    primaryDisabled={Boolean(genProblem)}
+                    oncancel={closeTab}
+                />
             </div>
         {:else if panelState === "loading_generating" || panelState === "loading_grading"}
             <div class="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-2 py-6">

@@ -6,16 +6,17 @@
      * 都要求内容已经在思源里。临时拿到一段讲义、一份代码或一段网页摘录时，
      * 用户得先新建一篇文档才能出题，这是纯粹的绕路。
      *
-     * 这里只负责收集内容与标题，出题流程仍复用 QuizPanel 的那一条。
+     * 这里只负责收集内容与标题，出题流程仍复用 QuizPanel 的那一条；
+     * 操作栏与「按日期」共用 GenActionBar，同一个动作只有一种排版。
      */
     import { Button } from "@/lib/components/ui/button";
-    import * as Card from "@/lib/components/ui/card";
     import { Field, FieldDescription, FieldLabel } from "@/lib/components/ui/field";
     import { Input } from "@/lib/components/ui/input";
     import { Textarea } from "@/lib/components/ui/textarea";
     import { cn } from "@/lib/utils";
     import { MAX_CONTENT_CHARS } from "../quiz/content";
     import { t } from "../i18n";
+    import GenActionBar from "./GenActionBar.svelte";
 
     /** 与块出题保持同一个下限：太短的内容模型给不出有依据的题目 */
     const MIN_CHARS = 50;
@@ -28,10 +29,15 @@
     let {
         ongenerate,
         oncancel = () => {},
+        aiHint = "",
+        aiBlocked = false,
     }: {
         /** 开始出题；调用方负责把内容交给生成流程 */
         ongenerate: (content: string, sourceTitle: string) => void;
         oncancel?: () => void;
+        /** 生成前置条件不满足的原因（来自 QuizPanel 的 AI 配置检查） */
+        aiHint?: string;
+        aiBlocked?: boolean;
     } = $props();
 
     let content = $state("");
@@ -44,18 +50,19 @@
     const canGenerate = $derived(!tooShort);
 
     function submit() {
-        if (!canGenerate) return;
+        if (!canGenerate || aiBlocked) return;
         ongenerate(effective, title.trim() || t("compose.sourcePlaceholder"));
     }
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-2 py-6">
-    <Card.Root class="w-full max-w-3xl">
-        <Card.Header>
-            <Card.Title>{t("compose.title")}</Card.Title>
-            <Card.Description>{t("compose.desc")}</Card.Description>
-        </Card.Header>
-        <Card.Content class="flex flex-col gap-4">
+<div class="flex min-h-0 flex-1 flex-col">
+    <div class="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+        <div class="mx-auto flex w-full max-w-2xl flex-col gap-6">
+            <header class="flex flex-col gap-1">
+                <h2 class="text-lg font-semibold">{t("compose.title")}</h2>
+                <p class="text-muted-foreground text-sm">{t("compose.desc")}</p>
+            </header>
+
             <Field>
                 <div class="flex items-baseline justify-between gap-2">
                     <FieldLabel for="rg-compose-material">{t("compose.materialLabel")}</FieldLabel>
@@ -91,11 +98,21 @@
                     oninput={(e) => (title = e.currentTarget.value)}
                 />
             </Field>
-        </Card.Content>
-        <Card.Footer class="flex flex-wrap items-center gap-2">
-            <Button disabled={!canGenerate} data-tap onclick={submit}>{t("compose.generate")}</Button>
+        </div>
+    </div>
+
+    <GenActionBar
+        hint={aiHint || (tooShort ? t("compose.tooShort", String(effective.trim().length), String(MIN_CHARS)) : "")}
+        hintTone={aiHint ? "destructive" : "muted"}
+        primaryLabel={t("compose.generate")}
+        onprimary={submit}
+        primaryDisabled={aiBlocked || !canGenerate}
+        {oncancel}
+    >
+        {#snippet extra()}
             <Button
                 variant="ghost"
+                size="sm"
                 data-tap
                 disabled={content.length === 0}
                 onclick={() => {
@@ -105,7 +122,6 @@
             >
                 {t("compose.clear")}
             </Button>
-            <Button variant="ghost" data-tap onclick={oncancel}>{t("common.cancel")}</Button>
-        </Card.Footer>
-    </Card.Root>
+        {/snippet}
+    </GenActionBar>
 </div>

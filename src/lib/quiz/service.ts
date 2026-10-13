@@ -30,6 +30,12 @@ export interface QuizService {
         range: "today" | "beforeToday",
         notebookId?: string
     ): Promise<import("./dateRange").DateRangeNotes>;
+    /** 出题前统计范围内的笔记数（仅用于取材预估；查询失败由调用方静默处理） */
+    countDateRangeNotes(
+        cfg: DateGenConfig,
+        range: "today" | "beforeToday",
+        notebookId?: string
+    ): Promise<import("./dateRange").DateRangeCount>;
     grade(
         questions: Question[],
         answers: Record<string, UserAnswer>,

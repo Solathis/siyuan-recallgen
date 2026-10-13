@@ -26,7 +26,7 @@ import { activePrompts, buildAnalysisMessages, buildChatMessages, buildGlobalCha
 import { callLLM, resolveAI, testConnection as aiTestConnection, type ChatMessage } from "@/lib/ai/client";
 import { saveAsNewDoc, appendAnalysis } from "@/lib/quiz/docWriter";
 import type { QuizService, QuizTabData } from "@/lib/quiz/service";
-import { loadDateRangeNotes } from "@/lib/quiz/dateRange";
+import { countDateRangeNotes, loadDateRangeNotes } from "@/lib/quiz/dateRange";
 import { initI18n, localeText, setFallback, t } from "@/lib/i18n";
 import enFallback from "@/../public/i18n/en.json";
 import type { RecallGenConfig } from "@/types/config";
@@ -377,6 +377,7 @@ export default class RecallGenPlugin extends Plugin {
             generate: (content: string, onProgress?: GenProgressCallback, signal?: AbortSignal) =>
                 generateQuestions(this.config, content, onProgress, signal),
             loadDateRangeContent: (cfg, range, notebookId) => loadDateRangeNotes(cfg, range, notebookId),
+            countDateRangeNotes: (cfg, range, notebookId) => countDateRangeNotes(cfg, range, notebookId),
             grade: (qs, ans, onProgress, seconds, signal) =>
                 gradeAll(this.config, qs, ans, onProgress, seconds, signal),
             analyze: (results, questions) => this.analyze(results, questions),

@@ -2,7 +2,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import { __resetFetchSyncPost, __setFetchSyncPost } from "@/test/siyuan-stub";
 import type { DateGenConfig } from "@/lib/quiz/service";
 import { MAX_CONTENT_CHARS, MAX_DOCS_PER_NOTEBOOK } from "./content";
-import { dateClause, dayBoundary, fmtTS, loadDateRangeNotes } from "./dateRange";
+import {
+    applyScope,
+    countDateRangeNotes,
+    dateClause,
+    dayBoundary,
+    fmtTS,
+    loadDateRangeNotes,
+    scopeOf,
+} from "./dateRange";
 
 const cfg = (days: number, baseHour = 4, baseMinute = 0): DateGenConfig => ({ days, baseHour, baseMinute });
 
@@ -130,5 +138,82 @@ describe("loadDateRangeNotes - 未纳入情况的回报", () => {
     it("范围内没有笔记时抛出带范围的提示", async () => {
         serve(0);
         await expect(loadDateRangeNotes(cfg(7), "beforeToday")).rejects.toThrow(/最近 7 天|没有/);
+    });
+});
+
+describe("scopeOf / applyScope(出题页的范围选择)", () => {
+    it("today 恒为今天,天数不影响", () => {
+        expect(scopeOf("today", 7)).toBe("today");
+        expect(scopeOf("today", 0)).toBe("today");
+    });
+
+    it("beforeToday 按天数分最近与全部", () => {
+        expect(scopeOf("beforeToday", 7)).toBe("recent");
+        expect(scopeOf("beforeToday", 1)).toBe("recent");
+        expect(scopeOf("beforeToday", 0)).toBe("all");
+    });
+
+    it("选最近时天数 0 落到缺省 7 天,已有天数保留", () => {
+        expect(applyScope("recent", 0)).toEqual({ range: "beforeToday", days: 7 });
+        expect(applyScope("recent", 14)).toEqual({ range: "beforeToday", days: 14 });
+    });
+
+    it("选全部即 beforeToday + 0,选今天保留原天数", () => {
+        expect(applyScope("all", 14)).toEqual({ range: "beforeToday", days: 0 });
+        expect(applyScope("today", 14)).toEqual({ range: "today", days: 14 });
+    });
+
+    it("三种范围写入后都能读回同一选项(往返一致)", () => {
+        for (const scope of ["today", "recent", "all"] as const) {
+            const next = applyScope(scope, 7);
+            expect(scopeOf(next.range, next.days)).toBe(scope);
+        }
+    });
+});
+
+describe("countDateRangeNotes(出题前的取材预估)", () => {
+    afterEach(() => __resetFetchSyncPost());
+
+    /** 让 query/sql 固定返回给定篇数,并记录收到的语句 */
+    function serveCount(count: number) {
+        const stmts: string[] = [];
+        __setFetchSyncPost((url, data) => {
+            if (url.includes("lsNotebooks")) {
+                return { code: 0, msg: "", data: { notebooks: [{ id: "nb-1", name: "笔记本", closed: false }] } };
+            }
+            if (url.includes("query/sql")) {
+                stmts.push((data as { stmt: string }).stmt);
+                return { code: 0, msg: "", data: [{ count }] };
+            }
+            return { code: -1, msg: "unexpected", data: null };
+        });
+        return stmts;
+    }
+
+    it("指定笔记本时按该箱统计,COUNT 语句带上范围条件", async () => {
+        const stmts = serveCount(12);
+        expect(await countDateRangeNotes(cfg(7), "beforeToday", "nb-1")).toEqual({ count: 12, capped: false });
+        expect(stmts).toHaveLength(1);
+        expect(stmts[0]).toContain("COUNT(*)");
+        expect(stmts[0]).toContain("'nb-1'");
+    });
+
+    it("不指定笔记本时汇总各未关闭笔记本", async () => {
+        const stmts = serveCount(5);
+        expect(await countDateRangeNotes(cfg(7), "beforeToday")).toEqual({ count: 5, capped: false });
+        expect(stmts).toHaveLength(1);
+    });
+
+    it("达到单箱上限时 capped 为真,提示这只是下限", async () => {
+        serveCount(MAX_DOCS_PER_NOTEBOOK);
+        expect(await countDateRangeNotes(cfg(0), "beforeToday", "nb-1")).toEqual({
+            count: MAX_DOCS_PER_NOTEBOOK,
+            capped: true,
+        });
+    });
+
+    it("范围内没有笔记时返回 0", async () => {
+        serveCount(0);
+        expect(await countDateRangeNotes(cfg(7), "today", "nb-1")).toEqual({ count: 0, capped: false });
     });
 });
