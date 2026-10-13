@@ -6,6 +6,27 @@ import { exportDocsMarkdown, MAX_DOCS_PER_NOTEBOOK } from "./content";
 /** 日期范围类型 */
 export type DateRange = "today" | "beforeToday";
 
+/** 出题页的范围选项：今天 / 最近 N 天 / 基点之前全部 */
+export type DateScope = "today" | "recent" | "all";
+
+/**
+ * 由当前配置推导所选范围。
+ *
+ * 「全部」沿用 beforeToday + days=0 的既有语义（dateClause 就是这么算的），
+ * 所以滑块拖到 0 与点「全部」是同一件事，不必再造第三种 range。
+ */
+export function scopeOf(range: DateRange, days: number): DateScope {
+    if (range === "today") return "today";
+    return days > 0 ? "recent" : "all";
+}
+
+/** 选完范围应写入的配置：选「最近」而天数为 0 时落到缺省 7 天 */
+export function applyScope(scope: DateScope, days: number): { range: DateRange; days: number } {
+    if (scope === "today") return { range: "today", days };
+    if (scope === "recent") return { range: "beforeToday", days: days > 0 ? days : 7 };
+    return { range: "beforeToday", days: 0 };
+}
+
 /** 格式化 Date 为 SiYuan created 字段格式 YYYYMMDDHHmmss */
 export function fmtTS(d: Date): string {
     const p = (n: number) => String(n).padStart(2, "0");
@@ -67,6 +88,45 @@ async function collectAllDocIdsByDate(cfg: DateGenConfig, range: DateRange): Pro
         capped = capped || collected.capped;
     }
     return { ids: out, capped };
+}
+
+export interface DateRangeCount {
+    /** 范围内的文档数 */
+    count: number;
+    /** 某个笔记本达到取用上限，实际可出题的文档只会更多 */
+    capped: boolean;
+}
+
+/** 单箱 COUNT，避开把 ID 全捞出来只为数个数 */
+async function countDocsByDate(notebookId: string, clause: string): Promise<number> {
+    const rows = await sql(
+        `SELECT COUNT(*) AS count FROM blocks WHERE box = ${quoteSqlLiteral(notebookId)} AND type = ${quoteSqlLiteral("d")} AND ${clause}`
+    );
+    const n = Number(rows?.[0]?.count ?? 0);
+    return Number.isFinite(n) ? n : 0;
+}
+
+/** 出题前统计范围内的文档数，只作取材预估，不改变实际取用逻辑 */
+export async function countDateRangeNotes(
+    cfg: DateGenConfig,
+    range: DateRange,
+    notebookId?: string
+): Promise<DateRangeCount> {
+    const clause = dateClause(cfg, range);
+    if (notebookId) {
+        const count = await countDocsByDate(notebookId, clause);
+        return { count, capped: count >= MAX_DOCS_PER_NOTEBOOK };
+    }
+    const res = await lsNotebooks().catch(() => null);
+    const notebooks = res?.notebooks?.filter((n: { closed: boolean }) => !n.closed) ?? [];
+    let count = 0;
+    let capped = false;
+    for (const nb of notebooks) {
+        const one = await countDocsByDate(nb.id, clause);
+        count += one;
+        capped = capped || one >= MAX_DOCS_PER_NOTEBOOK;
+    }
+    return { count, capped };
 }
 
 export interface DateRangeNotes {

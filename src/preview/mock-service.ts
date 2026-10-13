@@ -19,7 +19,7 @@ import {
     type BankSummary,
     type ReviewScope,
 } from "@/lib/quiz/bank";
-import type { DateRangeNotes } from "@/lib/quiz/dateRange";
+import type { DateRangeCount, DateRangeNotes } from "@/lib/quiz/dateRange";
 import type { DateGenConfig, QuizService } from "@/lib/quiz/service";
 import type { RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, QuizSession, ScoreDetail, ScoreIndexEntry, ScoreRecord } from "@/types/quiz";
@@ -176,6 +176,11 @@ export function createPreviewService(): PreviewService {
                 skipped: 0,
                 failed: 0,
             };
+        },
+
+        async countDateRangeNotes(_cfg: DateGenConfig, _range, _notebookId): Promise<DateRangeCount> {
+            await sleep(Math.max(120, controls.latency / 3));
+            return { count: 23, capped: false };
         },
 
         /* ── 判分与答疑 ────────────────────────────────────────── */
