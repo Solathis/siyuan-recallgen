@@ -73,7 +73,8 @@ jobs:
         with:
           allowUpdates: true
           artifactErrorsFailBuild: true
-          artifacts: dist/package.zip
+          # zipPack 把 package.zip 写到仓库根（见 vite.config.ts），不是 dist/ 下
+          artifacts: package.zip
           token: ${{ secrets.GITHUB_TOKEN }}
           prerelease: ${{ steps.channel.outputs.prerelease }}
           bodyFile: release-notes.md
