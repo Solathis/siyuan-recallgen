@@ -27,6 +27,11 @@
 - 标签页命中区 44px 高于列表本身的 h-8,原先会溢出列表;在 app.css 为 tabs-list 增加触摸下的高度覆盖,不改 shadcn 组件本体。
 - 答题翻页只保留底栏一套,顶部仅显示题号,宽屏与窄屏行为一致。
 
+性能
+
+- 主观题预览改为防抖渲染(300ms):预览标签即使隐藏也一直挂载并读取派生值,原先每敲一个字都重跑 marked + DOMPurify + KaTeX;切到「预览」标签时立即同步。
+- 启动时的题库读取核对:reconcile、prune、summary 共享分片内存缓存,磁盘 I/O 只有一次,不另做合并。
+
 工程
 
 - 删除无引用的 `useMobileLayout`、`useReducedMotion`。
