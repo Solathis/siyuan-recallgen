@@ -13,6 +13,9 @@
         if (answer?.type === "coding") return answer.value;
         return question.type === "coding" ? (question.starter_code ?? "") : "";
     }
+
+    /** 主观题预览的防抖时长：输入停顿这么久之后才重算一次 */
+    export const PREVIEW_DEBOUNCE_MS = 300;
 </script>
 
 <script lang="ts">
@@ -108,8 +111,26 @@
     );
 
     const subjectiveValue = $derived(answer?.type === "subjective" ? answer.value : "");
-    /** 必须是派生值：写成普通常量只会渲染一次，输入后预览不会更新 */
-    const subjectivePreview = $derived(renderMarkdownLatex(subjectiveValue));
+
+    /**
+     * 预览用的作答文本。
+     *
+     * 直接拿 subjectiveValue 派生，会让每敲一个字都重跑一次 marked + DOMPurify + KaTeX：
+     * 「预览」标签即使隐藏着也一直挂载、一直在读这个派生值。这里让预览晚
+     * PREVIEW_DEBOUNCE_MS 跟上，输入停顿后才渲染一次；切到「预览」标签时立即同步，
+     * 免得看到停顿前的旧文。
+     */
+    let previewSource = $state("");
+    $effect(() => {
+        const value = subjectiveValue;
+        if (subjectiveMode === "preview") {
+            previewSource = value;
+            return;
+        }
+        const timer = setTimeout(() => (previewSource = value), PREVIEW_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    });
+    const subjectivePreview = $derived(renderMarkdownLatex(previewSource));
     let subjectiveMode = $state<"edit" | "preview">("edit");
 
     /* ── 编程题 ──────────────────────────────────────────────────── */
