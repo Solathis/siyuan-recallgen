@@ -12,6 +12,8 @@ import { fill, scaffoldOf, type PromptLang, type PromptScaffold } from "./scaffo
 
 export type { AIConfig };
 
+const MATH_FORMAT = String.raw`In every question, option, accepted answer, reference answer and explanation, wrap inline mathematics in $...$ and display mathematics in $$...$$. Never emit bare LaTeX commands. In JSON strings escape every LaTeX backslash as \\ (for example {"answer":[["$-\\sigma_z$"]]}). Preserve ordinary text and code; do not wrap code in math delimiters.`;
+
 /**
  * 把不可信内容包成「数据块」。
  *
@@ -63,7 +65,7 @@ export function buildGenerateMessages(
 ): Array<{ role: "system" | "user"; content: string }> {
     const s = scaffoldOf(general.language);
 
-    const system = [prompts.generate, s.jsonOnly, s.topLevelQuestions];
+    const system = [prompts.generate, s.jsonOnly, s.topLevelQuestions, MATH_FORMAT];
 
     const user = [
         s.noteContent,
@@ -287,7 +289,7 @@ export function buildRegenerateMessages(
 ): Array<{ role: "system" | "user"; content: string }> {
     const s = scaffoldOf(general.language);
 
-    const system = [prompts.generate, s.jsonOnly, s.regenIntro];
+    const system = [prompts.generate, s.jsonOnly, s.regenIntro, MATH_FORMAT];
 
     const items = failedQuestions.map((q, i) => {
         const parts = [

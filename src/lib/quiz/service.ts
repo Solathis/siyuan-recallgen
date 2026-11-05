@@ -15,6 +15,20 @@ import type { GenProgressCallback } from "../quiz/generator";
 
 /** QuizPanel 与插件后端交互的接口，由 index.ts 实现 */
 export interface QuizService {
+    workflow?: {
+        snapshot(): Promise<import("./review-workflow").WorkflowState>;
+        capture(): Promise<import("./review-workflow").PromptVersion>;
+        enqueue(
+            questions: Question[],
+            versionId: string,
+            source: { sourceDocId: string; sourceTitle: string }
+        ): Promise<import("./review-workflow").ReviewDraft[]>;
+        commit(drafts: import("./review-workflow").ReviewDraft[]): Promise<Question[]>;
+        saveVersion(version: import("./review-workflow").PromptVersion): Promise<void>;
+        activate(id: string): Promise<void>;
+        deleteVersion(id: string): Promise<void>;
+        analyze(): Promise<void>;
+    };
     getConfig(): RecallGenConfig;
     /** 在思源中打开一篇文档（用于结果面板跳回原始笔记） */
     openDoc(docId: string): void;

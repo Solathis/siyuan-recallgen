@@ -15,6 +15,7 @@
     import * as Table from "@/lib/components/ui/table";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
+    import { renderMarkdownLatex } from "./latex";
     import { Area, Chart, Layer, Spline } from "layerchart";
     import { ChartContainer } from "@/lib/components/ui/chart";
     import { createClock } from "./clock.svelte";
@@ -577,9 +578,9 @@
                                     aria-expanded={expanded === item.id}
                                     onclick={() => toggle(item.id)}
                                 >
-                                    <span class="line-clamp-2 text-xs" title={item.question.question}
-                                        >{item.question.question}</span
-                                    >
+                                    <div class="rg-markdown max-h-32 overflow-auto text-xs" aria-label="题干">
+                                        {@html renderMarkdownLatex(item.question.question)}
+                                    </div>
                                     <span class="text-muted-foreground text-2xs">
                                         {expanded === item.id ? "▾" : "▸"}
                                         {item.sourceTitle}

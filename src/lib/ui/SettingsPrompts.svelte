@@ -5,10 +5,21 @@
     import { Field, FieldLegend } from "@/lib/components/ui/field";
     import { t } from "../i18n";
     import { getDefaultPrompts, type RecallGenConfig } from "@/types/config";
+    import PromptWorkbench from "./PromptWorkbench.svelte";
 
-    let { config, onsave }: { config: RecallGenConfig; onsave: (config: RecallGenConfig) => void } = $props();
+    let {
+        config,
+        onsave,
+        service,
+    }: {
+        config: RecallGenConfig;
+        onsave: (config: RecallGenConfig) => void;
+        service?: import("../quiz/service").QuizService;
+    } = $props();
 
     const PROMPT_KEYS = ["generate", "review", "gradeSubjective", "analysis"] as const;
+    let page = $state("current");
+    let promptKey = $state<(typeof PROMPT_KEYS)[number]>("generate");
 
     function labelOf(key: (typeof PROMPT_KEYS)[number]): string {
         return t(`settings.prompts.${key}`);
@@ -41,21 +52,49 @@
         </div>
     </Card.Header>
     <Card.Content class="flex flex-col gap-4">
-        {#each PROMPT_KEYS as key (key)}
-            <Field>
-                <div class="flex items-center justify-between">
-                    <FieldLegend variant="label">{labelOf(key)}</FieldLegend>
-                    <Button variant="ghost" size="sm" data-tap onclick={() => resetPrompt(key)}>
-                        {t("settings.prompts.reset")}
-                    </Button>
-                </div>
-                <Textarea
-                    class="min-h-28 font-mono text-xs"
-                    aria-label={labelOf(key)}
-                    value={config.prompts[key]}
-                    oninput={(e) => patchPrompt(key, e.currentTarget.value)}
-                />
-            </Field>
-        {/each}
+        <div class="flex gap-2" role="tablist">
+            {#each ["current", "versions", "feedback"] as tab (tab)}
+                <Button
+                    role="tab"
+                    aria-selected={page === tab}
+                    variant={page === tab ? "secondary" : "ghost"}
+                    onclick={() => (page = tab)}>{t(`prompt.${tab}`)}</Button
+                >
+            {/each}
+        </div>
+        {#if page === "current"}
+            <p class="text-sm text-muted-foreground">{t("prompt.direct")}</p>
+            {#if service?.workflow}<Button
+                    variant="outline"
+                    onclick={() => {
+                        page = "versions";
+                    }}>{t("prompt.saveSnapshot")}</Button
+                >{/if}
+            <div class="flex flex-wrap gap-2">
+                {#each PROMPT_KEYS as key (key)}<Button
+                        variant={promptKey === key ? "secondary" : "ghost"}
+                        onclick={() => (promptKey = key)}>{labelOf(key)}</Button
+                    >{/each}
+            </div>
+            {#each PROMPT_KEYS.filter((key) => key === promptKey) as key (key)}
+                <Field>
+                    <div class="flex items-center justify-between">
+                        <FieldLegend variant="label">{labelOf(key)}</FieldLegend>
+                        <Button variant="ghost" size="sm" data-tap onclick={() => resetPrompt(key)}>
+                            {t("settings.prompts.reset")}
+                        </Button>
+                    </div>
+                    <Textarea
+                        class="min-h-28 font-mono text-xs"
+                        aria-label={labelOf(key)}
+                        value={config.prompts[key]}
+                        oninput={(e) => patchPrompt(key, e.currentTarget.value)}
+                    />
+                </Field>
+            {/each}
+        {:else if service?.workflow}<PromptWorkbench
+                {service}
+                mode={page === "feedback" ? "feedback" : "versions"}
+            />{/if}
     </Card.Content>
 </Card.Root>

@@ -1,4 +1,21 @@
 import { renderMarkdownLatex } from "./latex";
+import katex from "katex";
+
+/** Legacy answers may contain bare TeX. Only recognize a whole, valid math fragment.
+ * Keep the stored answer unchanged: this is a presentation-only compatibility path.
+ */
+function renderAnswer(segment: string): string {
+    const text = segment.trim();
+    if (/\\[a-zA-Z]+/.test(text) && !/[$`\n\r]|\\[()[\]]/.test(text) && !/[\u3400-\u9fff]/.test(text)) {
+        try {
+            katex.renderToString(text, { throwOnError: true, strict: false });
+            return renderMarkdownLatex(`$${text}$`);
+        } catch {
+            // Ambiguous or invalid content stays ordinary Markdown.
+        }
+    }
+    return renderMarkdownLatex(segment);
+}
 
 /**
  * 把「多个片段」的答案渲染成一段 HTML。
@@ -14,7 +31,12 @@ import { renderMarkdownLatex } from "./latex";
  */
 export function renderAnswerSegments(segments: string[], separator = "；"): string {
     return segments
-        .map((segment) => renderMarkdownLatex(segment))
+        .map(renderAnswer)
         .filter((html) => html.length > 0)
         .join(separator);
+}
+
+/** Preserve each accepted answer as a separate Markdown/math document. */
+export function renderAcceptedAnswers(answers: string[][]): string {
+    return answers.map((options) => renderAnswerSegments(options, " / ")).join("；");
 }

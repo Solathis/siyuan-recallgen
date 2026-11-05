@@ -192,6 +192,39 @@ describe("callLLM - 成功路径", () => {
     });
 });
 
+describe("reasoning effort", () => {
+    it.each(["low", "medium", "high"] as const)("forwards %s using each OpenAI protocol", async (effort) => {
+        const calls = recordingHandler(() => proxyOk({ choices: [{ message: { content: "ok" } }], output_text: "ok" }));
+        const config = getDefaultConfig();
+        config.ai.models[0].reasoningEffort = effort;
+        const resolved = resolveAI(config.ai, config.ai.models[0].id);
+        await callLLM({ ...rc(), reasoningEffort: resolved.reasoningEffort }, [{ role: "user", content: "hi" }]);
+        await callLLM(rc({ protocol: "responses", reasoningEffort: effort }), [{ role: "user", content: "hi" }]);
+        expect(calls[0].data.payload.reasoning_effort).toBe(effort);
+        expect(calls[0].data.payload).not.toHaveProperty("reasoning");
+        expect(calls[1].data.payload.reasoning).toEqual({ effort });
+        expect(calls[1].data.payload).not.toHaveProperty("reasoning_effort");
+    });
+
+    it.each([undefined, "default"] as const)("omits reasoning for server default %s", async (reasoningEffort) => {
+        const calls = recordingHandler(() => proxyOk({ choices: [{ message: { content: "ok" } }], output_text: "ok" }));
+        for (const protocol of ["chat", "responses"] as const) {
+            await callLLM(rc({ protocol, reasoningEffort }), [{ role: "user", content: "hi" }]);
+        }
+        for (const call of calls) {
+            expect(call.data.payload).not.toHaveProperty("reasoning");
+            expect(call.data.payload).not.toHaveProperty("reasoning_effort");
+        }
+    });
+
+    it("does not send OpenAI reasoning fields to Messages", async () => {
+        const calls = recordingHandler(() => proxyOk({ content: [{ type: "text", text: "ok" }] }));
+        await callLLM(rc({ protocol: "messages", reasoningEffort: "high" }), [{ role: "user", content: "hi" }]);
+        expect(calls[0].data.payload).not.toHaveProperty("reasoning");
+        expect(calls[0].data.payload).not.toHaveProperty("reasoning_effort");
+    });
+});
+
 describe("callLLM - 重试策略", () => {
     it("429 后重试并最终成功", async () => {
         const calls = recordingHandler((n) =>

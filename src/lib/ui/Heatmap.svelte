@@ -237,7 +237,13 @@
             const month = day.date.getMonth();
             if (month !== prevMonth) {
                 prevMonth = month;
-                out.push({ col: colOf(day), label: monthFormatter.format(day.date) });
+                const col = colOf(day);
+                const label = monthFormatter.format(day.date);
+                // A partial first month and the next month can share a week.
+                // Prefer the month starting in that column: labels must neither
+                // overlap nor use the same keyed-each identity.
+                if (out.at(-1)?.col === col) out[out.length - 1] = { col, label };
+                else out.push({ col, label });
             }
         }
         return out;

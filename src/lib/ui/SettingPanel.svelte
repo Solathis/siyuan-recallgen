@@ -80,6 +80,11 @@
     $effect(() => {
         void service?.bankSummary().then((summary) => (bank = { total: summary.total, due: summary.due }));
     });
+    $effect(() =>
+        service?.subscribeConfig((next) => {
+            localConfig = next;
+        })
+    );
 
     function handleSave(next: RecallGenConfig) {
         localConfig = next;
@@ -153,7 +158,7 @@
                             {:else if active === "general"}
                                 <SettingsGeneral config={localConfig} onsave={handleSave} {service} />
                             {:else if active === "prompts"}
-                                <SettingsPrompts config={localConfig} onsave={handleSave} />
+                                <SettingsPrompts config={localConfig} onsave={handleSave} {service} />
                             {:else if active === "heatmap"}
                                 <SettingsHeatmap config={localConfig} {scores} onsave={handleSave} />
                             {:else if active === "data"}

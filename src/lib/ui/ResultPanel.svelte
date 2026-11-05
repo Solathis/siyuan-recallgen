@@ -7,7 +7,7 @@
     import { Spinner } from "@/lib/components/ui/spinner";
     import { Textarea } from "@/lib/components/ui/textarea";
     import CodeBlock from "../editor/CodeBlock.svelte";
-    import { renderAnswerSegments } from "./answer-render";
+    import { renderAnswerSegments, renderAcceptedAnswers } from "./answer-render";
     import * as Tabs from "@/lib/components/ui/tabs";
     import * as ToggleGroup from "@/lib/components/ui/toggle-group";
     import { Progress } from "@/lib/components/ui/progress";
@@ -557,7 +557,9 @@
                                                 >{t("result.correctAnswer")}</span
                                             >
                                             <div class="rg-markdown">
-                                                {@html renderAnswerSegments(correctSegments(activeQuestion))}
+                                                {@html activeQuestion.type === "fill_blank"
+                                                    ? renderAcceptedAnswers(activeQuestion.answer)
+                                                    : renderAnswerSegments(correctSegments(activeQuestion))}
                                             </div>
                                         </div>
                                     {/if}

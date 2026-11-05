@@ -66,6 +66,7 @@ export interface ResolvedAIConfig {
     model: string;
     temperature: number;
     maxTokens: number;
+    reasoningEffort?: "default" | "low" | "medium" | "high";
     timeout: number;
 }
 
@@ -88,6 +89,7 @@ export function resolveAI(config: AIConfig, modelId: string): ResolvedAIConfig {
         model: model.name,
         temperature: model.temperature,
         maxTokens: model.maxTokens,
+        reasoningEffort: model.reasoningEffort,
         timeout: config.timeout,
     };
 }
@@ -322,6 +324,7 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
         stream: false,
     };
     const maxTokens = opts.maxTokens ?? rc.maxTokens;
+    if (rc.reasoningEffort && rc.reasoningEffort !== "default") body.reasoning_effort = rc.reasoningEffort;
     // maxTokens 为 0 表示「由 API 决定」，不发送 max_tokens 让服务端用模型默认值
     if (maxTokens > 0) body.max_tokens = maxTokens;
     if (opts.tools) {
@@ -392,6 +395,7 @@ async function callResponses(rc: ResolvedAIConfig, messages: ChatMessage[], opts
         temperature: opts.temperature ?? rc.temperature,
     };
     const respMaxTokens = opts.maxTokens ?? rc.maxTokens;
+    if (rc.reasoningEffort && rc.reasoningEffort !== "default") body.reasoning = { effort: rc.reasoningEffort };
     if (respMaxTokens > 0) body.max_output_tokens = respMaxTokens;
     // 开启 JSON Schema 时上层给的是 tools，这里优先映射成结构化输出格式
     const fmt = toolsToResponsesFormat(opts.tools) ?? toResponsesFormat(opts.responseFormat);

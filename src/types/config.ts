@@ -45,6 +45,7 @@ export interface AIModel {
     endpointId: string;
     temperature: number;
     maxTokens: number;
+    reasoningEffort?: "default" | "low" | "medium" | "high";
 }
 
 /** AI 角色：出题者 / 审题者 / 判题者，各指向一个模型 ID */

@@ -294,16 +294,17 @@
                     </div>
                     {#if modelsOf(endpoint.id).length > 0}
                         <div
-                            class="text-muted-foreground hidden grid-cols-[1fr_5rem_6rem_auto] gap-2 text-2xs font-semibold @2xl:grid"
+                            class="text-muted-foreground hidden grid-cols-[1fr_5rem_6rem_7rem_auto] gap-2 text-2xs font-semibold @2xl:grid"
                         >
                             <span>{t("settings.ai.colName")}</span>
                             <span class="text-center">{t("settings.ai.colTemp")}</span>
                             <span class="text-center">{t("settings.ai.colMaxTokens")}</span>
+                            <span class="text-center">{t("settings.ai.reasoningEffort")}</span>
                             <span class="text-center">{t("settings.ai.colAction")}</span>
                         </div>
                     {/if}
                     {#each modelsOf(endpoint.id) as model (model.id)}
-                        <div class="grid grid-cols-2 items-center gap-2 @2xl:grid-cols-[1fr_5rem_6rem_auto]">
+                        <div class="grid grid-cols-2 items-center gap-2 @2xl:grid-cols-[1fr_5rem_6rem_7rem_auto]">
                             <Input
                                 value={model.name}
                                 aria-label={t("settings.ai.colName")}
@@ -347,6 +348,33 @@
                                     onchange={(e) =>
                                         patchModel(model.id, { maxTokens: parseInt(e.currentTarget.value, 10) || 0 })}
                                 />
+                            {/if}
+                            {#if endpoint.protocol !== "messages"}
+                                <Select.Root
+                                    type="single"
+                                    value={model.reasoningEffort ?? "default"}
+                                    onValueChange={(v) => {
+                                        if (v === "default" || v === "low" || v === "medium" || v === "high") {
+                                            patchModel(model.id, { reasoningEffort: v });
+                                        }
+                                    }}
+                                >
+                                    <Select.Trigger
+                                        class="h-8 w-full text-xs"
+                                        aria-label={t("settings.ai.reasoningEffort")}
+                                    >
+                                        {t(`settings.ai.reasoning.${model.reasoningEffort ?? "default"}`)}
+                                    </Select.Trigger>
+                                    <Select.Content>
+                                        {#each ["default", "low", "medium", "high"] as effort}
+                                            <Select.Item value={effort}
+                                                >{t(`settings.ai.reasoning.${effort}`)}</Select.Item
+                                            >
+                                        {/each}
+                                    </Select.Content>
+                                </Select.Root>
+                            {:else}
+                                <span class="text-muted-foreground text-center text-xs">—</span>
                             {/if}
                             <Button variant="ghost" size="sm" data-tap onclick={() => removeModel(model.id)}>
                                 {t("common.delete")}

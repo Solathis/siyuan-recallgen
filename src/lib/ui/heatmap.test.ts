@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { flushSync, mount, unmount } from "svelte";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HeatmapConfig, ScoreIndexEntry } from "@/types/quiz";
 import Heatmap from "./Heatmap.svelte";
 
@@ -48,6 +48,7 @@ let cleanup: (() => void) | null = null;
 afterEach(() => {
     cleanup?.();
     cleanup = null;
+    vi.useRealTimers();
 });
 
 function mountHeatmap(onDayClick?: (date: string) => void) {
@@ -79,6 +80,14 @@ const tipOf = (cell: SVGRectElement) => cell.getAttribute("aria-label") ?? "";
 const textOf = (host: HTMLElement) => (host.textContent ?? "").replace(/\s+/g, " ");
 
 describe("热力图", () => {
+    it("月份交界落在同一周时仍能渲染，月份标签不重叠", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 9, 26));
+        const host = mountHeatmap();
+        const labels = [...host.querySelectorAll("text")].filter((node) => node.textContent?.includes("月"));
+        expect(labels.length).toBeGreaterThan(0);
+        expect(cells(host).length).toBeGreaterThan(350);
+    });
     it("月份标签按界面语言渲染（中文出现「月」）", { timeout: MOUNT_TIMEOUT }, () => {
         const host = mountHeatmap();
         // 标签由图表库的 SVG 文本承担：原先月份是 HTML 盒子，且必须禁止换行，

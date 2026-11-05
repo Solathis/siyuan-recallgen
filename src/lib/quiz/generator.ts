@@ -514,6 +514,20 @@ export function coerceQuestion(raw: unknown, id: string, allowedTypes: QuestionT
     if (!allowedTypes.includes(type)) {
         return { ok: false, reason: t("validate.typeDisabled", String(item.type)) };
     }
+    // JSON accepts \t, \f, \b and \r escapes, which can silently corrupt TeX
+    // commands such as \tau and \frac. Reject damaged prose rather than guessing.
+    const prose = [item.question, item.explanation, item.options];
+    if (type !== "coding") prose.push(item.answer, item.reference_answer);
+    const hasDamagedText = (value: unknown): boolean =>
+        typeof value === "string"
+            ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f]|\tau\b|\rac\b|\rho\b/.test(value)
+            : Array.isArray(value) && value.some(hasDamagedText);
+    if (prose.some(hasDamagedText)) {
+        return {
+            ok: false,
+            reason: "Invalid control characters or damaged LaTeX JSON escaping; escape backslashes as \\\\.",
+        };
+    }
     const question = String(item.question ?? "").trim();
     if (!question) {
         return { ok: false, reason: t("validate.emptyQuestion") };

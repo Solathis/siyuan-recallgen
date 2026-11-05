@@ -222,6 +222,13 @@ function sanitizeModels(value: unknown, endpoints: AIEndpoint[], warnings: strin
             endpointId: candidate.endpointId,
             temperature: clampNumber(candidate.temperature, DEFAULT_AI_CONFIG.models[0].temperature, 0, 2),
             maxTokens: clampInt(candidate.maxTokens, DEFAULT_AI_CONFIG.models[0].maxTokens, 0, 200_000),
+            ...(candidate.reasoningEffort !== undefined
+                ? {
+                      reasoningEffort: ["low", "medium", "high"].includes(candidate.reasoningEffort)
+                          ? candidate.reasoningEffort
+                          : ("default" as const),
+                  }
+                : {}),
         });
     }
     return out;

@@ -4,6 +4,36 @@ import { clearMarkdownCache, markdownCacheSize, renderMarkdownLatex } from "./la
 
 const PLACEHOLDER_MARK = "\uE000";
 
+describe("思源高亮", () => {
+    it("渲染多处高亮以及内部粗体、公式", () => {
+        const html = renderMarkdownLatex("==high light== 与 ==**重点** $x_1$==");
+        expect(html).toContain("<mark>high light</mark>");
+        expect(html).toContain("<mark><strong>重点</strong>");
+        expect(html).toContain('class="katex"');
+        expect(html.match(/<mark>/g)).toHaveLength(2);
+        expect(html).not.toContain(PLACEHOLDER_MARK);
+    });
+
+    it.each([
+        "`==代码==`",
+        "```\n==代码==\n```",
+        String.raw`\==转义==`,
+        "$a==b$",
+        "==未闭合",
+        "==跨\n行==",
+        "====",
+        "==   ==",
+    ])("保留非高亮内容：%s", (source) => {
+        expect(renderMarkdownLatex(source)).not.toContain("<mark>");
+    });
+
+    it("高亮内部仍会净化 HTML", () => {
+        const html = renderMarkdownLatex('==重点<img src="x" onerror="alert(1)">==');
+        expect(html).toContain("<mark>");
+        expect(html).not.toContain("onerror");
+    });
+});
+
 describe("renderMarkdownLatex - 安全性", () => {
     it("剥离 <script> 标签", () => {
         const html = renderMarkdownLatex("正常文本<script>window.__pwned = 1;</script>");

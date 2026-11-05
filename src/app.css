@@ -327,6 +327,14 @@
 }
 
 /* markdown 渲染内容的默认排版（题目、解析、答疑消息） */
+.rg-markdown mark {
+    background-color: var(--b3-font-background5, #fff2a8);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 0.1em;
+    box-decoration-break: clone;
+}
+
 .rg-markdown > :first-child {
     margin-top: 0;
 }
