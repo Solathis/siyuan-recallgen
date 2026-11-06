@@ -63,3 +63,25 @@ export function stepStates(phase: GenPhase): Record<GenPhase, StepState> {
         regenerating: current === 2 ? "active" : "pending",
     };
 }
+
+/** 生成页「动态」里的一条记录 */
+export interface ActivityEntry {
+    /** 距开始生成的秒数 */
+    at: number;
+    text: string;
+}
+
+/** 动态只留最近几条：它回答的是「刚刚发生了什么」，不是一份完整日志 */
+export const MAX_ACTIVITY = 6;
+
+/**
+ * 追加一条动态，最新的排在最前。
+ *
+ * 生成器在某批状态单独变化（开始请求、失败）时会沿用上一条文案再推送一次，
+ * 因此与最近一条相同的文案直接忽略，并原样返回同一个数组，调用方据此可以跳过一次更新。
+ */
+export function pushActivity(list: ActivityEntry[], at: number, text: string): ActivityEntry[] {
+    const trimmed = text.trim();
+    if (!trimmed || list[0]?.text === trimmed) return list;
+    return [{ at, text: trimmed }, ...list].slice(0, MAX_ACTIVITY);
+}

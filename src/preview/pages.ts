@@ -15,6 +15,7 @@ export type PageKey =
     | "quiz-generating-empty"
     | "quiz-answering"
     | "quiz-answering-empty"
+    | "quiz-grading"
     | "quiz-result"
     | "flashcard"
     | "bank"
@@ -40,8 +41,12 @@ export const PAGE_GROUPS: PageGroup[] = [
         pages: [
             { key: "quiz-compose", label: "粘贴材料出题", hint: "材料输入、来源标题、字数上限与截断提示" },
             { key: "quiz-date-config", label: "日期范围配置", hint: "按日期出题时的配置卡与出题计划" },
-            { key: "quiz-generating", label: "生成中", hint: "进度条、阶段、批次与已收集题数" },
-            { key: "quiz-generating-slow", label: "生成中（慢）", hint: "把耗时拉长，便于观察进度与动效" },
+            { key: "quiz-generating", label: "生成中", hint: "收题数、步骤、逐批状态与动态" },
+            {
+                key: "quiz-generating-slow",
+                label: "生成中（慢）",
+                hint: "30 题拆三批：第 2 批失败、补题轮补齐差额，耗时拉长便于观察",
+            },
             { key: "quiz-generating-fail", label: "生成失败", hint: "失败诊断、原始返回折叠区与重试" },
             { key: "quiz-generating-empty", label: "生成 0 题", hint: "模型没给出可用题目时的空态" },
         ],
@@ -51,6 +56,7 @@ export const PAGE_GROUPS: PageGroup[] = [
         pages: [
             { key: "quiz-answering", label: "答题中", hint: "六种题型、题号导航、标记与交卷栏" },
             { key: "quiz-answering-empty", label: "空会话", hint: "恢复到一个没有题目的会话" },
+            { key: "quiz-grading", label: "判分中", hint: "交卷后的判分进度与薄弱点分析（循环演示）" },
         ],
     },
     {
@@ -63,7 +69,7 @@ export const PAGE_GROUPS: PageGroup[] = [
             { key: "flashcard", label: "闪卡复习", hint: "翻卡与四档自评" },
             { key: "bank", label: "题库", hint: "到期筛选、标签管理与表格" },
             { key: "stats", label: "统计", hint: "概览卡、趋势、分布、难度环形与热力图" },
-            { key: "history", label: "历史记录", hint: "列表/网格/表格三种视图" },
+            { key: "history", label: "历史记录", hint: "按日期的列表、汇总栏与三种视图；地址加 ?n=500 看分页" },
         ],
     },
     {

@@ -1,4 +1,6 @@
-import type { RecallGenConfig } from "@/types/config";
+import type { AIConfig, AIEndpoint, RecallGenConfig } from "@/types/config";
+import type { DetectedModels } from "@/lib/ai/providers/detect";
+import type { ModelCatalog } from "@/lib/ai/providers/catalog";
 import type { BankItem, BankSummary } from "./bank";
 import type {
     Difficulty,
@@ -134,7 +136,18 @@ export interface QuizService {
         results: GradingResult[]
     ): Promise<{ added: number; reused: number }>;
     clearBank(): Promise<void>;
-    testConnection: () => Promise<string>;
+    /**
+     * 测试连接。传 draft 时用草稿配置测（服务商接入面板「先测再保存」），否则用已保存的配置。
+     */
+    testConnection: (draft?: AIConfig, modelId?: string) => Promise<string>;
+    /** 服务商模型目录：缓存比随插件发布的快照新时用缓存 */
+    getProviderCatalog(): Promise<ModelCatalog>;
+    /** 识别自定义端点的模型列表，尽可能用 models.dev/随包快照补齐模型参数 */
+    detectProviderModels(
+        endpoint: Pick<AIEndpoint, "provider" | "protocol" | "baseUrl" | "apiKey">
+    ): Promise<DetectedModels>;
+    /** 从 models.dev 拉取最新模型并缓存；失败时抛错，已有的目录不受影响 */
+    refreshProviderCatalog(): Promise<ModelCatalog>;
     clearScores(): Promise<void>;
     clearAllProgress(): Promise<void>;
 }
@@ -146,10 +159,24 @@ export interface DateGenConfig {
     baseMinute: number;
 }
 
-/** 回看历史成绩所需的索引条目 + 明细 */
+/**
+ * 回看历史成绩所需的索引条目 + 明细。
+ *
+ * 明细不放进 Tab 数据：思源会把自定义 Tab 的 data 原样存进布局（customModelData），
+ * 每开一个回看 Tab，布局文件就多存一整份题目、判分与分析，重启时还要全部解析一遍。
+ * 现在只带索引条目，明细在面板里按 id 读取；旧布局里带着 detail 的 Tab 照常可用。
+ */
 export interface ReviewPayload {
     entry: ScoreIndexEntry;
-    detail: ScoreDetail;
+    detail?: ScoreDetail;
+}
+
+/** 回看用的明细：Tab 数据里自带的（旧布局）优先，否则按 id 读取；找不到返回 null */
+export async function resolveReviewDetail(
+    review: ReviewPayload,
+    load: (id: string) => Promise<ScoreDetail | null>
+): Promise<ScoreDetail | null> {
+    return review.detail ?? (await load(review.entry.id));
 }
 
 /** Tab 初始数据 */

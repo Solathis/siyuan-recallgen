@@ -1,6 +1,7 @@
 import { fetchSyncPost } from "siyuan";
 import { t } from "@/lib/i18n";
-import type { AIConfig, AIProvider, AIProtocol } from "@/types/config";
+import type { AIConfig, AIEndpoint, AIProvider, AIProtocol } from "@/types/config";
+import { presetById } from "./providers/catalog";
 
 /**
  * AI 调用错误类别。
@@ -68,6 +69,10 @@ export interface ResolvedAIConfig {
     maxTokens: number;
     reasoningEffort?: "default" | "low" | "medium" | "high";
     timeout: number;
+    /** 结构化输出时 tool_choice 只能写 auto 的服务商（智谱）；缺省为指定函数 */
+    toolChoice?: "named" | "auto";
+    /** 模型不接受自定义温度：请求里不发 temperature */
+    fixedTemperature?: boolean;
 }
 
 /**
@@ -91,6 +96,8 @@ export function resolveAI(config: AIConfig, modelId: string): ResolvedAIConfig {
         maxTokens: model.maxTokens,
         reasoningEffort: model.reasoningEffort,
         timeout: config.timeout,
+        toolChoice: presetById(endpoint.presetId)?.toolChoice,
+        fixedTemperature: model.fixedTemperature === true,
     };
 }
 
@@ -179,13 +186,14 @@ async function forward(
     body: Record<string, unknown>,
     headers: Record<string, string>[],
     timeout: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    method: "POST" | "GET" = "POST"
 ): Promise<ForwardResponse> {
     if (signal?.aborted) throw abortError();
 
     const req: ForwardRequest = {
         url,
-        method: "POST",
+        method,
         timeout,
         contentType: "application/json",
         headers,
@@ -242,6 +250,54 @@ function checkHttpOk(fr: ForwardResponse): void {
     if (fr.status < 200 || fr.status >= 300) {
         throw new AIError(`AI HTTP ${fr.status}: ${fr.body.slice(0, 500)}`, fr.status, "http", fr.body);
     }
+}
+
+/**
+ * 经内核 forwardProxy 发一个 GET，返回响应正文。
+ * 用于拉取 models.dev 这类公开数据：走内核不受 CORS 限制，移动端也一样能用。
+ */
+export async function fetchText(url: string, timeout = 60_000, signal?: AbortSignal): Promise<string> {
+    const fr = await forward(url, {}, [], timeout, signal, "GET");
+    checkHttpOk(fr);
+    return fr.body;
+}
+
+/**
+ * 请求一个 OpenAI / Anthropic / Ollama 兼容端点的模型列表。
+ * 不把返回值解释成配置：这里只负责请求和原文，服务商差异与 models.dev 对照在 providers/detect.ts。
+ */
+export async function listModelsRaw(
+    endpoint: Pick<AIEndpoint, "provider" | "protocol" | "baseUrl" | "apiKey">,
+    timeout = 30_000,
+    signal?: AbortSignal
+): Promise<string> {
+    const path =
+        endpoint.provider === "ollama" ? "api/tags" : endpoint.protocol === "messages" ? "models?limit=1000" : "models";
+    const headers: Record<string, string>[] = [];
+    if (endpoint.apiKey) {
+        if (endpoint.protocol === "messages") {
+            headers.push({ "x-api-key": endpoint.apiKey });
+            headers.push({ "anthropic-version": "2023-06-01" });
+        } else {
+            headers.push({ Authorization: `Bearer ${endpoint.apiKey}` });
+        }
+    }
+    let response: ForwardResponse;
+    try {
+        response = await forward(joinUrl(endpoint.baseUrl, path), {}, headers, timeout, signal, "GET");
+    } catch (error) {
+        throw error;
+    }
+    if (response.status === 404 || response.status === 405) {
+        throw new AIError(t("ai.modelsNotSupported"), response.status, "http", response.body);
+    }
+    checkHttpOk(response);
+    return response.body;
+}
+
+/** 请求体里的温度：模型不接受自定义温度时不发（例如 Kimi K3，发了会被拒） */
+function withTemperature(body: Record<string, unknown>, rc: ResolvedAIConfig, opts: LLMCallOptions): void {
+    if (!rc.fixedTemperature) body.temperature = opts.temperature ?? rc.temperature;
 }
 
 /**
@@ -320,16 +376,18 @@ async function callChat(rc: ResolvedAIConfig, messages: ChatMessage[], opts: LLM
     const body: Record<string, unknown> = {
         model: rc.model,
         messages,
-        temperature: opts.temperature ?? rc.temperature,
         stream: false,
     };
+    withTemperature(body, rc, opts);
     const maxTokens = opts.maxTokens ?? rc.maxTokens;
     if (rc.reasoningEffort && rc.reasoningEffort !== "default") body.reasoning_effort = rc.reasoningEffort;
     // maxTokens 为 0 表示「由 API 决定」，不发送 max_tokens 让服务端用模型默认值
     if (maxTokens > 0) body.max_tokens = maxTokens;
     if (opts.tools) {
         body.tools = opts.tools;
-        body.tool_choice = opts.toolChoice ?? "auto";
+        // 只支持 auto 的服务商（智谱）收到指定函数会报错；auto 下模型照样调用这唯一一个函数，
+        // 万一它直接答在正文里，extractChatContent 也会退回读 content
+        body.tool_choice = rc.toolChoice === "auto" ? "auto" : (opts.toolChoice ?? "auto");
     } else if (opts.responseFormat) {
         body.response_format = opts.responseFormat;
     }
@@ -392,8 +450,8 @@ async function callResponses(rc: ResolvedAIConfig, messages: ChatMessage[], opts
     const body: Record<string, unknown> = {
         model: rc.model,
         input: messages,
-        temperature: opts.temperature ?? rc.temperature,
     };
+    withTemperature(body, rc, opts);
     const respMaxTokens = opts.maxTokens ?? rc.maxTokens;
     if (rc.reasoningEffort && rc.reasoningEffort !== "default") body.reasoning = { effort: rc.reasoningEffort };
     if (respMaxTokens > 0) body.max_output_tokens = respMaxTokens;
@@ -456,7 +514,7 @@ async function callMessages(rc: ResolvedAIConfig, messages: ChatMessage[], opts:
     const msgMaxTokens = opts.maxTokens ?? rc.maxTokens;
     if (msgMaxTokens > 0) body.max_tokens = msgMaxTokens;
     if (system) body.system = system;
-    body.temperature = opts.temperature ?? rc.temperature;
+    withTemperature(body, rc, opts);
     // 强制调用指定工具：Anthropic 没有 response_format，结构化输出只能靠 tool use
     const anthropicTools = toolsToAnthropicTools(opts.tools);
     if (anthropicTools) {

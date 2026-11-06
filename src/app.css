@@ -130,6 +130,13 @@
     /* 浅底：用于选中态背景、标签底色。color-mix 让它在明暗主题下都自带透明度 */
     --rg-accent-soft: color-mix(in srgb, var(--rg-accent) 14%, transparent);
     --rg-accent-line: color-mix(in srgb, var(--rg-accent) 45%, transparent);
+    /*
+     * 服务商 logo 的底板：品牌 logo 是按浅底设计的（有的是纯黑单色），
+     * 放在深色主题的卡片上会看不见，所以两种主题都垫一块浅色底板，深色主题下略降亮度不刺眼。
+     */
+    --rg-logo-tile: #ffffff;
+    /* 底板上的文字（图标加载失败时的首字）：底板两种主题下都是浅色，文字色不必随主题换 */
+    --rg-logo-ink: #3f3f46;
 
     /*
      * 层次阴影。
@@ -158,6 +165,7 @@
     --rg-accent-foreground: #1a1630;
     --rg-accent-soft: color-mix(in srgb, var(--rg-accent) 18%, transparent);
     --rg-accent-line: color-mix(in srgb, var(--rg-accent) 50%, transparent);
+    --rg-logo-tile: #e9e9ee;
 }
 
 /*
@@ -202,6 +210,8 @@
     --color-rg-accent-foreground: var(--rg-accent-foreground);
     --color-rg-accent-soft: var(--rg-accent-soft);
     --color-rg-accent-line: var(--rg-accent-line);
+    --color-rg-logo-tile: var(--rg-logo-tile);
+    --color-rg-logo-ink: var(--rg-logo-ink);
 
     /* 层次：注册成 shadow-rg-sm/md/lg，避免各处直接用 Tailwind 写死的阴影值 */
     --shadow-rg-sm: var(--rg-shadow-sm);

@@ -31,6 +31,8 @@
         oncancel = () => {},
         aiHint = "",
         aiBlocked = false,
+        content = $bindable(""),
+        title = $bindable(""),
     }: {
         /** 开始出题；调用方负责把内容交给生成流程 */
         ongenerate: (content: string, sourceTitle: string) => void;
@@ -38,10 +40,13 @@
         /** 生成前置条件不满足的原因（来自 QuizPanel 的 AI 配置检查） */
         aiHint?: string;
         aiBlocked?: boolean;
+        /**
+         * 材料与来源标题。可以由调用方绑定：生成失败或取消后会回到这一屏，
+         * 组件重新挂载，状态若只留在这里，用户粘贴的材料就没了。
+         */
+        content?: string;
+        title?: string;
     } = $props();
-
-    let content = $state("");
-    let title = $state("");
 
     /** 超长内容直接截断并告知，避免把一整本书送进提示词（模型侧只会回一个 400） */
     const truncated = $derived(content.length > MAX_CONTENT_CHARS);

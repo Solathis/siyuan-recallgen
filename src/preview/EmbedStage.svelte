@@ -10,11 +10,13 @@
     import * as Card from "@/lib/components/ui/card";
     import BankPanel from "@/lib/ui/BankPanel.svelte";
     import FlashcardPanel from "@/lib/ui/FlashcardPanel.svelte";
+    import GenProgressView from "@/lib/ui/GenProgressView.svelte";
     import HistoryPanel from "@/lib/ui/HistoryPanel.svelte";
     import QuizPanel from "@/lib/ui/QuizPanel.svelte";
     import SettingPanel from "@/lib/ui/SettingPanel.svelte";
     import StatsPanel from "@/lib/ui/StatsPanel.svelte";
     import { setForcedMobile } from "@/lib/ui/media.svelte";
+    import { t } from "@/lib/i18n";
     import type { ImportResult } from "@/lib/quiz/config-io";
     import type { QuizTabData } from "@/lib/quiz/service";
     import { showMessage } from "siyuan";
@@ -53,7 +55,64 @@
     preview.controls.failConnection = false;
     preview.controls.resumeProgress = false;
 
+    /*
+     * 慢速屏要看全「并发、失败批次、补题轮」：样例配置只有 8 题（单批），
+     * 这里改成 30 题拆三批，并让第 2 批不给可用题目。
+     */
+    const slowGenerating = initialPage === "quiz-generating-slow";
+    preview.controls.failedBatch = slowGenerating;
+    if (slowGenerating) {
+        const base = previewConfig();
+        preview.setConfig({
+            ...base,
+            general: { ...base.general, difficulty: { total: 30, easy: 12, medium: 12, hard: 6 } },
+        });
+    }
+
+    /*
+     * 答题记录屏的样例只有 46 条，不满一页（60 条），看不到分页与「加载更多」。
+     * 地址里带 ?n=500 时按样例循环生成那么多条，日期依次往前推。
+     */
+    const sampleCount = Number(new URLSearchParams(location.search).get("n") ?? 0);
+    if (initialPage === "history" && sampleCount > previewScoreIndex.length) {
+        const base = previewScoreIndex;
+        preview.seedScores(
+            Array.from({ length: Math.min(sampleCount, 5000) }, (_, i) => {
+                const source = base[i % base.length];
+                const round = Math.floor(i / base.length);
+                return {
+                    ...source,
+                    id: `${source.id}-x${i}`,
+                    title: round === 0 ? source.title : `${source.title} · ${round + 1}`,
+                    timestamp: source.timestamp - round * 120 * 86_400_000,
+                };
+            })
+        );
+    }
+
     const { service } = preview;
+
+    /*
+     * 判分中这一屏：交卷后才会出现，从答题页一路点过来太绕，
+     * 这里直接循环演示「逐题判分 → 薄弱点分析」。
+     */
+    const GRADE_TOTAL = 8;
+    let gradeDone = $state(0);
+    let analyzing = $state(false);
+    $effect(() => {
+        if (page !== "quiz-grading") return;
+        const timer = setInterval(() => {
+            if (analyzing) {
+                analyzing = false;
+                gradeDone = 0;
+            } else if (gradeDone < GRADE_TOTAL) {
+                gradeDone += 1;
+            } else {
+                analyzing = true;
+            }
+        }, 900);
+        return () => clearInterval(timer);
+    });
 
     /** 设置面板内部持有可编辑副本，保存后同步回服务层（验证订阅链路） */
     let config = $state<RecallGenConfig>(previewConfig());
@@ -125,19 +184,15 @@
         sourceTitle: PREVIEW_DOC_TITLE,
     };
 
+    /*
+     * 与真实插件同一个形状：回看 Tab 只带索引条目，明细由面板经 loadScoreDetail 读取。
+     * 旧布局里「Tab 数据自带明细」的形状由 review-detail.test.ts 覆盖。
+     */
     const resultTab: QuizTabData = {
         mode: "review",
         sourceDocId: PREVIEW_DOC_ID,
         sourceTitle: resultRecord.title,
-        review: {
-            entry: resultIndex,
-            detail: {
-                id: resultRecord.id,
-                detail: resultRecord.detail,
-                questions: resultRecord.questions,
-                analysis: resultRecord.analysis,
-            },
-        },
+        review: { entry: resultIndex },
     };
 
     /* ── 面板之间的跳转（在 iframe 内换页）──────────────────────── */
@@ -189,6 +244,19 @@
         <div class="rg-scope h-full"><QuizPanel {service} tabData={answeringTab} /></div>
     {:else if page === "quiz-answering-empty"}
         <div class="rg-scope h-full"><QuizPanel {service} tabData={emptyTab} /></div>
+    {:else if page === "quiz-grading"}
+        <div class="rg-scope flex h-full flex-col px-4">
+            <GenProgressView
+                mode="grade"
+                title={analyzing ? t("quiz.analyzing") : t("quiz.grading")}
+                meta={PREVIEW_DOC_TITLE}
+                status={analyzing
+                    ? t("quiz.analyzing")
+                    : t("quiz.gradingProgress", String(gradeDone), String(GRADE_TOTAL))}
+                progress={analyzing ? null : (gradeDone / GRADE_TOTAL) * 100}
+                counter={analyzing ? null : { done: gradeDone, total: GRADE_TOTAL }}
+            />
+        </div>
     {:else if page === "quiz-result"}
         <div class="rg-scope h-full"><QuizPanel {service} tabData={resultTab} /></div>
     {:else if page === "flashcard"}

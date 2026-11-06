@@ -1,29 +1,48 @@
 <script lang="ts">
+    /**
+     * 答题记录（含统计、题库两个子页）。
+     *
+     * 记录页按「总量 → 怎么筛 → 逐条看」排：标题行、四格汇总、筛选、分组与视图、列表。
+     * 默认按日期的列表，每天一个分组头（当天次数与均分），行内只放分数、标题和一行要点；
+     * 查看、跳回原笔记、删除收进行尾的「更多操作」菜单，删除确认框整页共用一个。
+     */
     import { onMount } from "svelte";
     import { showMessage } from "siyuan";
-    import { Button } from "@/lib/components/ui/button";
+    import CalendarIcon from "@lucide/svelte/icons/calendar";
+    import ClipboardListIcon from "@lucide/svelte/icons/clipboard-list";
+    import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
+    import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
+    import EyeIcon from "@lucide/svelte/icons/eye";
+    import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
+    import SearchXIcon from "@lucide/svelte/icons/search-x";
+    import TrashIcon from "@lucide/svelte/icons/trash";
+    import XIcon from "@lucide/svelte/icons/x";
     import * as AlertDialog from "@/lib/components/ui/alert-dialog";
+    import { Button } from "@/lib/components/ui/button";
     import * as Card from "@/lib/components/ui/card";
     import * as DropdownMenu from "@/lib/components/ui/dropdown-menu";
+    import * as Empty from "@/lib/components/ui/empty";
     import { Input } from "@/lib/components/ui/input";
     import * as Item from "@/lib/components/ui/item";
     import { Progress } from "@/lib/components/ui/progress";
-    import * as Select from "@/lib/components/ui/select";
     import { Skeleton } from "@/lib/components/ui/skeleton";
-    import BankPanel from "./BankPanel.svelte";
-    import StatsPanel from "./StatsPanel.svelte";
     import * as Table from "@/lib/components/ui/table";
     import * as Tabs from "@/lib/components/ui/tabs";
-    import * as Empty from "@/lib/components/ui/empty";
+    import * as ToggleGroup from "@/lib/components/ui/toggle-group";
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
-    import { dayKey } from "../quiz/charts";
-    import { downloadText, exportStamp } from "./download";
+    import { dayKey, summarize } from "../quiz/charts";
     import { EXPORT_EXTENSION, EXPORT_MIME, buildExport, type ExportFormat } from "../quiz/export";
+    import { isOpenableDocId, sourceGroupKey } from "../quiz/history-view";
     import { PAGE_SIZE, limitGroups, nextLimit } from "../quiz/paging";
-    import { PASS_SCORE, scorePercent } from "../quiz/stats";
     import type { QuizService } from "../quiz/service";
-    import type { QuestionType, ScoreIndexEntry, Difficulty } from "@/types/quiz";
+    import { HIGH_SCORE, PASS_SCORE, passRate, scorePercent, scoreTier } from "../quiz/stats";
+    import type { Difficulty, QuestionType, ScoreIndexEntry } from "@/types/quiz";
+    import BankPanel from "./BankPanel.svelte";
+    import { downloadText, exportStamp } from "./download";
+    import { formatClock } from "./duration";
+    import { scoreBar, scoreText } from "./score-tone";
+    import StatsPanel from "./StatsPanel.svelte";
 
     let {
         service,
@@ -38,33 +57,31 @@
         openFlashcard?: (items: import("../quiz/bank").BankItem[]) => void;
     } = $props();
 
-    let records = $state<ScoreIndexEntry[]>([]);
+    /** 记录只会整体替换（载入、删除），用 raw 免得给每条的 byType/byTag 都建深层代理 */
+    let records = $state.raw<ScoreIndexEntry[]>([]);
     let loading = $state(true);
+    let loadError = $state<string | null>(null);
     /** 热力图需要配色配置与输出语言，跟随配置变化；初值经函数读取以避免捕获警告 */
     function initialConfig() {
         return service.getConfig();
     }
     let config = $state(initialConfig());
     $effect(() => service.subscribeConfig((next) => (config = next)));
-    let loadError = $state<string | null>(null);
-    let deleting = $state<string | null>(null);
+
     let query = $state("");
-    let groupBy = $state<"date" | "notebook">("date");
-    let viewMode = $state<"thumbnail" | "list" | "table">("thumbnail");
-    /** 分数区间筛选 */
+    let groupBy = $state<"date" | "source">("date");
+    let viewMode = $state<"list" | "cards" | "table">("list");
     let scoreFilter = $state<"all" | "high" | "mid" | "low">("all");
-    /** 顶层视图：记录列表 / 学习统计 */
     let topView = $state<"records" | "stats" | "bank">("records");
-    /** 从热力图点某一天跳过来时，筛选出该天的成绩；null 表示不限日期 */
+    /** 从热力图点某一天跳过来时只看那天；null 表示不限日期 */
     let dayFilter = $state<string | null>(null);
 
-    function clearDayFilter(): void {
-        dayFilter = null;
-    }
-    /**
-     * 已渲染条数上界。
-     * 记录很多时一次性渲染全部条目会创建大量 DOM，这里分段渲染并触底加载。
-     */
+    /** 删除确认框整页共用一个：原先每行各挂一套 AlertDialog */
+    let deleteTarget = $state<ScoreIndexEntry | null>(null);
+    let deleteOpen = $state(false);
+    let deleting = $state<string | null>(null);
+
+    /** 已渲染条数上界：分段渲染，触底或点按钮再加一批 */
     let visible = $state(PAGE_SIZE);
     let sentinel: HTMLDivElement | null = $state(null);
 
@@ -83,87 +100,140 @@
 
     onMount(() => void load());
 
+    /**
+     * 每条记录的派生值只在记录变化时算一次：
+     * 筛选、分组、渲染都要用百分比、日期键和搜索文本，原先每敲一个字都重算一遍。
+     */
+    interface Row {
+        entry: ScoreIndexEntry;
+        percent: number;
+        day: string;
+        haystack: string;
+    }
+
+    const rows = $derived<Row[]>(
+        records.map((entry) => ({
+            entry,
+            percent: scorePercent(entry),
+            day: dayKey(entry.timestamp),
+            haystack: `${entry.title} ${entry.sourceTitle ?? ""}`.toLowerCase(),
+        }))
+    );
+
     const filtered = $derived.by(() => {
         const q = query.trim().toLowerCase();
-        return records.filter((r) => {
-            if (dayFilter && dayKey(r.timestamp) !== dayFilter) return false;
-            if (q && !`${r.title} ${r.sourceTitle ?? ""}`.toLowerCase().includes(q)) return false;
-            const p = scorePercent(r);
-            if (scoreFilter === "high" && p < 80) return false;
-            if (scoreFilter === "mid" && (p < 60 || p >= 80)) return false;
-            if (scoreFilter === "low" && p >= 60) return false;
+        return rows.filter((row) => {
+            if (dayFilter && row.day !== dayFilter) return false;
+            if (q && !row.haystack.includes(q)) return false;
+            // 区间与配色同一套档位：≥80 优秀、60–79 达标、<60 未达标
+            const tier = scoreTier(row.percent);
+            if (scoreFilter === "high" && tier !== "high") return false;
+            if (scoreFilter === "mid" && tier !== "pass") return false;
+            if (scoreFilter === "low" && (tier === "high" || tier === "pass")) return false;
             return true;
         });
     });
 
-    /** 一条记录归到哪个分组：按日期是 YYYY-MM-DD，按来源是文档名 */
-    function groupKeyOf(entry: ScoreIndexEntry): string {
-        if (groupBy === "date") {
-            const d = new Date(entry.timestamp);
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        }
-        // 原先来源为空时错用「未作答」当兜底文案，语义不符
-        return (
-            entry.sourceTitle?.replace(/·.*$/, "").trim() ||
-            entry.title.replace(/·.*$/, "").trim() ||
-            t("history.noSource")
-        );
+    interface Group {
+        key: string;
+        items: Row[];
+        /** 分组头的统计按整组算，不受分段渲染截断影响 */
+        count: number;
+        avg: number;
     }
 
-    /** 按日期或来源分组，保持录入顺序（列表本身已按时间倒序） */
-    const grouped = $derived.by(() => {
-        const map = new Map<string, ScoreIndexEntry[]>();
-        for (const r of filtered) {
-            const key = groupKeyOf(r);
+    /** 按日期或来源分组，保持列表本身的时间倒序 */
+    const groups = $derived.by<Group[]>(() => {
+        const map = new Map<string, Row[]>();
+        for (const row of filtered) {
+            const key = groupBy === "date" ? row.day : sourceGroupKey(row.entry);
             const items = map.get(key);
-            if (items) items.push(r);
-            else map.set(key, [r]);
+            if (items) items.push(row);
+            else map.set(key, [row]);
         }
-        return [...map.entries()].map(([key, items]) => ({ key, items }));
+        return [...map.entries()].map(([key, items]) => ({
+            key,
+            items,
+            count: items.length,
+            avg: items.reduce((sum, row) => sum + row.percent, 0) / items.length,
+        }));
     });
-
-    /** 截断后的分组与剩余条数 */
-    const limited = $derived(limitGroups(grouped, visible));
-
-    /**
-     * 缩略图视图用的扁平序列。
-     *
-     * 缩略图是按日期/来源分组的，而一天通常只有一两次练习：若照分组逐行铺卡片，
-     * 每组右侧都会剩下一大片空列（一组 2 张卡 + 4 个空位），整个页面看上去像没排完。
-     * 因此缩略图只有一层网格，分组信息下沉成卡片上的一枚小标签；列表与表格视图
-     * 是竖向的，分组标题不占额外横向空间，继续保留。
-     */
-    const flatItems = $derived(limited.groups.flatMap((group) => group.items));
+    const groupMeta = $derived(new Map(groups.map((group) => [group.key, group])));
+    const limited = $derived(limitGroups(groups, visible));
+    /** 卡片视图是一层网格，不按分组折行（一天一两次练习时每组右侧会空出一大片） */
+    const flatRows = $derived(limited.groups.flatMap((group) => group.items));
 
     /**
-     * 概览数字。
-     *
-     * 原页面只有一串分组卡片，用户想知道「这段时间练得怎么样」得自己一张张看分数；
-     * 数据本来就在手上，先用一排数字说清总量、平均水平与达标次数更直接。
-     * 口径跟随当前筛选：筛了「60 分以下」时这排数字也应当只反映筛出来的那批。
+     * 汇总跟随当前筛选。每题用时与统计页同一个算法（按题数加权的实测单题耗时），
+     * 达标率是题目层面的 Σ达标题数 / Σ题数，与结果页顶部的「达标率」同一口径。
      */
     const summary = $derived.by(() => {
-        if (filtered.length === 0) return null;
-        const percents = filtered.map((entry) => scorePercent(entry));
-        const sum = percents.reduce((acc, p) => acc + p, 0);
+        const entries = filtered.map((row) => row.entry);
+        const stats = summarize(entries);
         return {
-            count: percents.length,
-            avg: sum / percents.length,
-            best: Math.max(...percents),
-            passed: percents.filter((p) => p >= PASS_SCORE).length,
+            count: entries.length,
+            avg: entries.length > 0 ? stats.averagePercent : null,
+            passRate: passRate(entries),
+            perQuestion: stats.secondsPerQuestion,
         };
     });
 
-    /** 搜索或筛选变化时回到第一批，避免沿用上一次的展开量 */
-    $effect(() => {
-        void query;
-        void scoreFilter;
+    /**
+     * 换筛选、分组、视图或子页时回到第一批。
+     * 原先只有搜索与分数筛选会收回：滚远之后再切视图，所有已加载的行会一次性渲染出来。
+     * 在事件处理里直接收回，而不是靠 $effect 事后收回——后者会先把那几百行渲染一遍。
+     */
+    function resetPaging(): void {
         visible = PAGE_SIZE;
-    });
+    }
 
-    // 触底自动加载下一批；同时也提供按钮，保证无 IntersectionObserver 时仍可用
+    function setQuery(value: string): void {
+        query = value;
+        resetPaging();
+    }
+
+    function setScoreFilter(value: string): void {
+        if (!value) return; // 再点一次已选中的项会传空串，保持原选择
+        scoreFilter = value as typeof scoreFilter;
+        resetPaging();
+    }
+
+    function setGroupBy(value: string): void {
+        if (!value) return;
+        groupBy = value as typeof groupBy;
+        resetPaging();
+    }
+
+    function setViewMode(value: string): void {
+        if (!value) return;
+        viewMode = value as typeof viewMode;
+        resetPaging();
+    }
+
+    function setTopView(value: string): void {
+        topView = value as typeof topView;
+        resetPaging();
+    }
+
+    function setDayFilter(day: string | null): void {
+        dayFilter = day;
+        resetPaging();
+    }
+
+    function clearFilters(): void {
+        query = "";
+        scoreFilter = "all";
+        setDayFilter(null);
+    }
+
+    /*
+     * 触底自动加载下一批。每加载一批就重建观察器：
+     * 行很矮、面板很高时，加载完哨兵仍在视口内，不会再触发新的「进入视口」，
+     * 原先自动加载就停在那里，得用户手动滚一下或点按钮。重建后浏览器会重新报告一次。
+     */
     $effect(() => {
         const element = sentinel;
+        void visible;
         if (!element || typeof IntersectionObserver === "undefined") return;
         const observer = new IntersectionObserver((entries) => {
             if (entries.some((e) => e.isIntersecting) && limited.remaining > 0) {
@@ -174,51 +244,72 @@
         return () => observer.disconnect();
     });
 
-    function timeStr(ts: number): string {
+    const pad = (n: number) => String(n).padStart(2, "0");
+
+    function clock(ts: number): string {
         const d = new Date(ts);
-        return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    /** 带日期的时间：今年的省掉年份 */
+    function dateTime(ts: number): string {
+        const d = new Date(ts);
+        const date = `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const year = d.getFullYear() === new Date().getFullYear() ? "" : `${d.getFullYear()}-`;
+        return `${year}${date} ${clock(ts)}`;
+    }
+
+    /** 分组头：按日期是「10月8日 周三」，按来源是最近一次记录的来源名 */
+    const dateFormats = new Map<string, Intl.DateTimeFormat>();
+    function dayTitle(day: string): string {
+        const locale = config.general.language === "en" ? "en-US" : "zh-CN";
+        const date = new Date(`${day}T00:00:00`);
+        const withYear = date.getFullYear() !== new Date().getFullYear();
+        const cacheKey = `${locale}|${withYear}`;
+        let format = dateFormats.get(cacheKey);
+        if (!format) {
+            format = new Intl.DateTimeFormat(locale, {
+                year: withYear ? "numeric" : undefined,
+                month: locale === "en-US" ? "short" : "long",
+                day: "numeric",
+                weekday: "short",
+            });
+            dateFormats.set(cacheKey, format);
+        }
+        return format.format(date);
+    }
+
+    function groupTitle(group: { key: string; items: Row[] }): string {
+        if (groupBy === "date") return dayTitle(group.key);
+        const latest = group.items[0]?.entry;
+        return latest?.sourceTitle || latest?.title || t("history.noSource");
     }
 
     /**
-     * 行内时间文案。
-     *
-     * 按日期分组时组标题已经写了日期，行内只需时刻；
-     * 按来源分组时组标题是「第三章」这类文档名，**没有日期**——
-     * 原先行内仍然只显示「11:24」，于是完全看不出这条记录是哪天做的。
+     * 行内一行要点：题数 · 时间 · 用时 · 未答 · 有分析。
+     * 按日期分组时分组头已经写了日期，只写时刻；按来源分组、以及不分组的卡片要带上日期。
      */
-    function timeLabel(entry: ScoreIndexEntry): string {
-        const time = timeStr(entry.timestamp);
-        if (groupBy === "date") return time;
-        const d = new Date(entry.timestamp);
-        const date = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        return d.getFullYear() === new Date().getFullYear() ? `${date} ${time}` : `${d.getFullYear()}-${date} ${time}`;
+    function metaLine(entry: ScoreIndexEntry, withDate: boolean): string {
+        const parts = [
+            t("result.qCount", String(entry.questionCount)),
+            withDate ? dateTime(entry.timestamp) : clock(entry.timestamp),
+        ];
+        if ((entry.duration ?? 0) > 0) parts.push(`${t("result.time")} ${formatClock(entry.duration ?? 0)}`);
+        if (entry.unanswered > 0) parts.push(t("history.unanswered", String(entry.unanswered)));
+        if (entry.hasAnalysis) parts.push(t("history.hasAnalysis"));
+        return parts.join(" · ");
     }
 
-    /** 缩略图卡片上的分组标签：今年的日期省掉年份，来源分组直接用文档名 */
-    function groupLabel(entry: ScoreIndexEntry): string {
-        const key = groupKeyOf(entry);
-        if (groupBy === "notebook") return key;
-        const [year, month, day] = key.split("-");
-        return year === String(new Date().getFullYear()) ? `${month}-${day}` : key;
+    function askDelete(entry: ScoreIndexEntry): void {
+        deleteTarget = entry;
+        // 等菜单收起再开确认框，免得菜单把焦点还给触发按钮时把确认框的焦点抢走
+        setTimeout(() => (deleteOpen = true), 0);
     }
 
-    /** 分数配色：全部走主题语义色，避免硬编码在暗色主题下不可读 */
-    function scoreClass(p: number): string {
-        if (p >= 80) return "text-success";
-        if (p >= 60) return "text-primary";
-        if (p >= 30) return "text-warning";
-        return "text-destructive";
-    }
-
-    /** 分数条的色调：覆盖 Progress 内部指示条的底色，与分数文字同一口径 */
-    function scoreTone(p: number): string {
-        if (p >= 80) return "[&>[data-slot=progress-indicator]]:bg-success";
-        if (p >= 60) return "[&>[data-slot=progress-indicator]]:bg-primary";
-        if (p >= 30) return "[&>[data-slot=progress-indicator]]:bg-warning";
-        return "[&>[data-slot=progress-indicator]]:bg-destructive";
-    }
-
-    async function remove(entry: ScoreIndexEntry) {
+    async function confirmDelete(): Promise<void> {
+        const entry = deleteTarget;
+        deleteOpen = false;
+        if (!entry) return;
         deleting = entry.id;
         try {
             await service.removeScore(entry.id);
@@ -233,20 +324,69 @@
     }
 
     /** 导出当前筛选结果：用 Blob + a[download]，不依赖思源接口 */
-    function exportAs(format: ExportFormat) {
+    function exportAs(format: ExportFormat): void {
         try {
-            const content = buildExport(filtered, format, t("history.title"));
+            const entries = filtered.map((row) => row.entry);
+            const content = buildExport(entries, format, t("history.title"));
             downloadText(`recallgen-scores-${exportStamp()}.${EXPORT_EXTENSION[format]}`, content, EXPORT_MIME[format]);
-            showMessage(t("history.exported", String(filtered.length)), 4000);
+            showMessage(t("history.exported", String(entries.length)), 4000);
         } catch (e) {
             showMessage(t("history.exportFailed", (e as Error).message), 7000, "error");
         }
     }
+
+    /** 分数区间：分界取自 scoreTier 的同一套常量 */
+    const SCORE_FILTERS = [
+        { value: "all", label: t("history.tier_all") },
+        { value: "high", label: `≥${HIGH_SCORE}` },
+        { value: "mid", label: `${PASS_SCORE}–${HIGH_SCORE - 1}` },
+        { value: "low", label: `<${PASS_SCORE}` },
+    ] as const;
+
+    /** 分段控件选中项补实底，否则描边变体只有一层浅灰，看不出选了哪个 */
+    const SEGMENT_ON = "data-[state=on]:bg-primary data-[state=on]:text-primary-foreground";
 </script>
 
+{#snippet rowMenu(entry: ScoreIndexEntry)}
+    <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+            {#snippet child({ props })}
+                <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    data-tap="icon"
+                    disabled={deleting === entry.id}
+                    aria-label={t("history.moreActions")}
+                    title={t("history.moreActions")}
+                >
+                    <EllipsisIcon aria-hidden="true" />
+                </Button>
+            {/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="end">
+            <DropdownMenu.Item onclick={() => onOpenReview(entry)}>
+                <EyeIcon aria-hidden="true" />
+                {t("history.review")}
+            </DropdownMenu.Item>
+            {#if isOpenableDocId(entry.sourceDocId)}
+                <DropdownMenu.Item onclick={() => service.openDoc(entry.sourceDocId ?? "")}>
+                    <ExternalLinkIcon aria-hidden="true" />
+                    {t("history.openSource")}
+                </DropdownMenu.Item>
+            {/if}
+            <DropdownMenu.Separator />
+            <DropdownMenu.Item variant="destructive" onclick={() => askDelete(entry)}>
+                <TrashIcon aria-hidden="true" />
+                {t("common.delete")}
+            </DropdownMenu.Item>
+        </DropdownMenu.Content>
+    </DropdownMenu.Root>
+{/snippet}
+
 <div class="@container flex flex-col gap-4 p-4">
-    <!-- 顶层视图切换：记录列表与学习统计 -->
-    <Tabs.Root value={topView} onValueChange={(v) => (topView = v as typeof topView)}>
+    <!-- 顶层视图：记录 / 统计 / 题库 -->
+    <Tabs.Root value={topView} onValueChange={setTopView}>
         <Tabs.List>
             <Tabs.Trigger value="records">{t("history.tabRecords")}</Tabs.Trigger>
             <Tabs.Trigger value="stats">{t("history.tabStats")}</Tabs.Trigger>
@@ -263,172 +403,212 @@
             {onStartReview}
             onDayClick={(date) => {
                 topView = "records";
-                dayFilter = date;
+                setDayFilter(date);
             }}
         />
     {:else if topView === "bank"}
         <BankPanel {service} {onStartReview} {openFlashcard} lang={config.general.language} />
     {:else}
-        <!--
-            顶栏拆成两行：第一行标题与次要操作，第二行搜索与筛选。
-            原实现把标题、日期筛选片、搜索框、分数下拉、刷新、导出全塞进一个
-            flex-wrap 行，面板一窄就折成三层且每层长度不一，看着像没排版。
-        -->
-        <header class="flex flex-col gap-3">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-                <div class="flex flex-col gap-1">
-                    <h2 class="text-lg font-semibold">{t("history.title")}</h2>
-                    <p class="text-muted-foreground text-sm">{t("history.pageDesc")}</p>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <Button variant="ghost" size="sm" data-tap onclick={() => void load()} disabled={loading}>
-                        {t("common.refresh")}
-                    </Button>
-                    <DropdownMenu.Root>
-                        <DropdownMenu.Trigger>
-                            {#snippet child({ props })}
-                                <Button
-                                    {...props}
-                                    variant="outline"
-                                    size="sm"
-                                    data-tap
-                                    disabled={filtered.length === 0}
-                                >
-                                    {t("history.export")}
-                                </Button>
-                            {/snippet}
-                        </DropdownMenu.Trigger>
-                        <DropdownMenu.Content align="end">
-                            <DropdownMenu.Item onclick={() => exportAs("json")}
-                                >{t("history.exportJson")}</DropdownMenu.Item
-                            >
-                            <DropdownMenu.Item onclick={() => exportAs("csv")}
-                                >{t("history.exportCsv")}</DropdownMenu.Item
-                            >
-                            <DropdownMenu.Item onclick={() => exportAs("markdown")}
-                                >{t("history.exportMarkdown")}</DropdownMenu.Item
-                            >
-                        </DropdownMenu.Content>
-                    </DropdownMenu.Root>
-                </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2">
-                {#if dayFilter}
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        class="border-primary text-primary hover:bg-primary/10 gap-1 text-xs"
-                        onclick={clearDayFilter}
-                        title={t("history.clearDayFilter")}
+        <header class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="m-0 flex items-baseline gap-2 text-lg font-semibold">
+                {t("history.title")}
+                {#if !loading && !loadError}
+                    <span class="text-muted-foreground text-sm font-normal tabular-nums"
+                        >{t("history.count", String(records.length))}</span
                     >
-                        📅 {dayFilter} ✕
-                    </Button>
                 {/if}
+            </h2>
+            <div class="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm" data-tap onclick={() => void load()} disabled={loading}>
+                    <RefreshCwIcon aria-hidden="true" />
+                    {t("common.refresh")}
+                </Button>
+                <DropdownMenu.Root>
+                    <DropdownMenu.Trigger>
+                        {#snippet child({ props })}
+                            <Button {...props} variant="outline" size="sm" data-tap disabled={filtered.length === 0}>
+                                {t("history.export")}
+                            </Button>
+                        {/snippet}
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Content align="end">
+                        <DropdownMenu.Item onclick={() => exportAs("json")}>{t("history.exportJson")}</DropdownMenu.Item
+                        >
+                        <DropdownMenu.Item onclick={() => exportAs("csv")}>{t("history.exportCsv")}</DropdownMenu.Item>
+                        <DropdownMenu.Item onclick={() => exportAs("markdown")}
+                            >{t("history.exportMarkdown")}</DropdownMenu.Item
+                        >
+                    </DropdownMenu.Content>
+                </DropdownMenu.Root>
+            </div>
+        </header>
+
+        {#if loading}
+            <div class="flex flex-col gap-2">
+                {#each [0, 1, 2, 3] as i (i)}
+                    <Skeleton class="h-14" />
+                {/each}
+            </div>
+        {:else if loadError}
+            <Empty.Root class="border-border min-h-40 rounded-lg border">
+                <Empty.Header>
+                    <Empty.Title>{t("history.loadFailed", loadError)}</Empty.Title>
+                </Empty.Header>
+                <Empty.Content>
+                    <Button variant="outline" size="sm" data-tap onclick={() => void load()}>{t("common.retry")}</Button
+                    >
+                </Empty.Content>
+            </Empty.Root>
+        {:else if records.length === 0}
+            <Empty.Root class="border-border min-h-40 rounded-lg border">
+                <Empty.Header>
+                    <Empty.Media variant="icon"><ClipboardListIcon aria-hidden="true" /></Empty.Media>
+                    <Empty.Title>{t("history.empty")}</Empty.Title>
+                </Empty.Header>
+            </Empty.Root>
+        {:else}
+            <!-- 四格汇总：口径跟随当前筛选 -->
+            <dl class="grid grid-cols-2 gap-2 @xl:grid-cols-4">
+                {#each [{ label: t("history.summaryCount"), value: String(summary.count) }, { label: t("history.summaryAvg"), value: summary.avg === null ? "—" : summary.avg.toFixed(1) }, { label: t("history.summaryPassRate"), value: summary.passRate === null ? "—" : `${Math.round(summary.passRate)}%` }, { label: t("history.summaryPerQuestion"), value: summary.perQuestion === null ? "—" : `${Math.round(summary.perQuestion)}s` }] as kpi (kpi.label)}
+                    <div class="bg-muted/40 flex flex-col gap-1 rounded-lg border px-3 py-2.5">
+                        <dt class="text-muted-foreground text-xs">{kpi.label}</dt>
+                        <dd class="text-xl leading-none font-semibold tabular-nums">{kpi.value}</dd>
+                    </div>
+                {/each}
+            </dl>
+
+            <!-- 筛选：搜索、分数区间、从热力图带过来的日期 -->
+            <div class="flex flex-wrap items-center gap-2">
                 <Input
                     class="h-8 w-full @xl:w-56"
                     placeholder={t("history.searchPlaceholder")}
                     aria-label={t("history.searchPlaceholder")}
-                    bind:value={query}
+                    value={query}
+                    oninput={(e) => setQuery(e.currentTarget.value)}
                 />
-                <Select.Root
+                <ToggleGroup.Root
                     type="single"
+                    variant="outline"
+                    size="sm"
                     value={scoreFilter}
-                    onValueChange={(v) => (scoreFilter = v as typeof scoreFilter)}
+                    onValueChange={setScoreFilter}
+                    aria-label={t("history.filterScore")}
                 >
-                    <Select.Trigger class="h-8 w-28" aria-label={t("history.filterScore")}>
-                        {t(`history.filter_${scoreFilter}`)}
-                    </Select.Trigger>
-                    <Select.Content>
-                        <Select.Item value="all">{t("history.filter_all")}</Select.Item>
-                        <Select.Item value="high">{t("history.filter_high")}</Select.Item>
-                        <Select.Item value="mid">{t("history.filter_mid")}</Select.Item>
-                        <Select.Item value="low">{t("history.filter_low")}</Select.Item>
-                    </Select.Content>
-                </Select.Root>
+                    {#each SCORE_FILTERS as option (option.value)}
+                        <ToggleGroup.Item
+                            value={option.value}
+                            class={cn("tabular-nums", SEGMENT_ON)}
+                            aria-label={t(`history.filter_${option.value}`)}
+                            title={t(`history.filter_${option.value}`)}>{option.label}</ToggleGroup.Item
+                        >
+                    {/each}
+                </ToggleGroup.Root>
+                {#if dayFilter}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        data-tap
+                        class="border-primary text-primary hover:bg-primary/10 gap-1 tabular-nums"
+                        onclick={() => setDayFilter(null)}
+                        title={t("history.clearDayFilter")}
+                        aria-label={`${dayFilter} · ${t("history.clearDayFilter")}`}
+                    >
+                        <CalendarIcon aria-hidden="true" />
+                        {dayFilter}
+                        <XIcon aria-hidden="true" />
+                    </Button>
+                {/if}
             </div>
-        </header>
 
-        <!-- 分组与视图切换 -->
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <Tabs.Root value={groupBy} onValueChange={(v) => (groupBy = v as typeof groupBy)}>
-                <Tabs.List>
-                    <Tabs.Trigger value="date">{t("history.byDate")}</Tabs.Trigger>
-                    <Tabs.Trigger value="notebook">{t("history.bySource")}</Tabs.Trigger>
-                </Tabs.List>
-            </Tabs.Root>
-            <Tabs.Root value={viewMode} onValueChange={(v) => (viewMode = v as typeof viewMode)}>
-                <Tabs.List>
-                    <Tabs.Trigger value="thumbnail">{t("history.thumb")}</Tabs.Trigger>
-                    <Tabs.Trigger value="list">{t("history.list")}</Tabs.Trigger>
-                    <Tabs.Trigger value="table">{t("history.table")}</Tabs.Trigger>
-                </Tabs.List>
-            </Tabs.Root>
-        </div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <ToggleGroup.Root
+                    type="single"
+                    variant="outline"
+                    size="sm"
+                    value={groupBy}
+                    onValueChange={setGroupBy}
+                    aria-label={t("history.groupBy")}
+                >
+                    <ToggleGroup.Item value="date" class={SEGMENT_ON}>{t("history.byDate")}</ToggleGroup.Item>
+                    <ToggleGroup.Item value="source" class={SEGMENT_ON}>{t("history.bySource")}</ToggleGroup.Item>
+                </ToggleGroup.Root>
+                <ToggleGroup.Root
+                    type="single"
+                    variant="outline"
+                    size="sm"
+                    value={viewMode}
+                    onValueChange={setViewMode}
+                    aria-label={t("history.viewMode")}
+                >
+                    <ToggleGroup.Item value="list" class={SEGMENT_ON}>{t("history.list")}</ToggleGroup.Item>
+                    <ToggleGroup.Item value="cards" class={SEGMENT_ON}>{t("history.cards")}</ToggleGroup.Item>
+                    <ToggleGroup.Item value="table" class={SEGMENT_ON}>{t("history.table")}</ToggleGroup.Item>
+                </ToggleGroup.Root>
+            </div>
 
-        {#if loading}
-            <div class="flex flex-col gap-2">
-                {#each [0, 1, 2] as i (i)}
-                    <Skeleton class="h-16 w-full" />
+            {#if filtered.length === 0}
+                <Empty.Root class="border-border min-h-40 rounded-lg border">
+                    <Empty.Header>
+                        <Empty.Media variant="icon"><SearchXIcon aria-hidden="true" /></Empty.Media>
+                        <Empty.Title>{t("history.noMatch")}</Empty.Title>
+                    </Empty.Header>
+                    <Empty.Content>
+                        <Button variant="outline" size="sm" data-tap onclick={clearFilters}
+                            >{t("history.clearFilters")}</Button
+                        >
+                    </Empty.Content>
+                </Empty.Root>
+            {:else if viewMode === "list"}
+                {#each limited.groups as group (group.key)}
+                    {@const meta = groupMeta.get(group.key)}
+                    <section class="flex flex-col gap-1.5">
+                        <h3 class="text-muted-foreground m-0 flex items-center gap-2 text-xs font-semibold">
+                            <span class="text-foreground truncate" title={groupTitle(group)}>{groupTitle(group)}</span>
+                            <span class="shrink-0 font-normal tabular-nums"
+                                >{t(
+                                    "history.groupSummary",
+                                    String(meta?.count ?? 0),
+                                    (meta?.avg ?? 0).toFixed(0)
+                                )}</span
+                            >
+                            <span class="bg-border h-px flex-1"></span>
+                        </h3>
+                        <div class="flex flex-col gap-1">
+                            {#each group.items as row, i (row.entry.id)}
+                                <Item.Root
+                                    variant="muted"
+                                    size="xs"
+                                    class="animate-in fade-in-0 [animation-fill-mode:backwards] duration-200"
+                                    style="animation-delay: {Math.min(i, 10) * 30}ms"
+                                >
+                                    <Item.Media variant="icon" class="w-10 shrink-0 justify-end bg-transparent">
+                                        <span class={cn("text-lg font-bold tabular-nums", scoreText(row.percent))}
+                                            >{row.percent.toFixed(0)}</span
+                                        >
+                                    </Item.Media>
+                                    <Item.Content class="min-w-0">
+                                        <Item.Title class="w-full min-w-0 text-sm">
+                                            <Button
+                                                variant="link"
+                                                class="h-auto max-w-full justify-start px-0 text-left"
+                                                onclick={() => onOpenReview(row.entry)}
+                                            >
+                                                <span class="truncate">{row.entry.title}</span>
+                                            </Button>
+                                        </Item.Title>
+                                        <Item.Description class="text-2xs truncate">
+                                            {metaLine(row.entry, groupBy === "source")}
+                                        </Item.Description>
+                                    </Item.Content>
+                                    <Item.Actions>{@render rowMenu(row.entry)}</Item.Actions>
+                                </Item.Root>
+                            {/each}
+                        </div>
+                    </section>
                 {/each}
-            </div>
-        {:else if loadError}
-            <Card.Root>
-                <Card.Content class="flex flex-col items-start gap-2 pt-4">
-                    <p class="text-destructive text-sm">{t("history.loadFailed", loadError)}</p>
-                    <Button variant="outline" size="sm" onclick={() => void load()}>{t("common.retry")}</Button>
-                </Card.Content>
-            </Card.Root>
-        {:else if records.length === 0}
-            <Empty.Root class="min-h-40">
-                <Empty.Header>
-                    <Empty.Media variant="icon">🗂</Empty.Media>
-                    <Empty.Title>{t("history.empty")}</Empty.Title>
-                </Empty.Header>
-            </Empty.Root>
-        {:else if filtered.length === 0}
-            <Empty.Root class="min-h-40">
-                <Empty.Header>
-                    <Empty.Media variant="icon">🔍</Empty.Media>
-                    <Empty.Title>{t("history.noMatch")}</Empty.Title>
-                </Empty.Header>
-            </Empty.Root>
-        {:else}
-            <!-- 概览：先用一排数字说清「这段时间练得怎么样」，不必一张张卡片去数 -->
-            {#if summary}
-                <dl class="border-border grid grid-cols-2 gap-x-5 gap-y-3 rounded-lg border px-4 py-3 @xl:grid-cols-4">
-                    <div class="flex flex-col gap-0.5">
-                        <dt class="text-muted-foreground text-xs">{t("history.summaryCount")}</dt>
-                        <dd class="text-lg leading-none font-semibold tabular-nums">{summary.count}</dd>
-                    </div>
-                    <div class="flex flex-col gap-0.5">
-                        <dt class="text-muted-foreground text-xs">{t("history.summaryAvg")}</dt>
-                        <dd class="text-lg leading-none font-semibold tabular-nums">
-                            {summary.avg.toFixed(1)}
-                        </dd>
-                    </div>
-                    <div class="flex flex-col gap-0.5">
-                        <dt class="text-muted-foreground text-xs">{t("history.summaryBest")}</dt>
-                        <dd class="text-lg leading-none font-semibold tabular-nums">{summary.best.toFixed(0)}</dd>
-                    </div>
-                    <div class="flex flex-col gap-0.5">
-                        <dt class="text-muted-foreground text-xs">{t("history.summaryPassed")}</dt>
-                        <dd class="text-lg leading-none font-semibold tabular-nums">{summary.passed}</dd>
-                    </div>
-                </dl>
-            {/if}
-
-            {#if viewMode === "thumbnail"}
+            {:else if viewMode === "cards"}
                 <div class="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-3">
-                    {#each flatItems as r, i (r.id)}
-                        {@const p = scorePercent(r)}
-                        <!--
-                                    整张卡片即入口。
-                                    原实现把「查看」做成卡片里一个整行按钮，删除又并排放在它右边：
-                                    一张 200px 宽的卡里最显眼的东西是两个操作按钮，信息反而被压成配角。
-                                    现在卡片本身可点开回看，删除退到右上角的小图标（触屏没有 hover，
-                                    所以不做「悬停才出现」）。
-                                -->
+                    {#each flatRows as row, i (row.entry.id)}
                         <Card.Root
                             class="group relative overflow-hidden transition-shadow focus-within:shadow-rg-md hover:shadow-rg-md animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
                             style="animation-delay: {Math.min(i, 10) * 30}ms"
@@ -436,268 +616,119 @@
                             <Button
                                 variant="ghost"
                                 class="hover:bg-transparent h-auto w-full flex-col items-stretch gap-2 p-4 text-left whitespace-normal"
-                                aria-label={`${t("history.review")}：${r.title}`}
-                                onclick={() => onOpenReview(r)}
+                                aria-label={t("history.reviewOf", row.entry.title)}
+                                onclick={() => onOpenReview(row.entry)}
                             >
-                                <div class="flex items-baseline gap-2 pr-6">
-                                    <span class={cn("text-2xl leading-none font-bold tabular-nums", scoreClass(p))}
-                                        >{p.toFixed(0)}</span
+                                <div class="flex items-baseline gap-2 pr-7">
+                                    <span
+                                        class={cn(
+                                            "text-2xl leading-none font-bold tabular-nums",
+                                            scoreText(row.percent)
+                                        )}>{row.percent.toFixed(0)}</span
                                     >
                                     <span class="text-muted-foreground text-xs">{t("history.pts")}</span>
-                                    <span class="text-muted-foreground ml-auto text-2xs tabular-nums">
-                                        {p >= PASS_SCORE ? t("result.passed") : t("result.notPassed")}
+                                    <span class="text-muted-foreground ml-auto text-2xs">
+                                        {row.percent >= PASS_SCORE ? t("result.passed") : t("result.notPassed")}
                                     </span>
                                 </div>
                                 <div class="min-w-0">
-                                    <div class="line-clamp-2 text-sm font-medium" title={r.title}>
-                                        {r.title}
+                                    <div class="line-clamp-2 text-sm font-medium" title={row.entry.title}>
+                                        {row.entry.title}
                                     </div>
-                                    <div class="text-muted-foreground mt-0.5 text-xs">
-                                        {t("result.qCount", String(r.questionCount))} · {groupLabel(r)}
-                                        {timeStr(r.timestamp)}
-                                    </div>
+                                    <div class="text-muted-foreground mt-0.5 text-xs">{metaLine(row.entry, true)}</div>
                                 </div>
                                 <Progress
-                                    value={p}
-                                    class={cn(
-                                        "mt-0.5 h-1.5",
-                                        p >= PASS_SCORE
-                                            ? "[&>[data-slot=progress-indicator]]:bg-success"
-                                            : "[&>[data-slot=progress-indicator]]:bg-destructive"
-                                    )}
+                                    value={row.percent}
+                                    class={cn("mt-0.5 h-1.5", scoreBar(row.percent))}
                                     aria-hidden="true"
                                 />
                             </Button>
-
-                            <div class="absolute top-1.5 right-1.5 z-10">
-                                <AlertDialog.Root>
-                                    <AlertDialog.Trigger>
-                                        {#snippet child({ props })}
-                                            <!--
-                                                        aria-label / title 必须写在开始标签里：
-                                                        放在标签之后会被当成文本渲染出来，
-                                                        页面上会直接出现「aria-label=删除 title=删除」。
-                                                    -->
-                                            <Button
-                                                {...props}
-                                                variant="ghost"
-                                                size="icon-xs"
-                                                class="opacity-70 hover:opacity-100"
-                                                disabled={deleting === r.id}
-                                                aria-label={t("common.delete")}
-                                                title={t("common.delete")}
-                                            >
-                                                ✕
-                                            </Button>
-                                        {/snippet}
-                                    </AlertDialog.Trigger>
-                                    <AlertDialog.Content>
-                                        <AlertDialog.Header>
-                                            <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
-                                            <AlertDialog.Description>
-                                                {t("history.deleteConfirm", r.title)}
-                                            </AlertDialog.Description>
-                                        </AlertDialog.Header>
-                                        <AlertDialog.Footer>
-                                            <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
-                                            <AlertDialog.Action variant="destructive" onclick={() => void remove(r)}>
-                                                {t("common.delete")}
-                                            </AlertDialog.Action>
-                                        </AlertDialog.Footer>
-                                    </AlertDialog.Content>
-                                </AlertDialog.Root>
-                            </div>
+                            <div class="absolute top-1.5 right-1.5 z-10">{@render rowMenu(row.entry)}</div>
                         </Card.Root>
                     {/each}
                 </div>
             {:else}
-                {#each limited.groups as group (group.key)}
-                    <section class="flex flex-col gap-2">
-                        <h3 class="text-muted-foreground flex items-center gap-2 text-xs font-semibold tracking-wide">
-                            <span class="text-foreground">{group.key}</span>
-                            <span class="bg-muted rounded-full px-1.5 py-0.5 text-2xs tabular-nums"
-                                >{group.items.length}</span
+                <!-- 一张表、分组用整行标题隔开：每组各一张表时列宽对不齐 -->
+                <Table.Root>
+                    <Table.Header>
+                        <Table.Row>
+                            <Table.Head class="w-1/2">{t("history.colTitle")}</Table.Head>
+                            <Table.Head class="w-32 text-right">{t("history.colScore")}</Table.Head>
+                            <Table.Head class="w-16 text-right">{t("history.colCount")}</Table.Head>
+                            <Table.Head class="w-24 text-right">{t("history.colTime")}</Table.Head>
+                            <Table.Head class="w-10"><span class="sr-only">{t("history.moreActions")}</span></Table.Head
                             >
-                            <span class="bg-border h-px flex-1"></span>
-                        </h3>
-
-                        {#if viewMode === "list"}
-                            <div class="flex flex-col gap-1">
-                                {#each group.items as r, i (r.id)}
-                                    {@const p = scorePercent(r)}
-                                    <!-- 行改用 shadcn Item：分值、标题与元信息、操作各归各位 -->
-                                    <Item.Root
-                                        variant="muted"
-                                        size="xs"
-                                        class="animate-in fade-in-0 [animation-fill-mode:backwards] duration-200"
-                                        style="animation-delay: {Math.min(i, 10) * 30}ms"
+                        </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                        {#each limited.groups as group (group.key)}
+                            {@const meta = groupMeta.get(group.key)}
+                            <Table.Row class="hover:bg-transparent">
+                                <Table.Cell
+                                    colspan={5}
+                                    class="text-muted-foreground bg-muted/40 py-1.5 text-xs font-semibold"
+                                >
+                                    <span class="text-foreground">{groupTitle(group)}</span>
+                                    <span class="ml-2 font-normal tabular-nums"
+                                        >{t(
+                                            "history.groupSummary",
+                                            String(meta?.count ?? 0),
+                                            (meta?.avg ?? 0).toFixed(0)
+                                        )}</span
                                     >
-                                        <Item.Media variant="icon" class="w-10 shrink-0 justify-end bg-transparent">
-                                            <span class={cn("text-lg font-bold tabular-nums", scoreClass(p))}>
-                                                {p.toFixed(0)}
-                                            </span>
-                                        </Item.Media>
-                                        <Item.Content>
-                                            <Item.Title class="truncate text-sm">
-                                                <Button
-                                                    variant="link"
-                                                    class="h-auto max-w-full justify-start px-0 text-left"
-                                                    onclick={() => onOpenReview(r)}
-                                                >
-                                                    <span class="truncate">{r.title}</span>
-                                                </Button>
-                                            </Item.Title>
-                                            <Item.Description class="text-2xs">
-                                                {t("result.qCount", String(r.questionCount))} · {timeLabel(r)}
-                                            </Item.Description>
-                                        </Item.Content>
-                                        <Item.Actions>
-                                            <AlertDialog.Root>
-                                                <AlertDialog.Trigger>
-                                                    {#snippet child({ props })}
-                                                        <!-- 列表视图原先没给图标按钮任何可访问名称 -->
-                                                        <Button
-                                                            {...props}
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            disabled={deleting === r.id}
-                                                            aria-label={t("common.delete")}
-                                                            title={t("common.delete")}>✕</Button
-                                                        >
-                                                    {/snippet}
-                                                </AlertDialog.Trigger>
-                                                <AlertDialog.Content>
-                                                    <AlertDialog.Header>
-                                                        <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
-                                                        <AlertDialog.Description
-                                                            >{t(
-                                                                "history.deleteConfirm",
-                                                                r.title
-                                                            )}</AlertDialog.Description
-                                                        >
-                                                    </AlertDialog.Header>
-                                                    <AlertDialog.Footer>
-                                                        <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
-                                                        <AlertDialog.Action
-                                                            variant="destructive"
-                                                            onclick={() => void remove(r)}
-                                                        >
-                                                            {t("common.delete")}
-                                                        </AlertDialog.Action>
-                                                    </AlertDialog.Footer>
-                                                </AlertDialog.Content>
-                                            </AlertDialog.Root>
-                                        </Item.Actions>
-                                    </Item.Root>
-                                {/each}
-                            </div>
-                        {:else}
-                            <Table.Root>
-                                <Table.Header>
-                                    <Table.Row>
-                                        <Table.Head class="w-1/2">{t("history.colTitle")}</Table.Head>
-                                        <Table.Head class="w-32 text-right">{t("history.colScore")}</Table.Head>
-                                        <Table.Head class="w-16 text-right">{t("history.colCount")}</Table.Head>
-                                        <Table.Head class="w-20 text-right">{t("history.colTime")}</Table.Head>
-                                        <Table.Head class="w-10"></Table.Head>
-                                    </Table.Row>
-                                </Table.Header>
-                                <Table.Body>
-                                    {#each group.items as r (r.id)}
-                                        {@const p = scorePercent(r)}
-                                        <Table.Row class="animate-in fade-in-0 duration-200">
-                                            <Table.Cell>
-                                                <Button
-                                                    variant="link"
-                                                    class="h-auto justify-start px-0"
-                                                    onclick={() => onOpenReview(r)}
-                                                >
-                                                    {r.title}
-                                                </Button>
-                                            </Table.Cell>
-                                            <Table.Cell>
-                                                <!--
-                                                    分数带一条进度条：表格里标题这一列几乎总是很短，
-                                                    数字全挤在右边会留下中间一大片空白；
-                                                    一条按分值着色的细条既补上这段空间，也让「哪几次差得多」一眼可见。
-                                                -->
-                                                <div class="flex items-center justify-end gap-2">
-                                                    <Progress
-                                                        value={p}
-                                                        class={cn("h-1.5 w-16", scoreTone(p))}
-                                                        aria-hidden="true"
-                                                    />
-                                                    <span
-                                                        class={cn(
-                                                            "w-10 text-right font-semibold tabular-nums",
-                                                            scoreClass(p)
-                                                        )}>{p.toFixed(0)}%</span
-                                                    >
-                                                </div>
-                                            </Table.Cell>
-                                            <Table.Cell class="text-right">{r.questionCount}</Table.Cell>
-                                            <Table.Cell class="text-muted-foreground text-right text-xs">
-                                                {timeLabel(r)}
-                                            </Table.Cell>
-                                            <Table.Cell>
-                                                <AlertDialog.Root>
-                                                    <AlertDialog.Trigger>
-                                                        {#snippet child({ props })}
-                                                            <!--
-                                                            aria-label / title 必须写在开始标签里：
-                                                            放在标签之后会被当成文本渲染出来，
-                                                            页面上会直接出现「aria-label=删除 title=删除」。
-                                                        -->
-                                                            <Button
-                                                                {...props}
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                disabled={deleting === r.id}
-                                                                aria-label={t("common.delete")}
-                                                                title={t("common.delete")}
-                                                            >
-                                                                ✕
-                                                            </Button>
-                                                        {/snippet}
-                                                    </AlertDialog.Trigger>
-                                                    <AlertDialog.Content>
-                                                        <AlertDialog.Header>
-                                                            <AlertDialog.Title
-                                                                >{t("history.deleteOne")}</AlertDialog.Title
-                                                            >
-                                                            <AlertDialog.Description>
-                                                                {t("history.deleteConfirm", r.title)}
-                                                            </AlertDialog.Description>
-                                                        </AlertDialog.Header>
-                                                        <AlertDialog.Footer>
-                                                            <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel
-                                                            >
-                                                            <AlertDialog.Action
-                                                                variant="destructive"
-                                                                onclick={() => void remove(r)}
-                                                            >
-                                                                {t("common.delete")}
-                                                            </AlertDialog.Action>
-                                                        </AlertDialog.Footer>
-                                                    </AlertDialog.Content>
-                                                </AlertDialog.Root>
-                                            </Table.Cell>
-                                        </Table.Row>
-                                    {/each}
-                                </Table.Body>
-                            </Table.Root>
-                        {/if}
-                    </section>
-                {/each}
+                                </Table.Cell>
+                            </Table.Row>
+                            {#each group.items as row (row.entry.id)}
+                                <Table.Row class="animate-in fade-in-0 duration-200">
+                                    <Table.Cell class="max-w-0">
+                                        <Button
+                                            variant="link"
+                                            class="h-auto max-w-full justify-start px-0"
+                                            onclick={() => onOpenReview(row.entry)}
+                                        >
+                                            <span class="truncate">{row.entry.title}</span>
+                                        </Button>
+                                    </Table.Cell>
+                                    <Table.Cell>
+                                        <div class="flex items-center justify-end gap-2">
+                                            <Progress
+                                                value={row.percent}
+                                                class={cn("h-1.5 w-16", scoreBar(row.percent))}
+                                                aria-hidden="true"
+                                            />
+                                            <span
+                                                class={cn(
+                                                    "w-10 text-right font-semibold tabular-nums",
+                                                    scoreText(row.percent)
+                                                )}>{row.percent.toFixed(0)}%</span
+                                            >
+                                        </div>
+                                    </Table.Cell>
+                                    <Table.Cell class="text-right tabular-nums">{row.entry.questionCount}</Table.Cell>
+                                    <Table.Cell class="text-muted-foreground text-right text-xs tabular-nums">
+                                        {groupBy === "date"
+                                            ? clock(row.entry.timestamp)
+                                            : dateTime(row.entry.timestamp)}
+                                    </Table.Cell>
+                                    <Table.Cell>{@render rowMenu(row.entry)}</Table.Cell>
+                                </Table.Row>
+                            {/each}
+                        {/each}
+                    </Table.Body>
+                </Table.Root>
             {/if}
 
             {#if limited.remaining > 0}
-                <!-- 触底自动加载；按钮同时兼顾键盘操作与不支持 IntersectionObserver 的环境 -->
                 <div bind:this={sentinel} class="flex flex-col items-center gap-2 py-2">
-                    <Button variant="outline" size="sm" onclick={() => (visible = nextLimit(visible, filtered.length))}>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        data-tap
+                        onclick={() => (visible = nextLimit(visible, filtered.length))}
+                    >
                         {t("history.loadMore", String(limited.remaining))}
                     </Button>
-                    <span class="text-muted-foreground text-xs">
+                    <span class="text-muted-foreground text-xs tabular-nums">
                         {t("history.showingCount", String(limited.shown), String(filtered.length))}
                     </span>
                 </div>
@@ -705,3 +736,19 @@
         {/if}
     {/if}
 </div>
+
+<!-- 删除确认框整页共用一个，记录很多时不必每行各挂一套 -->
+<AlertDialog.Root bind:open={deleteOpen}>
+    <AlertDialog.Content>
+        <AlertDialog.Header>
+            <AlertDialog.Title>{t("history.deleteOne")}</AlertDialog.Title>
+            <AlertDialog.Description>{t("history.deleteConfirm", deleteTarget?.title ?? "")}</AlertDialog.Description>
+        </AlertDialog.Header>
+        <AlertDialog.Footer>
+            <AlertDialog.Cancel>{t("common.cancel")}</AlertDialog.Cancel>
+            <AlertDialog.Action variant="destructive" onclick={() => void confirmDelete()}>
+                {t("common.delete")}
+            </AlertDialog.Action>
+        </AlertDialog.Footer>
+    </AlertDialog.Content>
+</AlertDialog.Root>

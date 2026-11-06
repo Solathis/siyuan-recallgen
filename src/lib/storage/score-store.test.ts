@@ -398,3 +398,79 @@ describe("成绩写入顺序（崩溃时的取舍）", () => {
         expect(await fresh.loadDetail("s-1")).toBeNull();
     });
 });
+
+describe("ScoreStore 明细分片的内存上限", () => {
+    /** 2026 年 1–5 月各一条成绩 */
+    const monthly = (n: number) => Array.from({ length: n }, (_, i) => record(`m-${i + 1}`, Date.UTC(2026, i, 15)));
+    const shardLoads = (loads: string[], month: string) => loads.filter((name) => name.includes(month)).length;
+
+    function countingPlugin() {
+        const mem = memoryPlugin();
+        const loads: string[] = [];
+        const load = mem.plugin.loadData;
+        mem.plugin.loadData = async (name) => {
+            loads.push(name);
+            return load(name);
+        };
+        return { ...mem, loads };
+    }
+
+    it("最多缓存最近用过的三个月；更早的月份再次回看时重新读盘", async () => {
+        const { plugin, loads } = countingPlugin();
+        const store = new ScoreStore(plugin);
+        for (const r of monthly(4)) await store.add(r);
+
+        const jan = monthKey(Date.UTC(2026, 0, 15));
+        const apr = monthKey(Date.UTC(2026, 3, 15));
+        const janBefore = shardLoads(loads, jan);
+        const aprBefore = shardLoads(loads, apr);
+
+        // 1 月已被 2、3、4 月挤出缓存：回看要重新读盘；4 月仍在缓存里
+        expect(await store.loadDetail("m-1")).not.toBeNull();
+        expect(shardLoads(loads, jan)).toBe(janBefore + 1);
+        expect(await store.loadDetail("m-4")).not.toBeNull();
+        expect(shardLoads(loads, apr)).toBe(aprBefore);
+    });
+
+    it("导出全部之后内存里也只留三个月", async () => {
+        const { plugin, loads } = countingPlugin();
+        const seed = new ScoreStore(plugin);
+        for (const r of monthly(5)) await seed.add(r);
+
+        const store = new ScoreStore(plugin);
+        const start = loads.length;
+        const exported = await store.exportAll();
+        expect(Object.keys(exported.details)).toHaveLength(5);
+
+        // 导出时依次读过五个月；按实际读取顺序判断谁还在缓存里，不假设导出的遍历顺序
+        const order = loads
+            .slice(start)
+            .map((name) => /scores-(\d{4}-\d{2})\.json$/.exec(name)?.[1])
+            .filter((month): month is string => Boolean(month));
+        expect(order).toHaveLength(5);
+        const idOf = (month: string) => `m-${Number(month.slice(5))}`;
+
+        // 最早读的那个月已被挤出：回看要重新读盘
+        const evicted = order[0];
+        const before = shardLoads(loads, evicted);
+        expect(await store.loadDetail(idOf(evicted))).not.toBeNull();
+        expect(shardLoads(loads, evicted)).toBe(before + 1);
+
+        // 最后读的那个月仍在缓存里
+        const kept = order[4];
+        const keptBefore = shardLoads(loads, kept);
+        expect(await store.loadDetail(idOf(kept))).not.toBeNull();
+        expect(shardLoads(loads, kept)).toBe(keptBefore);
+    });
+
+    it("被挤出缓存的月份照常写入，不丢已有明细", async () => {
+        const { plugin } = countingPlugin();
+        const store = new ScoreStore(plugin);
+        for (const r of monthly(4)) await store.add(r);
+        // 1 月已不在缓存里，再往 1 月写一条
+        await store.add(record("m-1b", Date.UTC(2026, 0, 20)));
+        expect(await store.loadDetail("m-1")).not.toBeNull();
+        expect(await store.loadDetail("m-1b")).not.toBeNull();
+        expect(await new ScoreStore(plugin).loadDetail("m-1")).not.toBeNull();
+    });
+});

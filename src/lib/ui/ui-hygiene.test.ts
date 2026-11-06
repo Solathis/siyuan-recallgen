@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 /**
  * 界面静态体检。
  *
- * 拦的是三类「编译器、typecheck、渲染快照都过得去，只在真机上表现为
+ * 拦的是四类「编译器、typecheck、渲染快照都过得去，只在真机上表现为
  * 难看 / 读不出 / 错位」的写法，本项目里都真实发生过：
  *
  * 1. 属性写在开始标签之后 → Svelte 把它当成文本与插值，页面上直接印出
@@ -15,6 +15,8 @@ import { describe, expect, it } from "vitest";
  * 2. 纯图标按钮没有可访问名称 → 读屏软件只会念「按钮」
  * 3. 行内 style 写死 px 间距，与相邻的 Tailwind rem 间距混用 →
  *    每行差零点几像素，行数一多就明显错位（热力图标签列差过 5px）
+ * 4. class 里留下字符串拼接的残留（`''' + SECT + '''`）→ 原样输出成类名，
+ *    那几张卡片的样式整组消失（统计页的热力图卡与趋势卡出现过）
  *
  * 实现上必须走 Svelte 自己的解析器：用正则匹配 `<button ...>` 会在
  * `onclick={() => {}}` 的 `>` 处截断，且区分不出 Element 与 InlineComponent，
@@ -169,5 +171,23 @@ describe("界面静态体检", () => {
             });
         }
         expect(issues, `间距请与相邻工具类同源：\n${issues.join("\n")}`).toEqual([]);
+    });
+
+    it("class 里没有字符串拼接的残留", () => {
+        // 生成脚本拼模板时漏了替换，会留下三引号或孤立的 + 号。
+        // 编译、typecheck、快照都照常通过，只有真机上那几个元素没了样式
+        const LEFTOVER = /'''|(^|\s)\+(\s|$)/;
+        const issues: string[] = [];
+        for (const { file, source, fragment } of parsed) {
+            walk(fragment, (n) => {
+                if (n.type !== "Attribute" || n.name !== "class" || !Array.isArray(n.value)) return;
+                const text = (n.value as Node[])
+                    .map((part) => (typeof part.data === "string" ? part.data : ""))
+                    .join("");
+                if (!LEFTOVER.test(text)) return;
+                issues.push(`${rel(file)}:${lineOf(source, n.start)}  class="${text.trim().slice(0, 40)}"`);
+            });
+        }
+        expect(issues, `class 里有拼接残留：\n${issues.join("\n")}`).toEqual([]);
     });
 });

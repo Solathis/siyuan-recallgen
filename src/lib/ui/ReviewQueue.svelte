@@ -18,19 +18,21 @@
     let busy = $state(false);
     let message = $state("");
     let editing = $state<Record<string, boolean>>({});
-    const typeNames: Record<string, string> = {
-        single_choice: "单选",
-        multiple_choice: "多选",
-        true_false: "判断",
-        fill_blank: "填空",
-        subjective: "简答",
-        coding: "编程",
-    };
+    const counts = $derived({
+        pass: rows.filter((r) => r.draft.action === "pass").length,
+        skip: rows.filter((r) => r.draft.action === "skip").length,
+        delete: rows.filter((r) => r.draft.action === "delete").length,
+    });
+    function actionLabel(action: ReviewDraft["action"]): string {
+        if (action === "pass") return t("workflow.ReviewQueue.18");
+        if (action === "skip") return t("workflow.ReviewQueue.19");
+        return t("workflow.ReviewQueue.20");
+    }
     function answerPreview(row: (typeof rows)[number]): string {
         if (row.draft.question.type === "subjective") return row.answer;
         try {
             const answer = JSON.parse(row.answer);
-            if (row.draft.question.type === "true_false") return answer ? "正确" : "错误";
+            if (row.draft.question.type === "true_false") return answer ? t("common.true") : t("common.false");
             if (["single_choice", "multiple_choice"].includes(row.draft.question.type)) {
                 return (Array.isArray(answer) ? answer : [answer])
                     .map((n: number) => String.fromCharCode(65 + n))
@@ -38,7 +40,7 @@
             }
             return Array.isArray(answer) ? answer.flat().join("；") : String(answer);
         } catch {
-            return "答案格式有误，请编辑检查";
+            return t("workflow.ReviewQueue.40");
         }
     }
     function load(drafts: ReviewDraft[]) {
@@ -76,7 +78,7 @@
                 question: row.draft.action === "delete" ? row.draft.question : build(row),
             }));
             const accepted = await service.workflow!.commit(JSON.parse(JSON.stringify(drafts)));
-            message = `已通过 ${accepted.length} 题；跳过的题目保留在待定区。`;
+            message = t("workflow.ReviewQueue.41", String(accepted.length));
             load((await service.workflow!.snapshot()).pending);
             ondone?.(accepted);
         } catch (e) {
@@ -89,25 +91,26 @@
 
 <section class="flex flex-col gap-4 p-4" aria-label={t("workflow.ReviewQueue.22")}>
     <header>
-        <h2 class="text-lg font-semibold">{t("workflow.ReviewQueue.1")}{rows.length} 题</h2>
+        <h2 class="text-lg font-semibold">
+            {t("workflow.ReviewQueue.1")}
+            {t("result.qCount", String(rows.length))}
+        </h2>
         <p class="text-muted-foreground text-sm">{t("workflow.ReviewQueue.2")}</p>
         <p class="text-sm mt-2">
-            通过 {rows.filter((r) => r.draft.action === "pass").length} · 待定 {rows.filter(
-                (r) => r.draft.action === "skip"
-            ).length} · 删除 {rows.filter((r) => r.draft.action === "delete").length}
+            {t("workflow.ReviewQueue.32", String(counts.pass), String(counts.skip), String(counts.delete))}
         </p>
     </header>
     {#each rows as row (row.draft.id)}
         <article class="review-card" class:review-deleted={row.draft.action === "delete"}>
             <header class="review-card-header">
                 <div>
-                    <strong>第 {row.draft.original.id.match(/\d+$/)?.[0] ?? rows.indexOf(row) + 1} 题</strong><span
-                        class="text-muted-foreground text-xs ml-3"
-                        >{typeNames[row.draft.question.type]} · {row.draft.action === "pass"
-                            ? "通过"
-                            : row.draft.action === "skip"
-                              ? "待定"
-                              : "删除"}</span
+                    <strong
+                        >{t(
+                            "quiz.questionNum",
+                            row.draft.original.id.match(/\d+$/)?.[0] ?? String(rows.indexOf(row) + 1)
+                        )}</strong
+                    ><span class="text-muted-foreground text-xs ml-3"
+                        >{t(`type.${row.draft.question.type}_short`)} · {actionLabel(row.draft.action)}</span
                     >
                 </div>
                 <Button
@@ -115,7 +118,7 @@
                     size="sm"
                     disabled={busy || row.draft.action === "delete"}
                     onclick={() => (editing[row.draft.id] = !editing[row.draft.id])}
-                    >{editing[row.draft.id] ? "预览" : "编辑"}</Button
+                    >{editing[row.draft.id] ? t("question.preview") : t("question.edit")}</Button
                 >
             </header>
             {#if row.draft.action !== "delete"}
@@ -130,14 +133,14 @@
                         </div>
                     {/if}
                     <div class="review-answer">
-                        <span class="text-muted-foreground text-xs">正确答案</span>
+                        <span class="text-muted-foreground text-xs">{t("workflow.ReviewQueue.33")}</span>
                         <div class="rg-markdown">{@html renderMarkdownLatex(answerPreview(row))}</div>
                     </div>
                     {#if row.draft.question.tags?.length}<p class="text-muted-foreground text-xs">
                             {row.draft.question.tags.join(" · ")}
                         </p>{/if}
                     {#if row.draft.question.explanation}<details>
-                            <summary>查看解析</summary>
+                            <summary>{t("workflow.ReviewQueue.34")}</summary>
                             <div class="rg-markdown mt-2">
                                 {@html renderMarkdownLatex(row.draft.question.explanation)}
                             </div>
@@ -173,8 +176,8 @@
                             >{/if}
                         <label
                             >{t("workflow.ReviewQueue.12")}{row.draft.question.type === "subjective"
-                                ? "（参考答案文本）"
-                                : '（JSON：单选 0，多选 [0,1]，判断 true，填空 [["答案"]]，编程用 JSON 字符串）'}<Textarea
+                                ? t("workflow.ReviewQueue.36")
+                                : t("workflow.ReviewQueue.37")}<Textarea
                                 aria-label={t("workflow.ReviewQueue.26")}
                                 bind:value={row.answer}
                                 disabled={busy}
@@ -224,20 +227,19 @@
                     </div>
                 {/if}
             {/if}
-            <footer class="review-actions" aria-label="处理方式">
-                {#each ["pass", "skip", "delete"] as action}
+            <footer class="review-actions" aria-label={t("workflow.ReviewQueue.17")}>
+                {#each ["pass", "skip", "delete"] as const as action}
                     <Button
                         size="sm"
                         variant={row.draft.action === action ? "default" : "outline"}
                         disabled={busy}
                         aria-pressed={row.draft.action === action}
-                        onclick={() => (row.draft.action = action as ReviewDraft["action"])}
-                        >{action === "pass" ? "通过" : action === "skip" ? "待定" : "删除"}</Button
+                        onclick={() => (row.draft.action = action)}>{actionLabel(action)}</Button
                     >
                 {/each}
             </footer>
             <details class="review-reason" open={!!row.draft.reason}>
-                <summary>添加理由（可选）</summary><label class="text-sm"
+                <summary>{t("workflow.ReviewQueue.35")}</summary><label class="text-sm"
                     >{t("workflow.ReviewQueue.21")}<Textarea
                         aria-label={t("workflow.ReviewQueue.31")}
                         bind:value={row.draft.reason}
@@ -250,9 +252,9 @@
     {#if error}<p role="alert" class="text-destructive">{error}</p>{/if}
     {#if message}<p role="status">{message}</p>{/if}
     <div class="review-submit">
-        <span class="text-muted-foreground text-sm">共 {rows.length} 题</span><Button
+        <span class="text-muted-foreground text-sm">{t("stats.questionCount", String(rows.length))}</span><Button
             onclick={submit}
-            disabled={busy || !rows.length}>{busy ? "保存中…" : "确认审核并入库"}</Button
+            disabled={busy || !rows.length}>{busy ? t("workflow.ReviewQueue.38") : t("workflow.ReviewQueue.39")}</Button
         >
     </div>
 </section>

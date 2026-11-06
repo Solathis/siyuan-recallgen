@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { GenStats } from "./generator";
-import { GEN_STEPS, genProgress, stepStates } from "./gen-progress";
+import { GEN_STEPS, MAX_ACTIVITY, genProgress, pushActivity, stepStates, type ActivityEntry } from "./gen-progress";
 
 function stats(partial: Partial<GenStats>): GenStats {
     return { phase: "generating", target: 8, collected: 0, batch: 1, batches: 1, dropped: 0, ...partial };
@@ -71,5 +71,46 @@ describe("流程步骤条", () => {
             const states = Object.values(stepStates(phase));
             expect(states.filter((state) => state === "active")).toHaveLength(1);
         }
+    });
+});
+
+describe("生成动态", () => {
+    it("新记录排在最前", () => {
+        let list: ActivityEntry[] = [];
+        list = pushActivity(list, 1, "开始");
+        list = pushActivity(list, 5, "第 1 批完成");
+        expect(list).toEqual([
+            { at: 5, text: "第 1 批完成" },
+            { at: 1, text: "开始" },
+        ]);
+    });
+
+    it("与最近一条相同的文案不重复记录，并原样返回同一个数组", () => {
+        // 生成器在某批开始请求、失败时会沿用上一条文案再推送一次
+        const list = pushActivity([], 1, "并发生成 3 批");
+        const again = pushActivity(list, 2, "并发生成 3 批");
+        expect(again).toBe(list);
+        expect(again).toHaveLength(1);
+        expect(again[0].at).toBe(1);
+    });
+
+    it("不相邻的重复文案照常记录", () => {
+        let list: ActivityEntry[] = [];
+        for (const text of ["甲", "乙", "甲"]) list = pushActivity(list, list.length, text);
+        expect(list.map((entry) => entry.text)).toEqual(["甲", "乙", "甲"]);
+    });
+
+    it("只保留最近几条，最早的先被挤掉", () => {
+        let list: ActivityEntry[] = [];
+        for (let i = 0; i < MAX_ACTIVITY + 3; i++) list = pushActivity(list, i, `第 ${i} 条`);
+        expect(list).toHaveLength(MAX_ACTIVITY);
+        expect(list[0].text).toBe(`第 ${MAX_ACTIVITY + 2} 条`);
+        expect(list.at(-1)?.text).toBe("第 3 条");
+    });
+
+    it("空白文案不记录，记录的文案去掉首尾空白", () => {
+        const list = pushActivity([], 0, "   ");
+        expect(list).toEqual([]);
+        expect(pushActivity(list, 1, "  完成  ")[0].text).toBe("完成");
     });
 });

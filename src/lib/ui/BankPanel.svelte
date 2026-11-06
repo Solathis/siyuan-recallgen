@@ -14,6 +14,7 @@
     import { Skeleton } from "@/lib/components/ui/skeleton";
     import * as Table from "@/lib/components/ui/table";
     import { cn } from "@/lib/utils";
+    import { scoreBar } from "./score-tone";
     import { t } from "../i18n";
     import { renderMarkdownLatex } from "./latex";
     import { Area, Chart, Layer, Spline } from "layerchart";
@@ -256,13 +257,8 @@
         return t(`type.${type}_short`);
     }
 
-    /** 掌握度条的色调：覆盖 Progress 内部指示条的底色 */
-    function masteryTone(mastery: number): string {
-        if (mastery >= 80) return "[&>[data-slot=progress-indicator]]:bg-success";
-        if (mastery >= 60) return "[&>[data-slot=progress-indicator]]:bg-primary";
-        if (mastery >= 30) return "[&>[data-slot=progress-indicator]]:bg-warning";
-        return "[&>[data-slot=progress-indicator]]:bg-destructive";
-    }
+    /** 掌握度条的色调：档位与答题记录、结果页、统计页同一份（score-tone） */
+    const masteryTone = scoreBar;
 </script>
 
 <!--
@@ -578,7 +574,10 @@
                                     aria-expanded={expanded === item.id}
                                     onclick={() => toggle(item.id)}
                                 >
-                                    <div class="rg-markdown max-h-32 overflow-auto text-xs" aria-label="题干">
+                                    <div
+                                        class="rg-markdown max-h-32 overflow-auto text-xs"
+                                        aria-label={t("bank.stemLabel")}
+                                    >
                                         {@html renderMarkdownLatex(item.question.question)}
                                     </div>
                                     <span class="text-muted-foreground text-2xs">

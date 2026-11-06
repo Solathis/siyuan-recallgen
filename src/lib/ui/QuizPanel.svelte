@@ -63,15 +63,16 @@
     import * as ToggleGroup from "@/lib/components/ui/toggle-group";
     import * as Card from "@/lib/components/ui/card";
     import * as Empty from "@/lib/components/ui/empty";
-    import { Separator } from "@/lib/components/ui/separator";
     import * as Collapsible from "@/lib/components/ui/collapsible";
     import ComposeView from "./ComposeView.svelte";
     import ReviewQueue from "./ReviewQueue.svelte";
     let reviewDrafts = $state<import("../quiz/review-workflow").ReviewDraft[]>([]);
     let reviewVersionId = $state("");
     import GenActionBar from "./GenActionBar.svelte";
-    import { GEN_STEPS, stepStates } from "../quiz/gen-progress";
+    import GenProgressView from "./GenProgressView.svelte";
+    import { genProgress, pushActivity, type ActivityEntry } from "../quiz/gen-progress";
     import { describeError, type ErrorDescription } from "../ai/errors";
+    import { modelProblem } from "../ai/providers/connect";
     import { isAbortError } from "../ai/client";
     import { copyText } from "./clipboard";
     import { isElementVisible } from "./visibility";
@@ -79,15 +80,14 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import { hasAnswer } from "@/types/quiz";
-    import type { DateGenConfig, QuizService, QuizTabData } from "../quiz/service";
+    import { resolveReviewDetail, type DateGenConfig, type QuizService, type QuizTabData } from "../quiz/service";
     import { applyScope, scopeOf, type DateRange, type DateScope } from "../quiz/dateRange";
     import { planBatches } from "../quiz/batching";
     import { sumTimings } from "../quiz/timings";
-    import type { GenPhase, GenStats } from "../quiz/generator";
-    import { genProgress } from "../quiz/gen-progress";
+    import type { GenStats } from "../quiz/generator";
     import { PASS_SCORE } from "@/types/quiz";
     import type { AIProtocol } from "@/types/config";
-    import type { GradingResult, PanelState, QuizSession, UserAnswer } from "@/types/quiz";
+    import type { GradingResult, PanelState, QuizSession, ScoreDetail, UserAnswer } from "@/types/quiz";
     import GenPlan from "./GenPlan.svelte";
     import ProgressBar from "./ProgressBar.svelte";
     import QuestionView from "./QuestionView.svelte";
@@ -138,11 +138,27 @@
     let genStartedAt: number | null = null;
     let genElapsed = $state(0);
     let genTimer: ReturnType<typeof setInterval> | undefined;
+    /** 生成页「动态」：每条都是整体替换，raw 即可，不必深层代理 */
+    let activity = $state.raw<ActivityEntry[]>([]);
+    /** 判分进度（已判 / 总数）；null 表示已进入薄弱点分析 */
+    let gradeCounter = $state<{ done: number; total: number } | null>(null);
+    /**
+     * loading_generating 是整屏的「请稍候」：AI 出题、从题库取到期题目都用它，
+     * 面板刚打开、还不知道要走哪条流程（以及回看时读取成绩明细）也用它，三者的界面不同。
+     * 初值是 init：否则打开回看或恢复会话的那一瞬间会闪一下「正在生成题目」。
+     */
+    let loadingKind = $state<"generate" | "due" | "init">("init");
 
+    /**
+     * 开始计时并清空上一轮的动态。
+     * 按日期出题时先读笔记、再出题，两段都会调用这里；第二次调用时计时已在跑，
+     * 沿用同一条时间线，否则「已用时」会在读完笔记后归零，动态也被清掉。
+     */
     function beginGenTimer(): void {
-        stopGenTimer();
+        if (genTimer !== undefined) return;
         genStats = null;
         genElapsed = 0;
+        activity = [];
         genStartedAt = Date.now();
         genTimer = setInterval(() => {
             if (genStartedAt !== null) genElapsed = Math.floor((Date.now() - genStartedAt) / 1000);
@@ -155,15 +171,10 @@
         genStartedAt = null;
     }
 
-    /**
-     * 生成阶段名。
-     * 用显式 t() 而不是查表：字典死键检查靠扫描 t() 调用里的字符串字面量，
-     * 放进对象字面量里会被判成「没人用的键」。
-     */
-    function phaseLabel(phase: GenPhase): string {
-        if (phase === "reviewing") return t("gen.phase.reviewing");
-        if (phase === "regenerating") return t("gen.phase.regenerating");
-        return t("gen.phase.generating");
+    /** 记一条动态，时间按距开始生成的秒数记 */
+    function logActivity(text: string): void {
+        const at = genStartedAt === null ? 0 : Math.floor((Date.now() - genStartedAt) / 1000);
+        activity = pushActivity(activity, at, text);
     }
 
     /* ── 答题用时 ────────────────────────────────────────────────── */
@@ -251,10 +262,12 @@
      */
     const isAnswered = (questionId: string) => hasAnswer(session?.answers[questionId]);
     const answeredCount = $derived(questions.filter((q) => isAnswered(q.id)).length);
-    /** 出题计划只在生成阶段展示；判分阶段没有它，布局也要跟着退回单列 */
-    const showGenPlan = $derived(panelState === "loading_generating");
 
     /* ── 日期范围配置 ────────────────────────────────────────────── */
+
+    /** 粘贴材料出题的草稿：放在面板里，生成失败或取消后回到输入界面时还在 */
+    let composeContent = $state("");
+    let composeTitle = $state("");
 
     let dateCfg = $state<DateGenConfig>({ days: 7, baseHour: 0, baseMinute: 0 });
 
@@ -356,6 +369,60 @@
     const planSummary = $derived(
         `${t("gen.plan.total")} ${config.general.difficulty.total} · ${t("gen.plan.batchesValue", String(plannedBatches))} · ${genModelName || "—"}`
     );
+
+    /* ── 生成中 / 判分中 ─────────────────────────────────────────── */
+
+    /** 界面上用哪一种「生成中」：init 与取到期题目一样只有标题和不确定进度 */
+    const progressMode = $derived<"generate" | "due" | "grade">(
+        panelState === "loading_grading" ? "grade" : loadingKind === "init" ? "due" : loadingKind
+    );
+    const progressTitle = $derived(
+        progressMode === "grade"
+            ? gradeCounter
+                ? t("quiz.grading")
+                : t("quiz.analyzing")
+            : loadingKind === "init"
+              ? t("common.loading")
+              : progressMode === "due"
+                ? t("bank.loadingDue")
+                : t("gen.progress.title")
+    );
+    /** 标题下的一行：来源 · 模型 · 题量（生成中）；判分时只留来源 */
+    const progressMeta = $derived(
+        progressMode === "generate"
+            ? [
+                  tabData.sourceTitle,
+                  genModelName,
+                  t("result.qCount", String(genStats?.target ?? config.general.difficulty.total)),
+              ]
+                  .filter(Boolean)
+                  .join(" · ")
+            : progressMode === "grade"
+              ? (session?.sourceTitle ?? "")
+              : ""
+    );
+    const progressCounter = $derived(
+        progressMode === "grade"
+            ? gradeCounter
+            : progressMode === "generate"
+              ? { done: genStats?.collected ?? 0, total: genStats?.target ?? config.general.difficulty.total }
+              : null
+    );
+
+    /**
+     * 生成中点「取消」：按日期出题与粘贴材料出题回到各自的输入页（与失败时一致），
+     * 从文档直接出题没有输入页，仍然关闭标签页。
+     */
+    function cancelProgress(): void {
+        abortRun();
+        stopGenTimer();
+        if (progressMode === "generate" && (tabData.mode === "dateGenerate" || tabData.mode === "manual")) {
+            error = null;
+            panelState = backToInput();
+            return;
+        }
+        closeTab();
+    }
 
     /* ── 倒计时 ──────────────────────────────────────────────────── */
 
@@ -492,7 +559,27 @@
         } else if (tabData.mode === "reviewDue") {
             await startDueReview();
         } else if (tabData.mode === "review" && tabData.review) {
-            const { entry, detail } = tabData.review;
+            const { entry } = tabData.review;
+            let detail: ScoreDetail | null = null;
+            try {
+                detail = await resolveReviewDetail(tabData.review, (id) => service.loadScoreDetail(id));
+            } catch (e) {
+                console.error("[RecallGen] 加载成绩明细失败", e);
+                const reason = t("history.detailLoadFailed", (e as Error).message);
+                error = { title: t("err.generic.title"), hint: t("err.generic.hint"), detail: reason };
+                panelState = "answering";
+                return;
+            }
+            if (!detail) {
+                // 回看 Tab 是从布局恢复的、而这条成绩已被删除：不能显示一张空的结果页
+                error = {
+                    title: t("err.generic.title"),
+                    hint: t("err.generic.hint"),
+                    detail: t("history.detailMissing"),
+                };
+                panelState = "answering";
+                return;
+            }
             session = {
                 id: entry.quizId,
                 sourceDocId: entry.sourceDocId ?? "",
@@ -523,6 +610,7 @@
             panelState = "answering";
             return;
         }
+        loadingKind = "due";
         panelState = "loading_generating";
         progressValue = null;
         progressLabel = t("bank.loadingDue");
@@ -624,24 +712,23 @@
 
     /* ── 生成 ────────────────────────────────────────────────────── */
 
-    /** AI 配置缺失的原因；null 表示配置完整。出题页用它把提示放进操作栏，而不是跳到错误页 */
+    /**
+     * AI 配置缺失的原因；null 表示配置完整。出题页用它把提示放进操作栏，而不是跳到错误页。
+     * 「模型能不能用」与服务商接入时自动改派角色用的是同一个判断（providers/connect.ts）。
+     */
     function aiConfigProblem(): ErrorDescription | null {
         const ai = config.ai;
-        if (!ai.models || ai.models.length === 0) {
-            return { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoModel") };
-        }
-        const genModel = ai.models.find((m) => m.id === ai.roles.generator);
-        if (!genModel) {
-            return { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoGenModel") };
-        }
-        const ep = ai.endpoints.find((e) => e.id === genModel.endpointId);
-        if (!ep) {
-            return { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoEndpoint") };
-        }
-        if (ep.provider !== "ollama" && !ep.apiKey) {
-            return { title: t("err.config.title"), hint: t("err.config.hint"), detail: t("quiz.aiNoApiKey") };
-        }
-        return null;
+        const problem = !ai.models || ai.models.length === 0 ? "noModels" : modelProblem(ai, ai.roles.generator);
+        if (!problem) return null;
+        const detail =
+            problem === "noModels"
+                ? t("quiz.aiNoModel")
+                : problem === "noModel"
+                  ? t("quiz.aiNoGenModel")
+                  : problem === "noEndpoint"
+                    ? t("quiz.aiNoEndpoint")
+                    : t("quiz.aiNoApiKey");
+        return { title: t("err.config.title"), hint: t("err.config.hint"), detail };
     }
 
     function checkAiConfig(): boolean {
@@ -655,26 +742,30 @@
 
     async function startDateGenerate() {
         error = null;
-        beginRun();
+        const signal = beginRun();
         if (!checkAiConfig()) return; // 留在本页,原因由吸底栏提示;不跳到答题页显示错误块
+        loadingKind = "generate";
         panelState = "loading_generating";
         progressValue = null;
         progressLabel = t("quiz.loadingNotes");
         beginGenTimer();
+        logActivity(progressLabel);
         try {
             const loaded = await service.loadDateRangeContent(dateCfg, dateRange, tabData.notebookId);
-            if (cancelled) return;
+            // 读笔记这一步不可中止：取消后返回输入页、甚至又开了新一轮，这里都不能再接着出题
+            if (cancelled || signal.aborted) return;
             warnPartialScope(loaded);
             tabData.content = loaded.content;
             tabData.sourceTitle = loaded.title;
             await startGenerate();
         } catch (e) {
             // 取消（无论来自关闭 tab 还是新一轮开始）都不该弹出错误
-            if (cancelled || isAbortError(e)) return;
+            if (cancelled || isAbortError(e) || signal.aborted) return;
             error = describeError(e);
             panelState = backToInput();
         } finally {
-            stopGenTimer();
+            // 已被取消或被新一轮接替时，计时归新一轮管
+            if (!signal.aborted) stopGenTimer();
         }
     }
 
@@ -703,15 +794,19 @@
         error = null;
         const signal = beginRun();
         if (!checkAiConfig()) return; // 留在本页,原因由吸底栏提示;不跳到答题页显示错误块
+        loadingKind = "generate";
         panelState = "loading_generating";
         progressValue = null;
         progressLabel = t("quiz.generating");
+        // 动态不在这里记：生成器的第一次推送就是「并发生成 N 批」或「正在生成」，先记一条泛泛的会重复
         beginGenTimer();
         try {
             const promptVersion = await service.workflow?.capture();
             const generated = await service.generate(
                 tabData.content ?? "",
                 (phase, round, detail, stats) => {
+                    // 已取消的一轮可能还会推送一两次，不能盖掉新一轮的界面
+                    if (signal.aborted) return;
                     progressLabel = detail;
                     /*
                      * 进度按「阶段权重 + 阶段内真实推进」算，而不是原实现的 round * 30：
@@ -719,12 +814,13 @@
                      * 拿不到实时数据时 genProgress 返回 null，交回不确定进度条。
                      */
                     progressValue = genProgress(phase, round, stats);
-                    // 生成器每批都会推送一次快照，界面据此显示「已收集 N 题 / 第 i/n 批」
+                    // 生成器每批都会推送一次快照，界面据此显示「已收集 N 题 / 各批状态」
                     if (stats) genStats = stats;
+                    logActivity(detail);
                 },
                 signal
             );
-            if (cancelled) return;
+            if (cancelled || signal.aborted) return;
             if (generated.length === 0) {
                 error = { title: t("err.generic.title"), hint: t("err.generic.hint"), detail: t("quiz.noQuestions") };
                 panelState = "answering";
@@ -746,7 +842,7 @@
                 answers: {},
             };
             const prev = await service.loadProgress(id);
-            if (cancelled) return;
+            if (cancelled || signal.aborted) return;
             if (prev) session.answers = prev.answers;
             panelState = "answering";
             reviewVersionId = promptVersion?.id ?? "";
@@ -754,11 +850,12 @@
             if (countdownEnabled) startCountdown();
         } catch (e) {
             // 取消（无论来自关闭 tab 还是新一轮开始）都不该弹出错误
-            if (cancelled || isAbortError(e)) return;
+            if (cancelled || isAbortError(e) || signal.aborted) return;
             error = describeError(e);
             panelState = "answering";
         } finally {
-            stopGenTimer();
+            // 取消后可能已回到输入页并开了新一轮：计时归新一轮管，不能在这里停掉
+            if (!signal.aborted) stopGenTimer();
         }
     }
 
@@ -879,6 +976,7 @@
         panelState = "loading_grading";
         progressValue = 0;
         progressLabel = t("quiz.grading");
+        gradeCounter = { done: 0, total: session.questions.length };
         try {
             results = await service.grade(
                 session.questions,
@@ -886,6 +984,7 @@
                 (done, total) => {
                     progressValue = total ? (done / total) * 100 : null;
                     progressLabel = t("quiz.gradingProgress", String(done), String(total));
+                    gradeCounter = { done, total };
                 },
                 session.timings,
                 beginRun()
@@ -931,6 +1030,7 @@
 
             progressLabel = t("quiz.analyzing");
             progressValue = null;
+            gradeCounter = null;
             try {
                 analysis = await service.analyze(results, session.questions);
                 analysisError = null;
@@ -1250,6 +1350,21 @@
             </div>
         {/snippet}
 
+        <!-- 生成中折叠在动态下方的出题计划；与出题配置页用同一个组件，信息同源 -->
+        {#snippet genPlan()}
+            <GenPlan
+                sourceTitle={tabData.sourceTitle}
+                chars={tabData.content?.length ?? 0}
+                difficulty={config.general.difficulty}
+                types={config.general.allowedTypes}
+                batches={plannedBatches}
+                modelName={genModelName}
+                protocol={genProtocol}
+                structured={config.ai.jsonSchemaEnabled}
+                reviewer={reviewerName}
+            />
+        {/snippet}
+
         {#if panelState === "auditing"}
             <ReviewQueue
                 {service}
@@ -1278,6 +1393,8 @@
             />
         {:else if panelState === "composing"}
             <ComposeView
+                bind:content={composeContent}
+                bind:title={composeTitle}
                 ongenerate={(content, sourceTitle) => {
                     tabData.content = content;
                     tabData.sourceTitle = sourceTitle;
@@ -1413,169 +1530,20 @@
                 />
             </div>
         {:else if panelState === "loading_generating" || panelState === "loading_grading"}
-            <div class="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-2 py-6">
-                <!--
-                    只做进场（in:），不做退场。
-                    这里是一整屏状态容器：用 transition: 会在切到结果页时给旧内容播一段
-                    淡出，于是「生成中」与「结果页」会有 200ms 同时挂在 DOM 里、上下叠着；
-                    更糟的是面板不在前台时（思源里切到别的 tab）WAAPI 动画会被浏览器暂停，
-                    退场永远播不完，旧界面就一直在那不退。进场动效没有这个问题。
-                -->
-                <div
-                    class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 flex w-full max-w-5xl flex-col gap-4"
-                >
-                    <!--
-                        容器够宽时进度卡与出题计划并排：进度是「正在发生什么」、
-                        计划是「按什么在生成」，两栏并看比上下堆叠更好读，
-                        也避免宽面板中间只剩一列 672px 的窄条。
-                        只有生成阶段有出题计划，判分阶段退回单列占满整宽。
-                    -->
-                    <div class={cn("grid grid-cols-1 items-start gap-4", showGenPlan && "@3xl:grid-cols-2")}>
-                        <!--
-                        进度卡：原实现是一张 max-w-2xl 的小卡悬在整屏中间，
-                        进度条和四格统计各占一行却互不对齐，看着像没做完的临时页面。
-                        现在收成一张有明确层级的卡：标题行（阶段 + 用时）、步骤条、
-                        进度条、统计行，全部左对齐同一列。
-                    -->
-                        <Card.Root>
-                            <Card.Header>
-                                <div class="flex flex-wrap items-baseline justify-between gap-2">
-                                    <Card.Title>
-                                        {panelState === "loading_generating" ? t("gen.progress.title") : progressLabel}
-                                    </Card.Title>
-                                    {#if panelState === "loading_generating"}
-                                        <span class="text-muted-foreground text-xs tabular-nums">
-                                            {t("gen.progress.elapsed")}
-                                            {t("gen.progress.seconds", String(genElapsed))}
-                                        </span>
-                                    {/if}
-                                </div>
-                            </Card.Header>
-
-                            <Card.Content class="flex flex-col gap-4">
-                                {#if panelState === "loading_generating"}
-                                    <!--
-                                        流程步骤条用 Badge + Separator 组合。
-                                        这套 shadcn 没有 stepper，而三步的状态表达
-                                        （已走完 / 进行中 / 未开始）用徽标加分隔符已经够用。
-                                    -->
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        {#each GEN_STEPS as step, index (step)}
-                                            {@const state = stepStates(genStats?.phase ?? "generating")[step]}
-                                            {#if index === 0 || config.ai.roles.reviewer}
-                                                <Badge
-                                                    variant={state === "active"
-                                                        ? "default"
-                                                        : state === "done"
-                                                          ? "secondary"
-                                                          : "outline"}
-                                                    class={state === "pending" ? "text-muted-foreground" : undefined}
-                                                    aria-current={state === "active" ? "step" : undefined}
-                                                >
-                                                    {index + 1}. {t(`gen.phase.${step}`)}
-                                                </Badge>
-                                                {#if index < GEN_STEPS.length - 1 && config.ai.roles.reviewer}
-                                                    <Separator class="w-5" />
-                                                {/if}
-                                            {/if}
-                                        {/each}
-                                    </div>
-                                {/if}
-
-                                <ProgressBar
-                                    value={progressValue}
-                                    label={progressLabel}
-                                    size="md"
-                                    showValue={progressValue !== null}
-                                />
-
-                                {#if panelState === "loading_generating"}
-                                    <!--
-                                    实时信息：光看进度条不知道「生成到哪了、有没有丢题」。
-                                    批次与收题数是同一组口径，并排放在一行里读起来才连得上。
-                                -->
-                                    <!--
-                                    用容器变体而不是 sm:：面板可用宽度与视口无关。
-                                    容器刻度比视口刻度小得多（@3xl = 48rem），这里要的是
-                                    「面板本身够宽才排四栏」。
-                                -->
-                                    <dl class="grid grid-cols-2 gap-x-4 gap-y-3 @3xl:grid-cols-4">
-                                        <div class="flex flex-col gap-0.5">
-                                            <dt class="text-muted-foreground text-xs">{t("gen.stat.batch")}</dt>
-                                            <dd class="text-sm font-medium tabular-nums">
-                                                {t(
-                                                    "gen.stat.batchValue",
-                                                    String(genStats?.batch ?? 1),
-                                                    String(genStats?.batches ?? plannedBatches)
-                                                )}
-                                            </dd>
-                                        </div>
-                                        <div class="flex flex-col gap-0.5">
-                                            <dt class="text-muted-foreground text-xs">{t("gen.stat.collected")}</dt>
-                                            <dd class="text-sm font-medium tabular-nums">
-                                                {genStats?.collected ?? 0}
-                                                <span class="text-muted-foreground font-normal">
-                                                    / {genStats?.target ?? config.general.difficulty.total}
-                                                </span>
-                                            </dd>
-                                        </div>
-                                        <div class="flex flex-col gap-0.5">
-                                            <dt class="text-muted-foreground text-xs">{t("gen.stat.dropped")}</dt>
-                                            <dd
-                                                class={cn(
-                                                    "text-sm font-medium tabular-nums",
-                                                    (genStats?.dropped ?? 0) > 0 && "text-warning"
-                                                )}
-                                            >
-                                                {genStats?.dropped ?? 0}
-                                            </dd>
-                                        </div>
-                                        <div class="flex flex-col gap-0.5">
-                                            <dt class="text-muted-foreground text-xs">{t("gen.stat.phase")}</dt>
-                                            <dd class="text-sm font-medium">
-                                                {genStats ? phaseLabel(genStats.phase) : t("gen.phase.generating")}
-                                            </dd>
-                                        </div>
-                                    </dl>
-
-                                    {#if genStats?.note}
-                                        <p class="text-warning text-xs">{genStats.note}</p>
-                                    {/if}
-                                {/if}
-                            </Card.Content>
-
-                            {#if panelState === "loading_generating"}
-                                <Card.Footer>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onclick={() => {
-                                            abortRun();
-                                            closeTab();
-                                        }}
-                                    >
-                                        {t("quiz.cancelGenerate")}
-                                    </Button>
-                                </Card.Footer>
-                            {/if}
-                        </Card.Root>
-
-                        {#if panelState === "loading_generating"}
-                            <GenPlan
-                                sourceTitle={tabData.sourceTitle}
-                                chars={tabData.content?.length ?? 0}
-                                difficulty={config.general.difficulty}
-                                types={config.general.allowedTypes}
-                                batches={plannedBatches}
-                                modelName={genModelName}
-                                protocol={genProtocol}
-                                structured={config.ai.jsonSchemaEnabled}
-                                reviewer={reviewerName}
-                            />
-                        {/if}
-                    </div>
-                </div>
-            </div>
+            <GenProgressView
+                mode={progressMode}
+                title={progressTitle}
+                meta={progressMeta}
+                status={progressLabel}
+                elapsed={progressMode === "generate" ? genElapsed : null}
+                progress={progressValue}
+                counter={progressCounter}
+                stats={progressMode === "generate" ? genStats : null}
+                {activity}
+                reviewer={reviewerName !== null}
+                oncancel={progressMode === "grade" || loadingKind === "init" ? undefined : cancelProgress}
+                plan={progressMode === "generate" ? genPlan : undefined}
+            />
         {:else if panelState === "answering"}
             {#if error && questions.length === 0}
                 {@render errorBlock(error, t("common.retry"), () => void retry())}

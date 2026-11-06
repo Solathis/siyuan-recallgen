@@ -8,23 +8,40 @@
     import { Separator } from "@/lib/components/ui/separator";
     import { Switch } from "@/lib/components/ui/switch";
     import { Field, FieldLabel, FieldLegend } from "@/lib/components/ui/field";
+    import { Checkbox } from "@/lib/components/ui/checkbox";
+    import { Label } from "@/lib/components/ui/label";
     import { t } from "../i18n";
+    import { defaultPick, type DetectedModel } from "../ai/providers/detect";
+    import { defaultModelConfig } from "../ai/providers/models";
     import type { AIEndpoint, AIModel, AIProvider, AIProtocol, RecallGenConfig } from "@/types/config";
+    import type { QuizService } from "../quiz/service";
+    import ProviderCards from "./ProviderCards.svelte";
 
     let {
         config,
         onTestConnection = async () => "",
         onsave,
+        service = undefined,
     }: {
         config: RecallGenConfig;
         onTestConnection?: () => Promise<string>;
         onsave: (config: RecallGenConfig) => void;
+        /** 服务商快速接入用：模型目录、从 models.dev 刷新、用草稿配置测试连接 */
+        service?: Pick<
+            QuizService,
+            "getProviderCatalog" | "refreshProviderCatalog" | "testConnection" | "detectProviderModels"
+        >;
     } = $props();
 
     let connState = $state<"idle" | "testing" | "ok" | "fail">("idle");
     let connError = $state("");
     let connResult = $state("");
     let showKeys = $state<Record<string, boolean>>({});
+    let detecting = $state<Record<string, boolean>>({});
+    let detectMessages = $state<Record<string, { kind: "success" | "error"; text: string }>>({});
+    let detectedByEndpoint = $state<Record<string, DetectedModel[]>>({});
+    let selectedDetected = $state<Record<string, string[]>>({});
+    let detectRequest = $state<Record<string, number>>({});
     /** 测试用模型直接取配置值，避免本地副本与配置脱钩（原实现会残留已被删除的模型 id） */
     const testModelId = $derived(config.ai.testModelId);
 
@@ -80,6 +97,10 @@
             return;
         }
         patchAi({ endpoints: config.ai.endpoints.filter((e) => e.id !== id) });
+    }
+
+    function endpointFingerprint(endpoint: AIEndpoint): string {
+        return JSON.stringify([endpoint.provider, endpoint.protocol, endpoint.baseUrl, endpoint.apiKey]);
     }
 
     function patchEndpoint(id: string, patch: Partial<AIEndpoint>) {
@@ -139,12 +160,75 @@
      * 重名时不再「提示后直接 return」把界面留在已输入的新名字上（原实现会造成 UI 与状态脱钩），
      * 而是回退到可用名，保证界面与配置始终一致。
      */
+    async function detectEndpointModels(endpoint: AIEndpoint) {
+        if (!service?.detectProviderModels || detecting[endpoint.id]) return;
+        const request = (detectRequest[endpoint.id] ?? 0) + 1;
+        detectRequest = { ...detectRequest, [endpoint.id]: request };
+        const fingerprint = endpointFingerprint(endpoint);
+        detecting = { ...detecting, [endpoint.id]: true };
+        const { [endpoint.id]: _previousMessage, ...remainingMessages } = detectMessages;
+        detectMessages = remainingMessages;
+        try {
+            const result = await service.detectProviderModels(endpoint);
+            const current = config.ai.endpoints.find((item) => item.id === endpoint.id);
+            if (request !== detectRequest[endpoint.id] || !current || endpointFingerprint(current) !== fingerprint)
+                return;
+            const existing = new Set(modelsOf(endpoint.id).map((model) => model.name));
+            const available = result.models.filter((model) => !existing.has(model.id));
+            detectedByEndpoint = { ...detectedByEndpoint, [endpoint.id]: available };
+            const selected = defaultPick(available);
+            selectedDetected = { ...selectedDetected, [endpoint.id]: selected ? [selected] : [] };
+            detectMessages = {
+                ...detectMessages,
+                [endpoint.id]: {
+                    kind: "success",
+                    text: t("provider.detected", String(result.models.length), result.specsFrom),
+                },
+            };
+        } catch (e) {
+            const current = config.ai.endpoints.find((item) => item.id === endpoint.id);
+            if (request === detectRequest[endpoint.id] && current && endpointFingerprint(current) === fingerprint) {
+                detectedByEndpoint = { ...detectedByEndpoint, [endpoint.id]: [] };
+                detectMessages = { ...detectMessages, [endpoint.id]: { kind: "error", text: (e as Error).message } };
+            }
+        } finally {
+            if (request === detectRequest[endpoint.id]) detecting = { ...detecting, [endpoint.id]: false };
+        }
+    }
+
+    function toggleDetected(endpointId: string, modelId: string, checked: boolean | "indeterminate") {
+        const selected = selectedDetected[endpointId] ?? [];
+        selectedDetected = {
+            ...selectedDetected,
+            [endpointId]:
+                checked === true ? [...new Set([...selected, modelId])] : selected.filter((id) => id !== modelId),
+        };
+    }
+
+    function addSelectedDetected(endpointId: string) {
+        const known = new Set(modelsOf(endpointId).map((model) => model.name));
+        const infoById = new Map((detectedByEndpoint[endpointId] ?? []).map((model) => [model.id, model.info]));
+        const additions = (selectedDetected[endpointId] ?? [])
+            .filter((name) => !known.has(name))
+            .map((name) => ({
+                id: genId("m"),
+                name,
+                endpointId,
+                ...defaultModelConfig(infoById.get(name) ?? null),
+            }));
+        if (additions.length > 0) patchAi({ models: [...config.ai.models, ...additions] });
+        detectedByEndpoint = { ...detectedByEndpoint, [endpointId]: [] };
+        selectedDetected = { ...selectedDetected, [endpointId]: [] };
+    }
+
     function patchModel(id: string, patch: Partial<AIModel>) {
         const current = config.ai.models.find((m) => m.id === id);
         if (!current) return;
 
         const next = { ...current, ...patch };
         if (patch.name !== undefined) {
+            const detected = detectedByEndpoint[current.endpointId]?.find((model) => model.id === patch.name);
+            if (detected?.info) Object.assign(next, defaultModelConfig(detected.info));
             const trimmed = patch.name.trim();
             const duplicated = modelsOf(current.endpointId).some((m) => m.id !== id && m.name === trimmed);
             if (duplicated) {
@@ -187,6 +271,9 @@
         <Card.Description>{t("settings.ai.desc")}</Card.Description>
     </Card.Header>
     <Card.Content class="flex flex-col gap-4">
+        <ProviderCards {config} {onsave} {service} />
+        <Separator />
+        <span class="text-sm font-semibold">{t("provider.customTitle")}</span>
         {#each config.ai.endpoints as endpoint (endpoint.id)}
             <div class="border-border flex flex-col gap-3 rounded-lg border p-3">
                 <div class="flex items-center gap-2">
@@ -291,7 +378,62 @@
                         <Button variant="outline" size="sm" data-tap onclick={() => addModel(endpoint.id)}>
                             {t("settings.ai.addModel")}
                         </Button>
+                        {#if service?.detectProviderModels}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                data-detect-custom-models
+                                onclick={() => void detectEndpointModels(endpoint)}
+                            >
+                                {detecting[endpoint.id] ? t("provider.detecting") : t("provider.detectModels")}
+                            </Button>
+                        {/if}
                     </div>
+                    {#if service?.detectProviderModels && detectMessages[endpoint.id]}
+                        <span
+                            class="text-xs"
+                            class:text-muted-foreground={detectMessages[endpoint.id].kind === "success"}
+                            class:text-destructive={detectMessages[endpoint.id].kind === "error"}
+                            role={detectMessages[endpoint.id].kind === "error" ? "alert" : "status"}
+                            >{detectMessages[endpoint.id].text}</span
+                        >
+                    {/if}
+                    {#if service?.detectProviderModels && detectedByEndpoint[endpoint.id]?.length}
+                        <div class="flex flex-col gap-2">
+                            <div class="flex flex-wrap gap-x-4 gap-y-2">
+                                {#each detectedByEndpoint[endpoint.id] as detected (detected.id)}
+                                    <div class="flex items-center gap-2">
+                                        <Checkbox
+                                            id={`rg-detected-${endpoint.id}-${detected.id}`}
+                                            checked={(selectedDetected[endpoint.id] ?? []).includes(detected.id)}
+                                            onCheckedChange={(checked) =>
+                                                toggleDetected(endpoint.id, detected.id, checked)}
+                                        />
+                                        <Label
+                                            for={`rg-detected-${endpoint.id}-${detected.id}`}
+                                            class="font-mono text-xs"
+                                        >
+                                            {detected.id}
+                                            {#if !detected.info}<span class="text-muted-foreground">
+                                                    · {t("provider.unknownParams")}</span
+                                                >{/if}
+                                        </Label>
+                                    </div>
+                                {/each}
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                data-tap
+                                class="self-start"
+                                data-add-selected-models
+                                disabled={(selectedDetected[endpoint.id] ?? []).length === 0}
+                                onclick={() => addSelectedDetected(endpoint.id)}
+                            >
+                                {t("provider.addSelected")}
+                            </Button>
+                        </div>
+                    {/if}
                     {#if modelsOf(endpoint.id).length > 0}
                         <div
                             class="text-muted-foreground hidden grid-cols-[1fr_5rem_6rem_7rem_auto] gap-2 text-2xs font-semibold @2xl:grid"
@@ -309,7 +451,7 @@
                                 value={model.name}
                                 aria-label={t("settings.ai.colName")}
                                 placeholder="gpt-4o-mini"
-                                oninput={(e) => patchModel(model.id, { name: e.currentTarget.value })}
+                                onchange={(e) => patchModel(model.id, { name: e.currentTarget.value })}
                             />
                             <Input
                                 type="number"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GradingResult, Question, ScoreRecord } from "@/types/quiz";
 import { PASS_SCORE, aggregateResults, buildIndexEntry, monthKey, scorePercent } from "./stats";
+import { HIGH_SCORE, LOW_SCORE, passRate, scoreTier } from "./stats";
 
 const question = (id: string, type: Question["type"], difficulty: Question["difficulty"], tags?: string[]): Question =>
     ({ id, type, difficulty, question: "题干", tags }) as Question;
@@ -236,5 +237,42 @@ describe("aggregateResults - 知识点标签", () => {
             questions: [question("q-1", "subjective", "easy")],
         };
         expect(buildIndexEntry(record).byTag).toEqual({});
+    });
+});
+
+describe("scoreTier", () => {
+    it("80/60/30 三条分界，达标线与 PASS_SCORE 同源", () => {
+        expect([100, 80, 79.9, PASS_SCORE, 59.9, 30, 29.9, 0].map(scoreTier)).toEqual([
+            "high",
+            "high",
+            "pass",
+            "pass",
+            "weak",
+            "weak",
+            "low",
+            "low",
+        ]);
+        expect([HIGH_SCORE, LOW_SCORE]).toEqual([80, 30]);
+    });
+});
+
+describe("passRate", () => {
+    it("按题数加权，不是各次达标率再取平均", () => {
+        // 10 题对 9 题 + 2 题对 0 题：题目层面是 9/12 = 75%，而不是 (90% + 0%) / 2 = 45%
+        expect(
+            passRate([
+                { passedCount: 9, questionCount: 10 },
+                { passedCount: 0, questionCount: 2 },
+            ])
+        ).toBe(75);
+    });
+
+    it("没有题目时为 null，而不是 0%", () => {
+        expect(passRate([])).toBeNull();
+        expect(passRate([{ passedCount: 0, questionCount: 0 }])).toBeNull();
+    });
+
+    it("负数等脏数据按 0 计", () => {
+        expect(passRate([{ passedCount: -3, questionCount: 4 }])).toBe(0);
     });
 });

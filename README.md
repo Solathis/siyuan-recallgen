@@ -48,7 +48,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 | Grader | Grade subjective/coding questions, analyze weaknesses, answer chat | 0 | 512 |
 
 - **Review Loop**: The reviewer checks all questions; failed ones are sent back to the generator for regeneration (preserving question IDs), then re-reviewed — up to 3 rounds
-- **Progress Display**: Real-time phase (generating/reviewing/regenerating), round number, and detail shown during generation
+- **Progress Display**: The title row shows the phase, elapsed time and Cancel. Below it: the collected count with a progress bar, three steps (Generating → Reviewing → Redoing failed), the state of each concurrent batch (waiting / requesting / done / no usable questions, with the top-up round marked separately), recent activity, and the generation plan (collapsed by default). On a wide panel, activity and the plan move to a right-hand column. Cancelling a date-range or pasted-text quiz returns to its input page, and pasted text is kept
 
 ### AI Protocol Support
 
@@ -61,6 +61,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 | Messages (Anthropic) | `/v1/messages` | Anthropic Claude |
 
 - **Structured Output**: When JSON Schema strict mode is enabled, uses OpenAI tools/function calling to enforce JSON output; when disabled, uses `response_format: json_object` + jsonrepair fault tolerance
+- **Built-in Providers**: DeepSeek, Zhipu GLM, Tencent Hunyuan, Qwen, Kimi, Xiaomi MiMo, Huawei Cloud, ERNIE and Doubao all use the Chat Completions–compatible API with the Base URL preset. Provider quirks are handled automatically: Zhipu only accepts `tool_choice: "auto"`, so structured output sends `auto` there; models that models.dev marks as not accepting a custom temperature (e.g. Kimi K3) are sent no `temperature`
 - **Ollama Support**: Automatically skips auth headers when no API key is set
 - **Timeout & Retry**: Configurable timeout (default 120s), automatic retry with exponential backoff for HTTP 429/5xx/timeout (max 2 retries)
 - **Network Proxy**: All AI calls go through SiYuan kernel `forwardProxy` — no CORS issues, API keys stay off the frontend
@@ -104,7 +105,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 - **Color Ranges**: Default GitHub green palette, customizable with color pickers
 - **Auto-Recording**: On submit the score index and the current month's detail shard are written immediately, independent of subsequent analysis. The history list loads only the lightweight index; detail is fetched on demand when reviewing
 - **History Tab**: open from the top-right icon; it has **Records**, **Statistics** and **Bank** views (the statistics view opens with the activity heatmap)
-  - **Records**: group by date/source, thumbnail/list/table views, search by title and source, filter by score band, export as JSON/CSV/Markdown, delete a single record with confirmation, and click a record to replay the full result. The list renders in batches of 60 with load-on-scroll, so a long history does not create a huge DOM at once
+  - **Records**: a title row with the record count and a four-figure summary (records / average / pass rate / time per question) that follows the filters; group by date/source; list/cards/table views; search by title and source, filter by score band, export as JSON/CSV/Markdown. Click a record's title to replay the full result; each row's **More actions** menu has View, Open source note (only when the source is a real document) and Delete (with confirmation). The list renders in batches of 60 with load-on-scroll and returns to the first batch when the view, grouping or filters change, so a long history does not create a huge DOM at once
   - **Statistics**: each knowledge point in the weakest-areas ranking has a "Review" action that starts a session on that topic. Switch the range (last 7/30/90 days or all time) and see a score-trend line, pass rate by question type, score-band distribution, pass rate by difficulty donut, plus summary metrics (quiz and question counts, average/best score, current and longest streak, time per question) and a weakest-areas ranking
 
 - **Spaced repetition**: newly generated questions enter the bank after post-answer approval; existing bank reviews update FSRS schedules directly. Review due questions from the command palette or title menu
@@ -113,7 +114,7 @@ The plugin supports **multi-endpoint + multi-model** configuration, with three A
 
 Left sidebar navigation + right content area, 6 independent sections:
 
-1. **AI Service**: Endpoint CRUD (name/provider/protocol/Base URL/API Key), nested models per endpoint (name/temperature/MaxTokens), duplicate name prevention, test connection (endpoint+model cascade select), global timeout and JSON Schema toggle
+1. **AI Service**: **Quick connect** cards for nine providers at the top (DeepSeek, Zhipu GLM, Tencent Hunyuan, Qwen, Kimi, Xiaomi MiMo, Huawei Cloud, ERNIE, Doubao): paste an API key and connect. The newest model is ticked by default (by models.dev release date, skipping deprecated and embedding/speech/image models, preferring ones with tool calling), and **Refresh from models.dev** updates the model list. Connecting re-points only the roles that are not usable yet; tick "Use as the default model for generating, reviewing and grading" to re-point all of them. Below, **Custom endpoints (advanced)** keeps endpoint CRUD (name/provider/protocol/Base URL/API Key), nested models per endpoint (name/temperature/MaxTokens/reasoning effort), duplicate name prevention, test connection (endpoint+model cascade select), global timeout and JSON Schema toggle
 2. **AI Roles**: Three role cards (generator/reviewer/grader) with endpoint+model cascade selection; different models recommended but same allowed
 3. **Quiz & Answer**: Question type toggles, difficulty distribution (total + per-difficulty + validation), extra-scope ratio, language (Chinese/English), countdown toggle and duration, panel width, multiple-choice scoring policy; the current combination can also be saved as a named **quiz preset** (apply or delete it with one click, and the active preset is marked)
 4. **Prompts**: Current prompts, Version library and Review feedback tabs; direct editing, defaults, manual version snapshots and feedback analysis
@@ -134,8 +135,8 @@ Left sidebar navigation + right content area, 6 independent sections:
 
 ## 🚀 Quick Start
 
-1. **Configure AI**: Open Settings → "AI Service" → fill in Base URL and API Key → add model → click "Test Connection"
-2. **Set Roles**: "AI Roles" → select models for generator/reviewer/grader (can all use the same model)
+1. **Configure AI**: Open Settings → "AI Service" → pick a provider under **Quick connect** → paste your API key → optionally "Test Connection" → "Connect". For a provider that is not listed, fill in Base URL and API key under **Custom endpoints (advanced)** and add models
+2. **Set Roles**: if no AI was set up yet, connecting points the generator, reviewer and grader at that provider's newest ticked model (roles that already work are left alone); to use different models, change them under "AI Roles"
 3. **Generate Quiz**: In any note document, right-click the block icon or click the document title icon → "Generate Quiz"
 4. **Answer**: Answer questions in the auto-opened tab; use the built-in code editor for coding questions
 5. **Submit**: Click "Submit" → objective questions graded instantly, subjective/coding AI-graded → view results
@@ -171,14 +172,15 @@ Left sidebar navigation + right content area, 6 independent sections:
 - **Data Persistence**: Uses SiYuan `saveData`/`loadData` (not localStorage), supports multi-device sync
   - `recallgen-config.json`: Plugin configuration
   - `recallgen-scores-index.json`: Score index with per-type/per-difficulty aggregates; the history list and charts read only this file
-  - `recallgen-scores-YYYY-MM.json`: Monthly detail shards (questions, grading, analysis), loaded on demand
+  - `recallgen-scores-YYYY-MM.json`: Monthly detail shards (questions, grading, analysis), loaded on demand; only the 3 most recently used months stay cached in memory
   - `recallgen-progress.json`: Answer progress (unsaved sessions)
+  - `recallgen-models-cache.json`: The model catalog from "Refresh from models.dev" (trimmed results only); used instead of the bundled snapshot when it is newer
 - **Async Store Base**: `AsyncStore` handles serialized reads/writes, prevents a read from clobbering a concurrent write, and propagates write failures. Config writes are coalesced over a 400ms window so typing in a field no longer rewrites the whole file; quiz progress expires after 30 days
 - **Tab State Machine**: `configuring → loading_generating → answering → loading_grading → result`
-- **UI Components**: all built on shadcn-svelte (Alert/AlertDialog/Badge/Button/Card/Checkbox/Collapsible/DropdownMenu/Empty/Field/Input/Item/Label/Progress/RadioGroup/Select/Separator/Skeleton/Slider/Spinner/Switch/Table/Tabs/Textarea/ToggleGroup, powered by bits-ui) plus shadcn `chart` for every chart. shadcn semantic variables are mapped to SiYuan's `--b3-*`, so light/dark follow the host theme, and the `dark:` variant is bound to SiYuan's `.theme-dark`
+- **UI Components**: all built on shadcn-svelte (Alert/AlertDialog/Avatar/Badge/Button/Card/Checkbox/Collapsible/DropdownMenu/Empty/Field/Input/Item/Label/Progress/RadioGroup/Select/Separator/Skeleton/Slider/Spinner/Switch/Table/Tabs/Textarea/ToggleGroup, powered by bits-ui) plus shadcn `chart` for every chart. shadcn semantic variables are mapped to SiYuan's `--b3-*`, so light/dark follow the host theme, and the `dark:` variant is bound to SiYuan's `.theme-dark`
 - **Responsive by container queries**: panel width is unrelated to viewport width (a SiYuan tab can be narrow, the settings dialog is always narrower than the window), so layout switches on `@container` variants rather than `md:`/`sm:`. Only genuinely device-bound rules stay in media queries: on touch devices hit areas are raised to 44px (the threshold is declared once, in `--rg-tap-size`) and bottom bars use `env(safe-area-inset-bottom)` to clear the iOS home indicator
 - **Style isolation**: Tailwind's preflight is **deliberately not imported** — SiYuan and the plugin share one document, and a global reset would break SiYuan's own UI. Only the theme and utilities layers are imported, with the resets Tailwind relies on narrowed to the plugin container `.rg-scope`. KaTeX's own `body{counter-reset}` rule is rewritten to that scope too. KaTeX's stylesheet itself is still appended globally (it ships with the plugin so formulas render offline), which is the only global style the plugin adds
-- **Tab Restore**: SiYuan restores custom tabs on restart; `mode='generate'` tabs auto-detect existing progress and resume to answering state
+- **Tab Restore**: SiYuan restores custom tabs on restart; `mode='generate'` tabs auto-detect existing progress and resume to answering state. SiYuan saves custom tab data into the layout file, so a review tab carries only the score index entry and loads the detail by id
 - **Formula rendering**: KaTeX styles and fonts ship with the plugin (woff2 only, ~296KB) instead of a CDN, so formulas render offline. The pipeline is `marked → DOMPurify → restore KaTeX`: at sanitize time formulas are still placeholders, which blocks script injection from notes/AI text without damaging KaTeX's own MathML
 
 ### Project Structure
@@ -195,16 +197,17 @@ src/
 │   ├── config.ts               # Config types, defaults, ConfigPatch, legacy migration
 │   └── quiz.ts                 # Question/answer/grading/score index & detail types
 └── lib/
-    ├── ai/                     # client.ts, errors.ts, schema.ts, scaffold.ts, prompts.ts
+    ├── ai/                     # client.ts, errors.ts, schema.ts, scaffold.ts, prompts.ts,
+    │                           # providers/ (built-in provider catalog, models.dev snapshot, quick connect)
     ├── quiz/                   # generator.ts, grader.ts, selector.ts, content.ts, stats.ts,
-    │                           # charts.ts, chart-geometry.ts, paging.ts, bank.ts, export.ts,
-    │                           # service.ts, docWriter.ts, dateRange.ts
+    │                           # charts.ts, chart-geometry.ts, paging.ts, history-view.ts, bank.ts,
+    │                           # export.ts, service.ts, docWriter.ts, dateRange.ts
     ├── editor/codemirror.ts    # CodeMirror 6 editor (lazy language packs, theme follows SiYuan)
     ├── i18n/index.ts           # t() with global placeholder replacement and dictionary fallback
     ├── storage/                # store.ts, config.ts, scores.ts, progress.ts
     ├── ui/                     # QuizPanel, QuestionView, ResultPanel, HistoryPanel, Heatmap,
-    │                           # ProgressBar, LineChart, DonutChart, StatsPanel,
-    │                           # SettingPanel + 6 Settings* panels, latex.ts
+    │                           # ProgressBar, GenProgressView, LineChart, DonutChart, StatsPanel,
+    │                           # SettingPanel + 6 Settings* panels, ProviderCards, latex.ts
     ├── components/ui/          # shadcn-svelte components (CLI-generated, editable)
     ├── utils.ts                # cn() plus the type helpers shadcn components import
     └── promise-pool.ts         # Concurrency-limited pool
@@ -235,6 +238,9 @@ pnpm run make-link
 
 # One-step install (build, then copy the output into the SiYuan plugin dir)
 pnpm run make-install
+
+# Refresh the model snapshot bundled with the plugin (needs access to models.dev)
+pnpm run sync-models
 ```
 
 ### Build Artifacts
@@ -254,6 +260,7 @@ pnpm run make-install
 - **Svelte 5**: components are mounted with `mount`/`unmount` (`new Component()` and `$destroy()` no longer work). `mount()` does not expose `$on`, so plugin-to-component communication uses callback props (`onsave`, `onchange`, ...). New components use runes (`$props`/`$state`/`$derived`/`$effect`)
 - **Quality gates**: `pnpm run typecheck` (svelte-check), `pnpm run format:check` (prettier), `pnpm test` (vitest), `pnpm run build`; CI runs all of them on push/PR and verifies the release tag matches `plugin.json`
 - **Output directory**: production builds go to `dist/` by default. To build straight into your SiYuan plugin folder, copy `.env.local.example` to `.env.local` and set `OUTPUT_DIR` (that file is gitignored)
+- **Model snapshot**: `src/lib/ai/providers/models-snapshot.json` is generated by `pnpm run sync-models`; do not edit it by hand. The trimming rules live in `models.ts` and are shared by the script and the in-app "Refresh from models.dev". If a mapped provider is missing from models.dev the script exits with code 1 instead of writing a snapshot without it
 - **SiYuan plugin loader**: Uses browser module loader (not Node require); Rollup code-split `require()` stubs cause runtime failures
 
 ## 📊 Data Flow

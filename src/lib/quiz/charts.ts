@@ -107,7 +107,8 @@ export function summarize(entries: ScoreIndexEntry[], now = Date.now()): StatsSu
         quizCount: entries.length,
         questionCount,
         averagePercent: percents.reduce((a, b) => a + b, 0) / percents.length,
-        bestPercent: Math.max(...percents),
+        // 不用 Math.max(...percents)：展开成实参，数组很大时会抛 RangeError
+        bestPercent: percents.reduce((best, p) => (p > best ? p : best), -Infinity),
         activeDays: days.length,
         currentStreak: current,
         longestStreak: longest,

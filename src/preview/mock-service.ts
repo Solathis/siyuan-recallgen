@@ -11,6 +11,8 @@
  */
 
 import { AIError } from "@/lib/ai/client";
+import { SNAPSHOT_CATALOG } from "@/lib/ai/providers/catalog";
+import { detectEndpointModels } from "@/lib/ai/providers/detect";
 import {
     selectReviewItems,
     summarizeBank,
@@ -19,7 +21,9 @@ import {
     type BankSummary,
     type ReviewScope,
 } from "@/lib/quiz/bank";
+import { planBatches } from "@/lib/quiz/batching";
 import type { DateRangeCount, DateRangeNotes } from "@/lib/quiz/dateRange";
+import type { BatchStatus, GenPhase } from "@/lib/quiz/generator";
 import type { DateGenConfig, QuizService } from "@/lib/quiz/service";
 import type { RecallGenConfig } from "@/types/config";
 import type { GradingResult, Question, QuizSession, ScoreDetail, ScoreIndexEntry, ScoreRecord } from "@/types/quiz";
@@ -49,6 +53,8 @@ export interface MockControls {
     failGenerate: boolean;
     /** 出题返回 0 题 */
     emptyGenerate: boolean;
+    /** 第 2 批「没返回可用题目」（题量至少两批时生效）：预览失败批次、跳过说明与较大的补题轮 */
+    failedBatch: boolean;
     /** 连接测试失败 */
     failConnection: boolean;
     /**
@@ -66,6 +72,8 @@ export interface PreviewService {
     setConfig(next: RecallGenConfig): void;
     /** 题库与成绩回到种子数据 */
     reseed(): void;
+    /** 把成绩列表换成给定的条目（答题记录屏用 ?n=500 看分页与大量记录） */
+    seedScores(entries: ScoreIndexEntry[]): void;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -92,6 +100,7 @@ export function createPreviewService(): PreviewService {
         latency: 900,
         failGenerate: false,
         emptyGenerate: false,
+        failedBatch: false,
         failConnection: false,
         resumeProgress: false,
     };
@@ -127,44 +136,100 @@ export function createPreviewService(): PreviewService {
         /* ── 出题 ──────────────────────────────────────────────── */
 
         async generate(content, onProgress, signal) {
-            const target = config.general.difficulty.total;
-            const batches = Math.max(1, Math.ceil(target / 12));
             void content;
+            const target = config.general.difficulty.total;
+            // 与真实生成器同一套分批规则，出题计划里的「预计批次」才对得上
+            const plan = planBatches(config.general.difficulty);
+            const batchStates: BatchStatus[] = plan.map((b) => ({ state: "pending", count: b.total, topUp: false }));
+            let collected = 0;
+            let dropped = 0;
+            let toppingUp = false;
+            let note: string | undefined;
+            let detail = "";
+            /** 推送一次快照；不给文案时沿用上一条，与真实生成器的「批次状态单独变化」一致 */
+            const emit = (text?: string, phase: GenPhase = "generating", round = 1): void => {
+                if (text !== undefined) detail = text;
+                const done = batchStates.filter((b) => b.state === "done").length;
+                onProgress?.(phase, round, detail, {
+                    phase,
+                    target,
+                    collected,
+                    batch: phase === "generating" ? Math.min(done + 1, batchStates.length) : round,
+                    batches: phase === "generating" ? batchStates.length : 3,
+                    dropped,
+                    note,
+                    batchStates: batchStates.map((b) => ({ ...b })),
+                    toppingUp,
+                });
+            };
+
+            const multi = plan.length > 1;
+            const concurrency = Math.min(3, plan.length);
+            emit(multi ? t("gen.parallelBatches", String(plan.length), String(target)) : t("quiz.generating"));
+            for (let i = 0; i < concurrency; i++) batchStates[i].state = "running";
+            emit();
 
             await sleep(controls.latency, signal);
             if (controls.failGenerate) {
                 throw new AIError(previewTruncatedError.detail, undefined, "truncated", previewTruncatedError.raw);
             }
 
-            // 逐批推进，让「已收集 N 题 / 第 i/n 批」真的会动
-            for (let batch = 1; batch <= batches; batch++) {
-                const collected = Math.min(target, batch * 12);
-                onProgress?.("generating", batch, t("gen.phase.generating"), {
-                    phase: "generating",
-                    target,
-                    collected,
-                    batch,
-                    batches,
-                    dropped: batch === 2 ? 1 : 0,
-                    note: batch === 2 ? t("gen.dropped", "1") : undefined,
-                });
-                await sleep(controls.latency, signal);
+            // 逐批完成；空出的并发名额交给下一批，让「已收集 N 题 / 各批状态」真的会动
+            let finished = 0;
+            for (let i = 0; i < plan.length; i++) {
+                if (i > 0) await sleep(controls.latency * 0.6, signal);
+                if (controls.failedBatch && multi && i === 1) {
+                    batchStates[i].state = "failed";
+                    note = t("gen.batchSkipped", String(i + 1));
+                    emit(note);
+                } else {
+                    // 最后一批少给两题、其中一道格式不合格，补题轮在预览里也看得到
+                    const short = i === plan.length - 1 ? Math.min(2, plan[i].total) : 0;
+                    collected += plan[i].total - short;
+                    if (short > 0) dropped += 1;
+                    batchStates[i].state = "done";
+                    finished++;
+                    emit(
+                        multi
+                            ? t("gen.parallelProgress", String(finished), String(plan.length), String(collected))
+                            : t("quiz.generating")
+                    );
+                }
+                const next = i + concurrency;
+                if (next < plan.length) {
+                    batchStates[next].state = "running";
+                    emit();
+                }
             }
 
-            if (config.ai.roles.reviewer) {
-                onProgress?.("reviewing", 1, t("gen.phase.reviewing"), {
-                    phase: "reviewing",
-                    target,
-                    collected: target,
-                    batch: batches,
-                    batches,
-                    dropped: 1,
-                });
+            const shortfall = target - collected;
+            if (shortfall > 0) {
+                toppingUp = true;
+                batchStates.push({ state: "pending", count: shortfall, topUp: true });
+                emit(t("gen.toppingUp", String(shortfall)));
+                batchStates[batchStates.length - 1].state = "running";
+                emit();
                 await sleep(controls.latency, signal);
+                collected = target;
+                batchStates[batchStates.length - 1].state = "done";
+                emit();
+                toppingUp = false;
+                emit();
+            }
+            if (dropped > 0) emit(t("gen.dropped", String(collected), String(dropped)));
+
+            if (config.ai.roles.reviewer) {
+                emit(t("gen.reviewing", "1"), "reviewing", 1);
+                await sleep(controls.latency, signal);
+                emit(t("gen.reviewPassed", "1", String(collected)), "reviewing", 1);
             }
 
             if (controls.emptyGenerate) return [];
-            return previewQuestions.slice(0, Math.min(target, previewQuestions.length));
+            // 题量超过样例题数时循环取用并重新编号（题量不超过时与原样例完全相同）
+            return Array.from({ length: target }, (_, i) => ({
+                ...previewQuestions[i % previewQuestions.length],
+                id: `q-${i + 1}`,
+            }));
         },
 
         async loadDateRangeContent(_cfg: DateGenConfig, _range, _notebookId): Promise<DateRangeNotes> {
@@ -373,14 +438,41 @@ export function createPreviewService(): PreviewService {
             bank = [];
         },
 
-        async testConnection() {
+        async testConnection(draft) {
             await sleep(controls.latency * 1.5);
-            if (controls.failConnection) {
+            // 草稿里的 Key 为空也算失败：预览台里不填 Key 点「测试连接」能看到失败的样子
+            const emptyKey = draft !== undefined && draft.endpoints.every((e) => !e.apiKey);
+            if (controls.failConnection || emptyKey) {
                 throw new AIError("401 Unauthorized", 401, "http");
             }
             // 不引 i18n：这里的返回值只是给预览看的模拟结果，
             // 引一个不存在的 key 会被字典体检用例拦下
             return "连接正常 · 240ms";
+        },
+
+        async getProviderCatalog() {
+            return SNAPSHOT_CATALOG;
+        },
+
+        async detectProviderModels(endpoint) {
+            await sleep(controls.latency);
+            return detectEndpointModels(endpoint, {
+                listRaw: async () => {
+                    if (!endpoint.apiKey) throw new AIError("401 Unauthorized", 401, "http");
+                    return JSON.stringify({ data: [{ id: "deepseek-v4-pro" }, { id: "gpt-4o-mini" }] });
+                },
+                fetchApi: async () => {
+                    if (controls.failConnection) throw new Error("models.dev 不可达");
+                    return {};
+                },
+                fallbackCatalog: async () => SNAPSHOT_CATALOG,
+            });
+        },
+
+        async refreshProviderCatalog() {
+            await sleep(controls.latency * 1.5);
+            if (controls.failConnection) throw new AIError("models.dev 不可达", undefined, "network");
+            return { ...SNAPSHOT_CATALOG, fetchedAt: new Date().toISOString() };
         },
 
         async clearScores() {
@@ -413,6 +505,9 @@ export function createPreviewService(): PreviewService {
                     analysis: record.analysis,
                 });
             }
+        },
+        seedScores(entries) {
+            scores = [...entries];
         },
     };
 }
