@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { getDefaultConfig, type RecallGenConfig } from "@/types/config";
 import { createBankItem, selectReviewItems } from "./bank";
-import { buildConfigExport, CONFIG_EXPORT_VERSION, mergeImportedConfig, parseConfigExport } from "./config-io";
+import {
+    buildConfigExport,
+    CONFIG_EXPORT_VERSION,
+    mergeImportedConfig,
+    parseConfigExport,
+    sanitizeConfig,
+} from "./config-io";
 
 const base = (): RecallGenConfig => {
     const config = getDefaultConfig();
@@ -469,5 +475,27 @@ describe("题库复习的题量上限生效", () => {
         });
         expect(selectReviewItems(items, { limit: 2 })).toHaveLength(2);
         expect(selectReviewItems(items, { limit: 0 })).toHaveLength(5);
+    });
+});
+
+describe("服务商接入的配置字段", () => {
+    it("presetId 与 fixedTemperature 经过清洗后保留（启动加载配置也走这条路径，丢了每次重启都会没）", () => {
+        const config = base();
+        config.ai.endpoints[0].presetId = "kimi";
+        config.ai.models[0].fixedTemperature = true;
+        const out = sanitizeConfig(getDefaultConfig(), config).config;
+        expect(out.ai.endpoints[0].presetId).toBe("kimi");
+        expect(out.ai.models[0].fixedTemperature).toBe(true);
+    });
+
+    it("不认识的 presetId 丢掉，fixedTemperature 只认 true", () => {
+        const config = base() as unknown as {
+            ai: { endpoints: { presetId?: unknown }[]; models: { fixedTemperature?: unknown }[] };
+        };
+        config.ai.endpoints[0].presetId = "not-a-provider";
+        config.ai.models[0].fixedTemperature = "yes";
+        const out = sanitizeConfig(getDefaultConfig(), config as unknown as RecallGenConfig).config;
+        expect(out.ai.endpoints[0]).not.toHaveProperty("presetId");
+        expect(out.ai.models[0]).not.toHaveProperty("fixedTemperature");
     });
 });

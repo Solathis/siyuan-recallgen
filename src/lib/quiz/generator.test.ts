@@ -795,3 +795,141 @@ describe("分批生成的并发度", () => {
         if (texts.length > 1) expect(texts[1]).toBe("批 2 的题");
     });
 });
+
+describe("逐批状态与补题轮", () => {
+    const q = (tag: string) => ({ type: "true_false", difficulty: "easy", question: `题 ${tag}`, answer: true });
+    const reply = (content: string) => ({
+        code: 0,
+        msg: "",
+        data: {
+            body: JSON.stringify({ choices: [{ message: { content }, finish_reason: "stop" }] }),
+            status: 200,
+            contentType: "application/json",
+            headers: null,
+            elapsed: 1,
+            url: "",
+        },
+    });
+    /** 第 call 次调用返回 n 道互不重复的题（跨批去重不会吞掉它们） */
+    const batchOf = (call: number, n: number) =>
+        reply(JSON.stringify({ questions: Array.from({ length: n }, (_, k) => q(`${call}-${k}`)) }));
+    /** 只测生成，不触发审题循环；30 题会拆成 10/10/10 三批 */
+    const configWith = (total: number) => {
+        const config = getDefaultConfig();
+        config.general.difficulty = { total, easy: total, medium: 0, hard: 0 };
+        config.general.allowedTypes = ["true_false"];
+        config.ai.roles.reviewer = "";
+        return config;
+    };
+    const record = () => {
+        const snapshots: GenStats[] = [];
+        const details: string[] = [];
+        const onProgress = (_phase: unknown, _round: unknown, detail: string, stats?: GenStats) => {
+            details.push(detail);
+            if (stats) snapshots.push(stats);
+        };
+        return { snapshots, details, onProgress };
+    };
+
+    it("每批依次经过等待、请求中、完成", async () => {
+        let call = 0;
+        __setFetchSyncPost(() => batchOf(++call, 10));
+        const { snapshots, onProgress } = record();
+        await generateQuestions(configWith(30), "笔记内容", onProgress);
+        __resetFetchSyncPost();
+
+        expect(snapshots[0].batchStates?.map((b) => b.state)).toEqual(["pending", "pending", "pending"]);
+        for (let i = 0; i < 3; i++) {
+            expect(
+                snapshots.some((s) => s.batchStates?.[i].state === "running"),
+                `第 ${i + 1} 批没有经过请求中`
+            ).toBe(true);
+        }
+        const last = snapshots.at(-1)?.batchStates;
+        expect(last?.map((b) => b.state)).toEqual(["done", "done", "done"]);
+        expect(last?.map((b) => b.count)).toEqual([10, 10, 10]);
+    });
+
+    it("一轮之内已收集数随每批完成而增长，不必等整轮跑完", async () => {
+        let call = 0;
+        __setFetchSyncPost(() => batchOf(++call, 10));
+        const { snapshots, details, onProgress } = record();
+        await generateQuestions(configWith(30), "笔记内容", onProgress);
+        __resetFetchSyncPost();
+
+        // 原实现在整轮结束前一直读 collected.length，于是这一条显示「已收集 0 题」
+        const index = details.findIndex((detail) => detail.includes("已完成 1/3 批"));
+        expect(index, "没有找到第一批完成时的进度").toBeGreaterThanOrEqual(0);
+        expect(details[index]).toContain("已收集 10 题");
+        expect(snapshots[index].collected).toBe(10);
+    });
+
+    it("某批没给出可用题目：该批标为失败并附说明，差额由补题轮补齐", async () => {
+        let call = 0;
+        __setFetchSyncPost(() => {
+            call++;
+            return call === 2 ? reply("{}") : batchOf(call, 10);
+        });
+        const { snapshots, onProgress } = record();
+        const questions = await generateQuestions(configWith(30), "笔记内容", onProgress);
+        __resetFetchSyncPost();
+
+        const last = snapshots.at(-1);
+        expect(last?.batchStates?.map((b) => [b.state, b.topUp])).toEqual([
+            ["done", false],
+            ["failed", false],
+            ["done", false],
+            ["done", true],
+        ]);
+        expect(last?.note).toContain("2");
+        expect(questions).toHaveLength(30);
+    });
+
+    it("补题轮的目标仍是总题量，结束后「补题中」收起", async () => {
+        let call = 0;
+        __setFetchSyncPost(() => {
+            call++;
+            return call === 1 ? batchOf(1, 2) : batchOf(call, 1);
+        });
+        const { snapshots, onProgress } = record();
+        await generateQuestions(configWith(3), "笔记内容", onProgress);
+        __resetFetchSyncPost();
+
+        // 原实现在补题时把目标改写成差额：界面上会是「已收集 2 / 目标 1」
+        expect(snapshots.map((s) => s.target)).toEqual(snapshots.map(() => 3));
+        const topUp = snapshots.filter((s) => s.toppingUp);
+        expect(topUp.length).toBeGreaterThan(0);
+        expect(topUp[0].collected).toBe(2);
+        expect(snapshots.at(-1)?.toppingUp).toBe(false);
+    });
+
+    it("取消后，还没发出的批次保持等待，不被标成失败", async () => {
+        const ctrl = new AbortController();
+        let call = 0;
+        __setFetchSyncPost(() => {
+            ctrl.abort(); // 第一批在途时用户点了取消
+            return batchOf(++call, 10);
+        });
+        const { snapshots, onProgress } = record();
+        await expect(generateQuestions(configWith(30), "笔记内容", onProgress, ctrl.signal)).rejects.toMatchObject({
+            kind: "aborted",
+        });
+        __resetFetchSyncPost();
+
+        const states = snapshots.at(-1)?.batchStates?.map((b) => b.state) ?? [];
+        expect(states).toHaveLength(3);
+        expect(states).not.toContain("failed");
+        expect(states.filter((state) => state === "pending")).toHaveLength(2);
+    });
+
+    it("每次推送的批次状态都是新数组，界面持有旧快照不会被后续推送改掉", async () => {
+        let call = 0;
+        __setFetchSyncPost(() => batchOf(++call, 10));
+        const { snapshots, onProgress } = record();
+        await generateQuestions(configWith(30), "笔记内容", onProgress);
+        __resetFetchSyncPost();
+
+        expect(snapshots[0].batchStates?.every((b) => b.state === "pending")).toBe(true);
+        expect(snapshots[0].batchStates).not.toBe(snapshots[1].batchStates);
+    });
+});

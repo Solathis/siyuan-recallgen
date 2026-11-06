@@ -86,9 +86,21 @@ class ShardStore extends AsyncStore {
  * 相比原先「单个文件装下全部记录、每次交卷全量重写」，
  * 交卷写入量与该月记录数成正比，而不是与全部历史成正比。
  */
+/**
+ * 内存里最多保留几个月份的明细。
+ *
+ * 分片读过一次就缓存住，原先从不释放：回看过的每个月、删过记录的每个月、
+ * 以及「导出全部」时的所有月份，都会在插件存活期间一直留在内存里。
+ * 回看通常集中在最近几个月，超出的按最久未用淘汰；淘汰只清缓存、保留实例，
+ * 实例上的写入队列不受影响，下次访问重新读盘。
+ */
+export const MAX_CACHED_SHARDS = 3;
+
 export class ScoreStore {
     private readonly index: ScoreIndexStore;
     private readonly shards = new Map<string, ShardStore>();
+    /** 当前持有缓存的月份，按最近访问排序：第一个就是最久未用的 */
+    private readonly cachedMonths = new Set<string>();
 
     constructor(private readonly plugin: StoragePlugin) {
         this.index = new ScoreIndexStore(plugin);
@@ -99,6 +111,13 @@ export class ScoreStore {
         if (!store) {
             store = new ShardStore(this.plugin, month);
             this.shards.set(month, store);
+        }
+        this.cachedMonths.delete(month);
+        this.cachedMonths.add(month);
+        while (this.cachedMonths.size > MAX_CACHED_SHARDS) {
+            const oldest = this.cachedMonths.values().next().value as string;
+            this.cachedMonths.delete(oldest);
+            this.shards.get(oldest)?.invalidate();
         }
         return store;
     }

@@ -26,6 +26,18 @@ export type GenProgressCallback = (phase: GenPhase, round: number, detail: strin
 
 export type GenPhase = "generating" | "reviewing" | "regenerating";
 
+/** 单批请求的状态：等待并发名额 / 请求中 / 已收到可用题目 / 没给出可用题目或请求失败 */
+export type BatchState = "pending" | "running" | "done" | "failed";
+
+/** 一批请求的展示信息 */
+export interface BatchStatus {
+    state: BatchState;
+    /** 本批请求的题数 */
+    count: number;
+    /** 是否属于「模型少给题后补齐差额」那一轮 */
+    topUp: boolean;
+}
+
 /** 生成过程的实时快照（用于界面展示，不参与逻辑） */
 export interface GenStats {
     phase: GenPhase;
@@ -41,6 +53,13 @@ export interface GenStats {
     dropped: number;
     /** 附加说明（例如某批失败已跳过） */
     note?: string;
+    /**
+     * 各批状态，按发出顺序排列；补题轮的批次接在首轮之后。
+     * 每次推送都是一份新数组，界面可以直接持有而不怕被后续推送改掉。
+     */
+    batchStates?: BatchStatus[];
+    /** 正在补齐差额（只在补题轮进行中为 true） */
+    toppingUp?: boolean;
 }
 
 /** 审题结果 */
@@ -229,8 +248,17 @@ export async function generateQuestions(
     const collected: Question[] = [];
     let skipped = 0;
     const ctx: BatchContext = { prompts, general, content, types, genAI, callOpts, signal };
-    /** 本轮要求的题目总量（补题轮会改写成差额），仅用于进度展示 */
-    let targetTotal = Math.max(0, Math.round(difficulty.total));
+    /**
+     * 本次要求的题目总量，仅用于进度展示。
+     * 补题轮也保持总量不变：原先补题时改写成差额，界面上会出现「已收集 12 / 目标 3」，
+     * 进度条也随之跳回补题前的位置；差额由「补题中：还差 N 题」单独表达。
+     */
+    const targetTotal = Math.max(0, Math.round(difficulty.total));
+    /** 各批状态，首轮与补题轮共用一份，按发出顺序追加 */
+    const batchList: BatchStatus[] = [];
+    let toppingUp = false;
+    /** 最近一条进度文案：批次状态单独变化时沿用它，界面的动态记录不会因此刷出重复条目 */
+    let lastDetail = "";
     /** 界面展示用的实时快照 */
     let stats: GenStats = {
         phase: "generating",
@@ -241,7 +269,16 @@ export async function generateQuestions(
         dropped: 0,
     };
     const report = (detail: string, patch: Partial<GenStats> = {}): void => {
-        stats = { ...stats, target: targetTotal, collected: collected.length, dropped: skipped, ...patch };
+        lastDetail = detail;
+        stats = {
+            ...stats,
+            target: targetTotal,
+            collected: collected.length,
+            dropped: skipped,
+            ...patch,
+            batchStates: batchList.map((item) => ({ ...item })),
+            toppingUp,
+        };
         onProgress?.(stats.phase, Math.max(1, stats.batch), detail, stats);
     };
 
@@ -259,7 +296,7 @@ export async function generateQuestions(
         group: DifficultyDistribution[],
         options: { allowPartial: boolean; toppingUp: boolean }
     ): Promise<void> => {
-        const { allowPartial, toppingUp } = options;
+        const { allowPartial } = options;
         const total = group.length;
         if (total === 0) return;
 
@@ -269,6 +306,16 @@ export async function generateQuestions(
         const problems: Array<{ index: number; problem: BatchProblem }> = [];
         const errors: unknown[] = [];
         let finished = 0;
+
+        toppingUp = options.toppingUp;
+        const offset = batchList.length;
+        for (const counts of group) batchList.push({ state: "pending", count: counts.total, topUp: toppingUp });
+
+        /** 本轮进行中的收集数：已合并的加上本轮已完成槽位里的，否则整轮跑完之前一直显示 0 */
+        const gathered = (): number => slots.reduce((sum, slot) => sum + slot.length, collected.length);
+        const setState = (index: number, state: BatchState): void => {
+            batchList[offset + index].state = state;
+        };
 
         const parallel = total > 1;
         if (parallel) {
@@ -297,26 +344,37 @@ export async function generateQuestions(
                     try {
                         // 取消后不再发新请求（在途的无法撤回）
                         throwIfAborted(signal);
+                        setState(i, "running");
+                        report(lastDetail, { collected: gathered() });
                         const outcome = await requestBatch(ctx, group[i]);
                         if (outcome.problem) {
                             problems.push({ index: i, problem: outcome.problem });
+                            setState(i, "failed");
+                            report(lastDetail, { collected: gathered() });
                             return;
                         }
                         slots[i] = outcome.questions;
                         skipped += outcome.dropped;
                         finished++;
+                        setState(i, "done");
                         report(
                             parallel
-                                ? t("gen.parallelProgress", String(finished), String(total), String(collected.length))
+                                ? t("gen.parallelProgress", String(finished), String(total), String(gathered()))
                                 : batchLabel(0, 1, group[0].total, toppingUp),
                             {
                                 phase: "generating",
                                 batch: Math.min(finished + 1, total),
                                 batches: total,
+                                collected: gathered(),
                             }
                         );
                     } catch (e) {
                         errors.push(e);
+                        // 取消不算这一批失败：界面马上就要收起，标成失败反而误导
+                        if (!isAbortError(e)) {
+                            setState(i, "failed");
+                            report(lastDetail, { collected: gathered() });
+                        }
                     }
                 })
             );
@@ -331,11 +389,14 @@ export async function generateQuestions(
 
         if (problems.length > 0) {
             const succeeded = slots.filter((slot) => slot.length > 0).length;
-            const failedAt = problems.map((p) => p.index + 1).join("、");
+            const failedAt = problems
+                .map((p) => p.index + 1)
+                .sort((a, b) => a - b)
+                .join("、");
             if (!allowPartial || succeeded === 0) throw problemError(problems[0].problem);
             console.warn("[RecallGen] 部分批次出题失败，保留已成功的批次", failedAt);
             const note = t("gen.batchSkipped", failedAt);
-            report(note, { note });
+            report(note, { note, collected: gathered() });
         }
 
         for (const slot of slots) collected.push(...slot);
@@ -348,7 +409,6 @@ export async function generateQuestions(
     const shortfall = Math.max(0, Math.round(difficulty.total) - collected.length);
     if (shortfall > 0) {
         throwIfAborted(signal);
-        targetTotal = shortfall;
         try {
             await runBatches(planBatches(scaleDistribution(difficulty, shortfall)), {
                 allowPartial: true,
@@ -358,14 +418,17 @@ export async function generateQuestions(
             // 取消要透传；补题本身失败不该作废已经拿到的题目
             if (isAbortError(e)) throw e;
             console.warn("[RecallGen] 补题失败，保留已有题目", e);
+        } finally {
+            toppingUp = false;
         }
+        // 补题轮结束（成功或失败）都要推送一次，界面上的「补题中」才会收起
+        report(lastDetail);
     }
 
     // 跨批也可能重复，去重后重新连续编号
     let questions = renumberQuestions(dedupeQuestions(collected));
     const discarded = skipped + (collected.length - questions.length);
     if (discarded > 0) {
-        targetTotal = Math.max(0, Math.round(difficulty.total));
         report(t("gen.dropped", String(questions.length), String(discarded)), {
             phase: "generating",
             collected: questions.length,

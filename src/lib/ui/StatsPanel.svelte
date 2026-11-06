@@ -19,6 +19,7 @@
         type RangeDays,
     } from "../quiz/charts";
     import { scorePercent } from "../quiz/stats";
+    import { scoreBar } from "./score-tone";
     import { createClock } from "./clock.svelte";
     import { dayKey } from "../quiz/charts";
     import type { HeatmapConfig, QuestionType, ScoreIndexEntry, Difficulty } from "@/types/quiz";
@@ -107,18 +108,8 @@
         return t(`diff.${d}`);
     }
 
-    /** 达标率对应的语义色，所有图表与列表共用同一口径 */
-    /**
-     * 分值条的色调：Progress 的填充是内部 data-slot="progress-indicator"，
-     * 用任意值变体覆盖它的 bg-primary。改组件本体没用——那是 CLI 生成的，
-     * 下次 add --overwrite 会覆盖掉。
-     */
-    function toneClass(accuracy: number): string {
-        if (accuracy >= 80) return "[&>[data-slot=progress-indicator]]:bg-success";
-        if (accuracy >= 60) return "[&>[data-slot=progress-indicator]]:bg-primary";
-        if (accuracy >= 30) return "[&>[data-slot=progress-indicator]]:bg-warning";
-        return "[&>[data-slot=progress-indicator]]:bg-destructive";
-    }
+    /** 达标率对应的分值条色调：档位与答题记录、结果页、题库页同一份（score-tone） */
+    const toneClass = scoreBar;
 </script>
 
 <div class="@container flex flex-col gap-4">
@@ -162,7 +153,7 @@
     {:else}
         <!-- 学习轨迹：热力图属于进度视图，放在统计页比放在设置里更符合直觉 -->
         {#if heatmapConfig}
-            <Card.Root class="''' + SECT + '''">
+            <Card.Root class="animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200">
                 <Card.Header>
                     <Card.Title class="text-sm">{t("stats.heatmap")}</Card.Title>
                     <Card.Description>{t("stats.heatmapDesc")}</Card.Description>
@@ -190,7 +181,10 @@
         </dl>
 
         <!-- 分数趋势 -->
-        <Card.Root class="''' + SECT + '''" style="animation-delay: 60ms">
+        <Card.Root
+            class="animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:backwards] duration-200"
+            style="animation-delay: 60ms"
+        >
             <Card.Header>
                 <Card.Title class="text-sm">{t("stats.trend")}</Card.Title>
                 <Card.Description>{t("stats.trendDesc")}</Card.Description>

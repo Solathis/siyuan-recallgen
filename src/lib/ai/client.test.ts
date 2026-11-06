@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetFetchSyncPost, __setFetchSyncPost, type IWebSocketData } from "@/test/siyuan-stub";
-import { AIError, callLLM, isAbortError, isRetryable, joinUrl, resolveAI, type ResolvedAIConfig } from "./client";
+import {
+    AIError,
+    callLLM,
+    isAbortError,
+    isRetryable,
+    joinUrl,
+    listModelsRaw,
+    resolveAI,
+    type ResolvedAIConfig,
+} from "./client";
 import { DEFAULT_AI_CONFIG, getDefaultConfig } from "@/types/config";
 import { buildJsonObjectResponseFormat, buildTools } from "./schema";
 
@@ -222,6 +231,81 @@ describe("reasoning effort", () => {
         await callLLM(rc({ protocol: "messages", reasoningEffort: "high" }), [{ role: "user", content: "hi" }]);
         expect(calls[0].data.payload).not.toHaveProperty("reasoning");
         expect(calls[0].data.payload).not.toHaveProperty("reasoning_effort");
+    });
+});
+
+describe("服务商差异", () => {
+    const tools = buildTools("recallgen_quiz", "d", { type: "object" });
+    const named = { type: "function", function: { name: "recallgen_quiz" } };
+
+    it("智谱只支持 tool_choice=auto：指定函数改发 auto；其他服务商照旧指定函数", async () => {
+        const calls = recordingHandler(() => proxyOk({ choices: [{ message: { content: "{}" } }] }));
+        await callLLM(rc({ toolChoice: "auto" }), [{ role: "user", content: "hi" }], { tools, toolChoice: named });
+        await callLLM(rc(), [{ role: "user", content: "hi" }], { tools, toolChoice: named });
+        expect(calls[0].data.payload.tool_choice).toBe("auto");
+        expect(calls[1].data.payload.tool_choice).toEqual(named);
+    });
+
+    it("不接受自定义温度的模型（Kimi K3）：三种协议都不发 temperature，连判分传进来的 0 也不发", async () => {
+        const calls = recordingHandler(() =>
+            proxyOk({
+                choices: [{ message: { content: "ok" } }],
+                output_text: "ok",
+                content: [{ type: "text", text: "ok" }],
+            })
+        );
+        for (const protocol of ["chat", "responses", "messages"] as const) {
+            await callLLM(rc({ protocol, fixedTemperature: true }), [{ role: "user", content: "hi" }], {
+                temperature: 0,
+            });
+        }
+        for (const call of calls) expect(call.data.payload).not.toHaveProperty("temperature");
+        await callLLM(rc(), [{ role: "user", content: "hi" }]);
+        expect(calls.at(-1)?.data.payload.temperature).toBe(0.7);
+    });
+
+    it("resolveAI 按端点的 presetId 带出 toolChoice，按模型带出 fixedTemperature", () => {
+        const config = getDefaultConfig();
+        config.ai.endpoints[0].presetId = "zhipu";
+        config.ai.models[0].fixedTemperature = true;
+        const resolved = resolveAI(config.ai, config.ai.models[0].id);
+        expect(resolved.toolChoice).toBe("auto");
+        expect(resolved.fixedTemperature).toBe(true);
+        config.ai.endpoints[0].presetId = undefined;
+        expect(resolveAI(config.ai, config.ai.models[0].id).toolChoice).toBeUndefined();
+    });
+});
+
+describe("listModelsRaw：识别端点的模型", () => {
+    const endpoint = {
+        provider: "openai",
+        protocol: "chat",
+        baseUrl: "https://api.example.com/v1/",
+        apiKey: "key-1",
+    } as const;
+
+    it("GET {baseUrl}/models；Chat/Responses 用 Bearer，Messages 用 x-api-key 并带 limit", async () => {
+        const calls = recordingHandler(() => proxyOk({ data: [] }));
+        await listModelsRaw(endpoint, 30_000);
+        await listModelsRaw({ ...endpoint, protocol: "messages" }, 30_000);
+        expect(calls[0].data).toMatchObject({ url: "https://api.example.com/v1/models", method: "GET" });
+        expect(calls[0].data.headers).toEqual([{ Authorization: "Bearer key-1" }]);
+        expect(calls[1].data.url).toBe("https://api.example.com/v1/models?limit=1000");
+        expect(calls[1].data.headers).toEqual([{ "x-api-key": "key-1" }, { "anthropic-version": "2023-06-01" }]);
+    });
+
+    it("没有 Key（Ollama）不发认证头；404 / 405 提示端点不支持列出模型", async () => {
+        const calls = recordingHandler((n) => proxyOk(n === 1 ? { data: [] } : "not found", n === 1 ? 200 : 404));
+        await listModelsRaw({ ...endpoint, provider: "ollama", apiKey: "" }, 30_000);
+        expect(calls[0].data.headers).toEqual([]);
+        await expect(listModelsRaw(endpoint, 30_000)).rejects.toThrow("端点不支持自动列出模型");
+    });
+
+    it("401 等其他错误原样抛出 HTTP 错误", async () => {
+        recordingHandler(() => proxyOk({ error: "bad key" }, 401));
+        const err = await listModelsRaw(endpoint, 30_000).catch((e) => e);
+        expect(err).toBeInstanceOf(AIError);
+        expect((err as AIError).status).toBe(401);
     });
 });
 

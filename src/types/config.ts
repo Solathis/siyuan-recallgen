@@ -36,6 +36,8 @@ export interface AIEndpoint {
     protocol: AIProtocol;
     baseUrl: string;
     apiKey: string;
+    /** 从「快速接入」卡片接入的服务商 id（见 lib/ai/providers/catalog.ts）；手动添加的端点没有 */
+    presetId?: string;
 }
 
 /** AI 模型：绑定到某个端点，携带独立温度/token 参数 */
@@ -46,6 +48,8 @@ export interface AIModel {
     temperature: number;
     maxTokens: number;
     reasoningEffort?: "default" | "low" | "medium" | "high";
+    /** 模型不接受自定义温度（例如 Kimi K3）：请求里不发 temperature，否则会被拒 */
+    fixedTemperature?: boolean;
 }
 
 /** AI 角色：出题者 / 审题者 / 判题者，各指向一个模型 ID */

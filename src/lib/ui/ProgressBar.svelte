@@ -18,6 +18,7 @@
     let {
         value = null,
         label = "",
+        ariaLabel = "",
         size = "md",
         tone = "accent",
         showValue = false,
@@ -25,6 +26,8 @@
         /** null 表示总量未知，用无尽滑动动画 */
         value?: number | null;
         label?: string;
+        /** 不显示文字时的无障碍名称；不传则沿用 label */
+        ariaLabel?: string;
         size?: "xs" | "sm" | "md";
         /** accent：自有强调色；primary：思源主题色 */
         tone?: "accent" | "primary";
@@ -35,6 +38,7 @@
     const indeterminate = $derived(value === null);
     const pct = $derived(indeterminate ? 0 : Math.max(0, Math.min(100, value as number)));
     const track = $derived(size === "xs" ? "h-1" : size === "sm" ? "h-1.5" : "h-2");
+    const name = $derived(ariaLabel || label || undefined);
     /*
      * 指示条的颜色靠覆盖 Progress 内部 data-slot="progress-indicator" 的 bg-primary 实现。
      * 用任意值变体而不是改 shadcn 组件本体：组件是 CLI 生成的、将来还会再生成，
@@ -61,8 +65,8 @@
             总量未知时用 Skeleton：shadcn 的 Progress 指示条由 value 定位，
             表达不了「一直在跑但不知道到哪」，而 Skeleton 的脉冲本就是「进行中」的语义。
         -->
-        <Skeleton class={cn("w-full rounded-full", track)} aria-label={label || undefined} />
+        <Skeleton class={cn("w-full rounded-full", track)} aria-label={name} />
     {:else}
-        <Progress {value} class={cn(track, toneClass)} aria-label={label || undefined} />
+        <Progress {value} class={cn(track, toneClass)} aria-label={name} />
     {/if}
 </div>

@@ -14,8 +14,10 @@
     import { cn } from "@/lib/utils";
     import { t } from "../i18n";
     import type { ChatTurn, QuizService } from "../quiz/service";
+    import { isOpenableDocId } from "../quiz/history-view";
     import { formatClock } from "./duration";
     import { renderMarkdownLatex } from "./latex";
+    import { scoreText } from "./score-tone";
     import { hasAnswer, PASS_SCORE } from "@/types/quiz";
     import type { GradingResult, Question } from "@/types/quiz";
 
@@ -127,16 +129,8 @@
     /** 每题平均耗时；没测到用时（duration 为 0）时保持 null，由 fmtDuration 显示「--」 */
     const secondsPerQuestion = $derived(duration > 0 && results.length > 0 ? duration / results.length : 0);
 
-    /**
-     * 按得分取主题语义色，不再硬编码十六进制色值
-     * （原实现在暗色主题下对比度不足，基本不可读）。
-     */
-    function scoreTone(p: number): string {
-        if (p >= 80) return "text-success";
-        if (p >= 60) return "text-primary";
-        if (p >= 30) return "text-warning";
-        return "text-destructive";
-    }
+    /** 按得分取主题语义色；档位与答题记录、统计页、题库页同一份（score-tone） */
+    const scoreTone = scoreText;
 
     function fmtDuration(sec: number): string {
         if (sec <= 0) return "--";
@@ -327,7 +321,7 @@
                             {passed ? t("result.passed") : t("result.notPassed")}
                         </Badge>
                         <span class="text-muted-foreground text-xs tabular-nums">{total.toFixed(0)}/{max}</span>
-                        {#if sourceDocId && sourceTitle}
+                        {#if isOpenableDocId(sourceDocId) && sourceTitle}
                             <span class="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
                                 <span class="shrink-0">{t("result.sourceNote")}:</span>
                                 <Button

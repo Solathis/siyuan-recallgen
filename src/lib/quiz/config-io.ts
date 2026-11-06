@@ -7,6 +7,7 @@ import {
     type QuizPreset,
     type RecallGenConfig,
 } from "@/types/config";
+import { presetById } from "@/lib/ai/providers/catalog";
 import {
     isSafeCssColor,
     type DifficultyDistribution,
@@ -197,6 +198,8 @@ function sanitizeEndpoints(value: unknown, warnings: string[]): AIEndpoint[] {
             protocol: protocol === "responses" || protocol === "messages" ? protocol : "chat",
             baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl : "",
             apiKey: typeof candidate.apiKey === "string" ? candidate.apiKey : "",
+            // 启动时加载配置也走这里：不显式保留，presetId 每次启动都会被静默丢掉
+            ...(presetById(candidate.presetId) ? { presetId: candidate.presetId } : {}),
         });
     }
     return out;
@@ -229,6 +232,7 @@ function sanitizeModels(value: unknown, endpoints: AIEndpoint[], warnings: strin
                           : ("default" as const),
                   }
                 : {}),
+            ...(candidate.fixedTemperature === true ? { fixedTemperature: true } : {}),
         });
     }
     return out;

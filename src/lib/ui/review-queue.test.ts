@@ -28,6 +28,9 @@ it("renders batch editing, submits changed question and reason through the servi
     document.body.append(host);
     const app = mount(ReviewQueue, { target: host, props: { service, initial: [draft], ondone: done } });
     flushSync();
+    // 审核卡默认是预览，题干输入框要点「编辑」才出现
+    [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === "编辑")!.click();
+    flushSync();
     const stem = host.querySelector<HTMLTextAreaElement>('[aria-label="题干"]')!;
     stem.value = "new";
     stem.dispatchEvent(new Event("input", { bubbles: true }));

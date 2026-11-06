@@ -152,7 +152,7 @@
                     {#key active}
                         <div class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
                             {#if active === "ai"}
-                                <SettingsAI config={localConfig} {onTestConnection} onsave={handleSave} />
+                                <SettingsAI config={localConfig} {onTestConnection} onsave={handleSave} {service} />
                             {:else if active === "roles"}
                                 <SettingsAIRoles config={localConfig} onsave={handleSave} />
                             {:else if active === "general"}

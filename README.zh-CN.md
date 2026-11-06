@@ -48,7 +48,7 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 | 判题者 (grader) | 主观题/编程题评分、薄弱点分析、AI 答疑 | 0 | 512 |
 
 - **审题循环**：审题者审查所有题目，未通过的题目发回出题者重新生成（保留题目 ID），再审，最多 3 轮循环
-- **进度展示**：生成阶段实时显示当前阶段（出题/审题/重生）、轮次和详情
+- **进度展示**：标题行显示阶段、已用时与取消；下面是已收集题数与进度条、三个步骤（生成题目 → 审题 → 重做不合格题）、并发各批的状态（等待中/请求中/已完成/没返回可用题目，补题轮单独标出）、最近的动态与默认折叠的出题计划。面板够宽时动态与出题计划排在右栏。按日期出题、粘贴材料出题时取消会回到各自的输入页，粘贴的材料保留
 
 ### AI 协议支持
 
@@ -61,6 +61,7 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 | Messages (Anthropic) | `/v1/messages` | Anthropic Claude |
 
 - **结构化输出**：开启 JSON Schema 严格模式时使用 OpenAI tools/function calling 强制 JSON 输出；关闭时使用 `response_format: json_object` 宽松模式 + jsonrepair 容错
+- **内置服务商**：DeepSeek、智谱 GLM、腾讯混元、通义千问、Kimi、小米 MiMo、华为云、文心、豆包九家都走 Chat Completions 兼容接口，Base URL 已内置。服务商之间的差异自动处理：智谱的 tool_choice 只支持 `auto`，结构化输出时改发 `auto`；models.dev 标明不接受自定义温度的模型（如 Kimi K3）不发送 `temperature`
 - **Ollama 支持**：无 API Key 时自动跳过认证头
 - **超时与重试**：可配置超时（默认 120s），HTTP 429/5xx/超时自动重试（指数退避，最多 2 次）
 - **网络代理**：所有 AI 调用经思源内核 `forwardProxy` 代理，无 CORS 问题，API Key 不暴露在前端
@@ -105,7 +106,7 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 - **配色区间**：默认 GitHub 绿色色阶，支持自定义颜色区间与色盘选色
 - **成绩自动记录**：交卷时立即写入成绩索引与当月明细分片，不受后续分析成败影响；历史列表只加载轻量索引，回看时才按需拉取明细
 - **复习记录 Tab**：右上角图标打开历史记录面板，含「记录」「统计」「题库」三个视图（统计页顶部是学习轨迹热力图）
-  - **记录**：按日期/按来源分组，缩略图/列表/表格三种视图；支持按标题与来源搜索、按分数区间筛选、导出 JSON/CSV/Markdown、单条删除（带二次确认）；点击记录可回看完整结果。列表分段渲染（每批 60 条，触底自动加载），记录很多时也不会一次性创建大量 DOM
+  - **记录**：标题行带条数，四格汇总（记录数/平均分/达标率/每题用时，随筛选变化）；按日期/按来源分组，列表/卡片/表格三种视图；支持按标题与来源搜索、按分数区间筛选、导出 JSON/CSV/Markdown。点击记录标题回看完整结果；每行的「更多操作」菜单里有查看、跳回原笔记（仅来源是真实文档时）、删除（带二次确认）。列表分段渲染（每批 60 条，触底自动加载），切换视图、分组或筛选时回到第一批，记录很多时也不会一次性创建大量 DOM
   - **统计**：薄弱环节排行里的知识点可直接点「复习」开始一次该知识点的复习；时间范围可切换（近 7/30/90 天或全部），包含分数趋势折线、题型达标率、分数区间分布、难度达标率环形，以及答题次数、平均/最高得分率、连续打卡天数、每题平均耗时等总览指标与薄弱环节排行
 
 - **间隔重复**：新生成题目在答题后审核通过才进入题库；已有题库复习更新 FSRS 排程。命令面板或标题菜单的「复习到期题目」可直接复习到期内容
@@ -114,7 +115,7 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 
 左侧导航栏 + 右侧内容区，6 个独立设置分区：
 
-1. **AI 服务**：端点 CRUD（名称/提供商/协议/Base URL/API Key），每个端点下嵌套管理模型（名称/温度/MaxTokens/推理强度），端点内模型名去重，测试连接（端点+模型级联选择），全局超时与 JSON Schema 开关
+1. **AI 服务**：顶部「快速接入」九家服务商卡片（DeepSeek、智谱 GLM、腾讯混元、通义千问、Kimi、小米 MiMo、华为云、文心、豆包），填 API Key 即可接入；默认勾选最新的模型（按 models.dev 的发布日期，跳过已弃用和向量/语音/图像等专用模型，优先支持工具调用的），「从 models.dev 刷新」可更新模型列表。接入时只改指向当前用不了的角色，勾选「设为出题、审题、判分的默认模型」才全部改指向。下方「自定义端点（高级）」保留端点 CRUD（名称/提供商/协议/Base URL/API Key），每个端点下嵌套管理模型（名称/温度/MaxTokens/推理强度），端点内模型名去重，测试连接（端点+模型级联选择），全局超时与 JSON Schema 开关
 2. **AI 身份**：出题者/审题者/判题者三角色卡片，端点+模型级联选择，不同角色推荐使用不同模型但允许相同
 3. **题目与答题**：题型开关、难度分布（总数+各难度题数+校验）、超纲比例、语言（中文/英文）、倒计时开关与时长、面板宽度、多选题计分策略；另可把当前组合存为**试卷预设**（具名保存题型/难度/超纲比例），一键「应用」或删除，正在使用的预设会被标出
 4. **提示词**：当前提示词、版本库、审核反馈三个标签页；支持直接编辑、重置默认、手动版本快照与反馈分析
@@ -135,8 +136,8 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 
 ## 🚀 快速上手
 
-1. **配置 AI**：打开设置 →「AI 服务」→ 填写 Base URL 和 API Key → 添加模型 → 点击「测试连接」
-2. **设置角色**：「AI 身份」→ 为出题者/审题者/判题者选择模型（可全部使用同一模型）
+1. **配置 AI**：打开设置 →「AI 服务」→ 在「快速接入」里点一家服务商 → 填入 API Key → 可先「测试连接」→「接入」。服务商不在列表里时，在下方「自定义端点（高级）」手动填写 Base URL、API Key 并添加模型
+2. **设置角色**：还没配置过 AI 时，接入后出题者/审题者/判题者会自动指向这家勾选的最新模型（已经能用的角色不会被改动）；想分别指定时到「AI 身份」里调整
 3. **生成题目**：在任意笔记文档中，右键块图标或点击文档标题图标 →「生成复习题」
 4. **答题**：自动打开的 Tab 中逐题作答，编程题使用内置代码编辑器
 5. **交卷**：点击「交卷」按钮 → 客观题即时判分，主观题/编程题 AI 判分 → 批量审核新题 → 通过的题目入库并查看结果
@@ -172,14 +173,15 @@ RecallGen 是一款思源笔记插件，将笔记内容转化为可答题的复�
 - **数据持久化**：使用思源 `saveData`/`loadData`（非 localStorage），支持多端同步
   - `recallgen-config.json`：插件配置
   - `recallgen-scores-index.json`：成绩索引（含按题型/难度的聚合值，历史列表与统计图表只读它）
-  - `recallgen-scores-YYYY-MM.json`：按月分片的成绩明细（题目、判分、分析），按需加载
+  - `recallgen-scores-YYYY-MM.json`：按月分片的成绩明细（题目、判分、分析），按需加载；内存里只缓存最近用过的 3 个月
   - `recallgen-progress.json`：答题进度（未交卷的会话）
+  - `recallgen-models-cache.json`：「从 models.dev 刷新」得到的模型目录（只存裁剪后的结果），比随插件发布的快照新时优先使用
 - **异步存储基类**：`AsyncStore` 统一处理读串行化、写串行化、读写不互相覆盖、写入失败上抛；配置写入按 400ms 合并，避免每次按键都重写配置文件；答题进度按 30 天 TTL 自动清理
 - **Tab 状态机**：`configuring → loading_generating → answering → loading_grading → result`
-- **UI 组件**：全部使用 shadcn-svelte 组件（Alert/AlertDialog/Badge/Button/Card/Checkbox/Collapsible/DropdownMenu/Empty/Field/Input/Item/Label/Progress/RadioGroup/Select/Separator/Skeleton/Slider/Spinner/Switch/Table/Tabs/Textarea/ToggleGroup，基于 bits-ui），全部图表走 shadcn `chart`。shadcn 的语义变量映射到思源 `--b3-*`，因此明暗主题自动跟随；`dark:` 变体绑定思源的 `.theme-dark`
+- **UI 组件**：全部使用 shadcn-svelte 组件（Alert/AlertDialog/Avatar/Badge/Button/Card/Checkbox/Collapsible/DropdownMenu/Empty/Field/Input/Item/Label/Progress/RadioGroup/Select/Separator/Skeleton/Slider/Spinner/Switch/Table/Tabs/Textarea/ToggleGroup，基于 bits-ui），全部图表走 shadcn `chart`。shadcn 的语义变量映射到思源 `--b3-*`，因此明暗主题自动跟随；`dark:` 变体绑定思源的 `.theme-dark`
 - **响应式走容器查询**：面板可用宽度与视口宽度无关（思源的 tab 可以很窄，设置弹窗永远比窗口窄），因此布局一律按 `@container` 变体切换，而不是 `md:`/`sm:`；只有真正与设备相关的规则留在媒体查询里。触摸设备上把命中区抬到 44px（阈值只在 `--rg-tap-size` 声明一处），贴底操作栏用 `env(safe-area-inset-bottom)` 避开 iOS 的底部小横条
 - **样式隔离**：**刻意不引入 Tailwind 的 preflight**——思源本体与插件共享同一文档，全局重置会破坏思源界面。只引入 theme 与 utilities 两个 layer，并把工具类依赖的重置收窄到插件容器 `.rg-scope` 内；KaTeX 自带的 `body{counter-reset}` 规则也改写为容器作用域。KaTeX 样式表本身仍是全局注入的（随插件一起打包以保证离线公式正常），这是本插件唯一新增的全局样式
-- **Tab 恢复**：思源重启时恢复自定义 Tab，`mode='generate'` 的 Tab 自动检测已有进度并恢复为答题状态，避免重新生成
+- **Tab 恢复**：思源重启时恢复自定义 Tab，`mode='generate'` 的 Tab 自动检测已有进度并恢复为答题状态，避免重新生成。思源会把自定义 Tab 的数据存进布局文件，所以回看 Tab 只带成绩索引条目，明细按 id 读取
 - **公式渲染**：KaTeX 样式与字体随插件打包（仅 woff2，共约 296KB），不再依赖 CDN，离线可用；渲染走「marked → DOMPurify 净化 → 回填 KaTeX」的顺序，净化时公式还是占位符，既拦住了笔记/AI 文本里的脚本注入，又不会误伤 KaTeX 生成的 MathML
 
 ### 项目结构
@@ -201,7 +203,8 @@ src/
     │   ├── errors.ts           # 错误 → 「标题 + 建议 + 原文」的展示映射
     │   ├── schema.ts           # JSON Schema 与宽松解析（parseJsonLoose）
     │   ├── scaffold.ts         # 提示词脚手架文案（中英双份，跟随输出语言）
-    │   └── prompts.ts          # 生成/审题/重生/判分/分析/答疑消息构建
+    │   ├── prompts.ts          # 生成/审题/重生/判分/分析/答疑消息构建
+    │   └── providers/          # 内置服务商目录、models.dev 快照与裁剪、一键接入、刷新缓存
     ├── quiz/
     │   ├── generator.ts        # 出题 + 审题循环 + 逐题容错校验与类型收敛
     │   ├── grader.ts           # 判分（客观本地 + 主观 AI，并发 ≤4）
@@ -212,6 +215,7 @@ src/
     │   ├── charts.ts           # 统计图表的数据准备（纯函数）
     │   ├── chart-geometry.ts   # 折线与环形的几何计算（纯函数）
     │   ├── paging.ts           # 历史记录分段渲染
+    │   ├── history-view.ts     # 答题记录的来源分组键、能否跳回原笔记
     │   ├── bank.ts             # 题库、题干指纹与 FSRS 排程
     │   ├── service.ts          # QuizService 接口（QuizPanel 与后端解耦）
     │   ├── docWriter.ts        # 题目写入思源文档（IAL 标记、折叠答案）
@@ -230,11 +234,13 @@ src/
     │   ├── QuizPanel.svelte    # 答题主面板（状态机、倒计时、确认对话框）
     │   ├── QuestionView.svelte # 单题渲染（Markdown+LaTeX+代码编辑器）
     │   ├── ResultPanel.svelte  # 结果面板（统计卡片、题目详情、AI 答疑）
-    │   ├── HistoryPanel.svelte # 历史记录（搜索/筛选/导出/删除，三种视图）
+    │   ├── HistoryPanel.svelte # 历史记录（汇总栏、搜索/筛选/导出/删除，三种视图）
     │   ├── Heatmap.svelte      # 热力图（跟随主题、窄屏横向滚动、可聚焦查看）
     │   ├── ProgressBar.svelte  # 进度条（确定/不确定两种形态）
+    │   ├── GenProgressView.svelte # 出题生成中/取到期题目/判分中的进度屏
     │   ├── SettingPanel.svelte # 设置面板外壳（左侧导航）
-    │   ├── SettingsAI.svelte   # 端点/模型管理与测试连接
+    │   ├── SettingsAI.svelte   # 快速接入 + 自定义端点/模型管理与测试连接
+    │   ├── ProviderCards.svelte # 服务商卡片（填 Key 接入、选模型、从 models.dev 刷新）
     │   ├── SettingsAIRoles.svelte
     │   ├── SettingsGeneral.svelte
     │   ├── SettingsPrompts.svelte
@@ -275,6 +281,9 @@ pnpm run make-link
 
 # 一键安装（构建 + 安装到思源）
 pnpm run make-install
+
+# 更新随插件发布的模型快照（需要能访问 models.dev）
+pnpm run sync-models
 ```
 
 ### 构建产物
@@ -294,6 +303,7 @@ pnpm run make-install
 - **Svelte 5**：组件挂载用 `mount`/`unmount`（`new Component()` 与 `$destroy()` 已不可用）；`mount()` 不再暴露 `$on`，插件入口与组件之间统一改用回调属性（`onsave`、`onchange` 等）；新组件一律使用 runes（`$props`/`$state`/`$derived`/`$effect`）
 - **质量门禁**：`pnpm run typecheck`（svelte-check）、`pnpm run format:check`（prettier）、`pnpm test`（vitest）、`pnpm run build`；CI 在 push/PR 上全部执行，并在 tag 发布前校验 tag 与 `plugin.json` 版本一致
 - **输出目录**：生产构建默认输出到 `dist/`；需要直接构建到思源插件目录时，复制 `.env.local.example` 为 `.env.local` 并填写 `OUTPUT_DIR`（该文件已被 gitignore）
+- **模型快照**：`src/lib/ai/providers/models-snapshot.json` 由 `pnpm run sync-models` 生成，不要手改。裁剪规则在 `models.ts`，脚本与运行时的「从 models.dev 刷新」共用；映射的服务商在 models.dev 上找不到时脚本以退出码 1 结束，不写出缺家的快照
 - **思源插件加载器**：使用浏览器模块加载（非 Node require），Rollup code-split 产生的 `require()` 存根会导致运行时失败
 
 ## 📊 数据流

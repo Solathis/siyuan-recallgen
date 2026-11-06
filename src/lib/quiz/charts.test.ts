@@ -425,4 +425,9 @@ describe("单题耗时的加权口径", () => {
         } as unknown as ScoreIndexEntry;
         expect(summarize([entry], NOW).secondsPerQuestion).toBeNull();
     });
+
+    it("记录很多时最高分照常算出（回归：Math.max(...数组) 在几十万条时抛 RangeError）", () => {
+        const many = Array.from({ length: 200_000 }, (_, i) => entry(NOW - i, i === 123 ? 97 : 50));
+        expect(summarize(many, NOW).bestPercent).toBe(97);
+    });
 });

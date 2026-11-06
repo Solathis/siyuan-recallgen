@@ -123,6 +123,41 @@ export function scorePercent(entry: Pick<ScoreIndexEntry, "totalScore" | "maxSco
     return Number.isFinite(percent) ? percent : 0;
 }
 
+/**
+ * 分数档位：优秀 / 达标 / 偏弱 / 很差。
+ *
+ * 80/60/30 这条阶梯原先在答题记录、结果页、统计页、题库页各写了一遍配色，
+ * 筛选器又自己写了一遍 60/80；任何一处改了分界，同一个分数在两个页面就是两种颜色。
+ * 「达标」那一档的下沿就是 PASS_SCORE，不另起数字。
+ */
+export type ScoreTier = "high" | "pass" | "weak" | "low";
+
+/** 「优秀」档的下沿 */
+export const HIGH_SCORE = 80;
+/** 「很差」档的上沿（不含） */
+export const LOW_SCORE = 30;
+
+export function scoreTier(percent: number): ScoreTier {
+    if (percent >= HIGH_SCORE) return "high";
+    if (percent >= PASS_SCORE) return "pass";
+    if (percent >= LOW_SCORE) return "weak";
+    return "low";
+}
+
+/**
+ * 题目层面的达标率（0-100）：Σ达标题数 / Σ题数。
+ * 与结果页顶部「达标率」同一口径；没有题目时返回 null，而不是显示 0%。
+ */
+export function passRate(entries: Pick<ScoreIndexEntry, "passedCount" | "questionCount">[]): number | null {
+    let passed = 0;
+    let total = 0;
+    for (const entry of entries) {
+        passed += Math.max(0, entry.passedCount);
+        total += Math.max(0, entry.questionCount);
+    }
+    return total > 0 ? (passed / total) * 100 : null;
+}
+
 /** 按本地时间取分片键 YYYY-MM */
 export function monthKey(timestamp: number): string {
     const d = new Date(timestamp);
